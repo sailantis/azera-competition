@@ -12,6 +12,8 @@ namespace App\Services;
 
 use Azera\Aop\Advised;
 use Azera\Aop\Cache;
+use Azera\Aop\Log;
+use Azera\Aop\Retry;
 use Azera\Aop\Transactional;
 use Azera\AppContext;
 use Azera\Db\Query;
@@ -65,5 +67,39 @@ class FeatureService
             ->selectRow('SELECT COUNT(*) AS c FROM items', null, \PDO::FETCH_ASSOC);
 
         return (int) ($row['c'] ?? 0);
+    }
+
+    /**
+     * Log a message via the #[Log] AOP advice.
+     *
+     * The LogInterceptor logs method entry, exit (with duration), and any
+     * exception.  The MemoryLogger registered in Bootstrap captures the
+     * entries so the controller can show them.
+     */
+    #[Log(level: 'info', logArgs: true)]
+    public function logSomething(string $message): string
+    {
+        return "logged: {$message}";
+    }
+
+    /**
+     * Retry a flaky operation via the #[Retry] AOP advice.
+     *
+     * The RetryInterceptor retries the method up to `times` attempts
+     * (including the first).  This method fails on the first two calls
+     * and succeeds on the third, so the interceptor's retry loop is
+     * exercised and the final result is returned.
+     */
+    #[Retry(times: 3, backoff: 0)]
+    public function flakyOperation(): string
+    {
+        static $attempts = 0;
+        $attempts++;
+
+        if ($attempts < 3) {
+            throw new \RuntimeException("flaky failure (attempt {$attempts})");
+        }
+
+        return "succeeded on attempt {$attempts}";
     }
 }

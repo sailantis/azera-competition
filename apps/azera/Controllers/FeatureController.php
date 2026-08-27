@@ -15,7 +15,9 @@
 namespace App\Controllers;
 
 use App\Events\ItemCreated;
+use App\Services\DbEventLog;
 use App\Services\FeatureService;
+use App\Services\MemoryLogger;
 use Azera\AppContext;
 use Azera\Core\Controller;
 use Azera\Http\Response;
@@ -34,6 +36,9 @@ class FeatureController extends Controller
             'features' => [
                 ['url' => '/features/aop', 'title' => 'AOP #[Transactional]', 'desc' => 'Insert a row inside an AOP-managed DB transaction'],
                 ['url' => '/features/cache', 'title' => 'AOP #[Cache]', 'desc' => 'Cache a method result for 10 seconds via #[Cache] attribute'],
+                ['url' => '/features/log', 'title' => 'AOP #[Log]', 'desc' => 'Log method entry/exit/duration via the #[Log] advice'],
+                ['url' => '/features/retry', 'title' => 'AOP #[Retry]', 'desc' => 'Retry a failing method up to N times via the #[Retry] advice'],
+                ['url' => '/features/db-events', 'title' => 'Db Events', 'desc' => 'Observe QueryExecuted / StatementPrepared / Transaction events'],
                 ['url' => '/features/events', 'title' => 'PSR-14 Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'Allow max 5 requests per 60 seconds'],
                 ['url' => '/features/security', 'title' => 'Security (Hasher + CSRF)', 'desc' => 'Password hashing and CSRF token protection'],
@@ -192,6 +197,54 @@ class FeatureController extends Controller
             'description' => 'POST request passed CSRF token validation.',
             'csrf_valid'  => true,
             'post_data'   => $ctx->request()->post(),
+        ]);
+    }
+
+    /**
+     * GET /features/log — demonstrate #[Log] AOP logging.
+     */
+    public function logAction(MemoryLogger $logger, FeatureService $service): Response
+    {
+        $logger->clear();
+        $result = $service->logSomething('hello from the #[Log] demo');
+
+        return Response::json([
+            'feature'     => 'AOP #[Log]',
+            'description' => 'LogInterceptor logs method entry, exit (with duration), and exceptions via PSR-3.',
+            'result'      => $result,
+            'log_entries' => $logger->entries(),
+        ]);
+    }
+
+    /**
+     * GET /features/retry — demonstrate #[Retry] AOP retry.
+     */
+    public function retryAction(FeatureService $service): Response
+    {
+        $result = $service->flakyOperation();
+
+        return Response::json([
+            'feature'     => 'AOP #[Retry]',
+            'description' => 'RetryInterceptor retries a failing method up to `times` attempts (including the first).',
+            'result'      => $result,
+        ]);
+    }
+
+    /**
+     * GET /features/db-events — demonstrate the Db event pipeline.
+     */
+    public function dbEventsAction(DbEventLog $log, FeatureService $service): Response
+    {
+        $log->clear();
+
+        // Run a couple of queries + a transaction so the Db events fire.
+        $service->createItemTransactional('DbEvent Item ' . date('Y-m-d H:i:s'));
+        $service->countItems();
+
+        return Response::json([
+            'feature'     => 'Db Events',
+            'description' => 'Database dispatches QueryExecuted, StatementPrepared, TransactionStarted, TransactionCommitted via PSR-14.',
+            'events'      => $log->all(),
         ]);
     }
 }

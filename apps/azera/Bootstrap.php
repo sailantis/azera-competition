@@ -18,8 +18,12 @@ use Azera\Event\EventDispatcher;
 use Azera\Queue\SyncQueue;
 use Azera\Aop\TransactionalInterceptor;
 use Azera\Aop\CacheInterceptor;
+use Azera\Aop\LogInterceptor;
+use Azera\Aop\RetryInterceptor;
 use Azera\Aop\Transactional;
 use Azera\Aop\Cache as CacheAdvice;
+use Azera\Aop\Log as LogAdvice;
+use Azera\Aop\Retry as RetryAdvice;
 use Psr\Log\LoggerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\SimpleCache\CacheInterface;
@@ -127,6 +131,9 @@ class Bootstrap
             $r->get('/features', '::indexAction');
             $r->get('/features/aop', '::aopAction');
             $r->get('/features/cache', '::cacheAction');
+            $r->get('/features/log', '::logAction');
+            $r->get('/features/retry', '::retryAction');
+            $r->get('/features/db-events', '::dbEventsAction');
             $r->get('/features/events', '::eventsAction');
             $r->get('/features/rate-limit', '::rateLimitAction');
 
@@ -152,9 +159,14 @@ class Bootstrap
     private static function registerEnterpriseServices(AppContext $ctx): void
     {
         // --- PSR-3 Logger ---
-        // Register NullLogger so listener constructors that type-hint
-        // LoggerInterface can be autowired.  Swap to Monolog for real logs.
-        $ctx->set(LoggerInterface::class, fn() => new \Azera\Log\NullLogger());
+        // Register a single in-memory logger instance under BOTH its
+        // concrete class and the PSR-3 interface, so the #[Log] AOP
+        // interceptor (which resolves LoggerInterface) and the controller
+        // (which injects MemoryLogger) share the same object.  Swap to
+        // Monolog for real logs.
+        $memoryLogger = new \App\Services\MemoryLogger();
+        $ctx->set(\App\Services\MemoryLogger::class, $memoryLogger);
+        $ctx->set(LoggerInterface::class, $memoryLogger);
 
         // --- PSR-14 Event Dispatcher ---
         $ctx->set(EventDispatcherInterface::class, function () {
@@ -162,6 +174,25 @@ class Bootstrap
             $dispatcher->listen(
                 \App\Events\ItemCreated::class,
                 \App\Events\Listener\ItemCreatedListener::class,
+            );
+            // Db event listeners — one handler per concrete event class.
+            // EventDispatcher also resolves listeners for parent classes
+            // and interfaces, so each registration covers its subtype.
+            $dispatcher->listen(
+                \Azera\Db\Event\QueryExecuted::class,
+                \App\Events\Listener\DatabaseEventListener::class,
+            );
+            $dispatcher->listen(
+                \Azera\Db\Event\StatementPrepared::class,
+                \App\Events\Listener\DatabaseEventListener::class,
+            );
+            $dispatcher->listen(
+                \Azera\Db\Event\TransactionStarted::class,
+                \App\Events\Listener\DatabaseEventListener::class,
+            );
+            $dispatcher->listen(
+                \Azera\Db\Event\TransactionCommitted::class,
+                \App\Events\Listener\DatabaseEventListener::class,
             );
             return $dispatcher;
         });
@@ -171,6 +202,9 @@ class Bootstrap
 
         // --- Queue ---
         $ctx->set(QueueInterface::class, fn() => new SyncQueue());
+
+        // --- Demo services (autowired) ---
+        $ctx->set(\App\Services\DbEventLog::class);
 
         // --- AOP Interceptors ---
         // Enable proxy generation for #[Advised] classes.
@@ -184,6 +218,14 @@ class Bootstrap
         $ctx->registerInterceptor(
             CacheAdvice::class,
             new CacheInterceptor($ctx->cache()),
+        );
+        $ctx->registerInterceptor(
+            LogAdvice::class,
+            new LogInterceptor($ctx->logger()),
+        );
+        $ctx->registerInterceptor(
+            RetryAdvice::class,
+            new RetryInterceptor($ctx->logger()),
         );
     }
 
