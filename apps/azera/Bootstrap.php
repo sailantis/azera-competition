@@ -150,6 +150,7 @@ class Bootstrap
             $r->get('/features/validation', '::validationAction');
             $r->get('/features/config', '::configAction');
             $r->get('/features/request-scoped', '::requestScopedAction');
+            $r->get('/features/pipeline', '::pipelineAction');
             $r->get('/features/events', '::eventsAction');
             $r->get('/features/rate-limit', '::rateLimitAction');
 

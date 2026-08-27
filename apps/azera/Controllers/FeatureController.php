@@ -12,6 +12,7 @@
  *   GET  /features/validation — Validator demo (valid + invalid payloads)
  *   GET  /features/config     — Config dot-notation demo
  *   GET  /features/request-scoped — RequestScoped lifecycle demo
+ *   GET  /features/pipeline   — direct (explicit) AOP Pipeline demo
  *   GET  /features/events     — PSR-14 event dispatch + listener demo
  *   GET  /features/rate-limit — RateLimiter demo (max 5 requests / 60s)
  *   GET  /features/security   — Hasher + CSRF token demo
@@ -25,6 +26,8 @@ use App\Services\DbEventLog;
 use App\Services\FeatureService;
 use App\Services\MemoryLogger;
 use App\Services\RequestCounter;
+use Azera\Aop\LogInterceptor;
+use Azera\Aop\RetryInterceptor;
 use Azera\AppContext;
 use Azera\Core\Controller;
 use Azera\Http\Response;
@@ -50,6 +53,7 @@ class FeatureController extends Controller
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate and coerce input via the Validator'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Dot-notation access to a nested config array'],
                 ['url' => '/features/request-scoped', 'title' => 'RequestScoped', 'desc' => 'Reset per-request state via clearRequestScope()'],
+                ['url' => '/features/pipeline', 'title' => 'AOP Pipeline (direct)', 'desc' => 'Explicit interceptor pipeline — no proxy generation'],
                 ['url' => '/features/events', 'title' => 'PSR-14 Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'Allow max 5 requests per 60 seconds'],
                 ['url' => '/features/security', 'title' => 'Security (Hasher + CSRF)', 'desc' => 'Password hashing and CSRF token protection'],
@@ -346,6 +350,36 @@ class FeatureController extends Controller
             'count_before'      => $before,
             'count_after'       => $after,
             'count_after_reset' => $afterReset,
+        ]);
+    }
+
+    /**
+     * GET /features/pipeline — demonstrate the direct (explicit) AOP Pipeline.
+     *
+     * Unlike the transparent #[Advised] proxy, the Pipeline composes
+     * interceptors around a plain callable with NO proxy generation.
+     * This is the technique Spiral uses — so it's the fair apples-to-apples
+     * comparison for the AOP feature.  The same interceptors work in both
+     * modes.
+     */
+    public function pipelineAction(MemoryLogger $logger): Response
+    {
+        $logger->clear();
+
+        // Direct pipeline: RetryInterceptor + LogInterceptor around a
+        // plain callable.  No proxy class is generated.
+        $result = $this->context()->pipeline()
+            ->through([
+                new RetryInterceptor($logger, defaultTimes: 3, defaultBackoff: 0),
+                new LogInterceptor($logger),
+            ])
+            ->call(fn() => 'direct pipeline result');
+
+        return Response::json([
+            'feature'     => 'AOP Pipeline (direct)',
+            'description' => 'Explicit interceptor pipeline around a plain callable — no proxy generation. The technique Spiral uses.',
+            'result'      => $result,
+            'log_entries' => $logger->entries(),
         ]);
     }
 }
