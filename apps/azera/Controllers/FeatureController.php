@@ -290,17 +290,17 @@ class FeatureController extends Controller
         $invalid->field('age')->optional()->int()->min(18)->max(120);
 
         return Response::json([
-            'feature'     => 'Validation',
-            'description' => 'Validator coerces and validates input; errors are keyed by dot-path field name.',
+            'feature'       => 'Validation',
+            'description'   => 'Validator coerces and validates input; errors are keyed by dot-path field name.',
             'valid_payload' => [
-                'passed'   => !$valid->fails(),
-                'data'     => $valid->validated(),
-                'errors'   => $valid->errors(),
+                'passed' => !$valid->fails(),
+                'data'   => $valid->validated(),
+                'errors' => $valid->errors(),
             ],
             'invalid_payload' => [
-                'passed'   => !$invalid->fails(),
-                'data'     => $invalid->validated(),
-                'errors'   => $invalid->errors(),
+                'passed' => !$invalid->fails(),
+                'data'   => $invalid->validated(),
+                'errors' => $invalid->errors(),
             ],
         ]);
     }
@@ -341,10 +341,10 @@ class FeatureController extends Controller
         $afterReset = $counter->count();
 
         return Response::json([
-            'feature'     => 'RequestScoped',
-            'description' => 'Services implementing RequestScoped are reset by clearRequestScope() between requests.',
-            'count_before' => $before,
-            'count_after'  => $after,
+            'feature'           => 'RequestScoped',
+            'description'       => 'Services implementing RequestScoped are reset by clearRequestScope() between requests.',
+            'count_before'      => $before,
+            'count_after'       => $after,
             'count_after_reset' => $afterReset,
         ]);
     }
