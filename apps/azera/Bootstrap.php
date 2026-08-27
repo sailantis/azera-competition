@@ -162,6 +162,16 @@ class Bootstrap
             });
         });
 
+        // --- REST API Routes ---
+        // A dedicated JSON API category.  Every framework implements the
+        // same /api/* endpoints so routing + controller + JSON
+        // serialization overhead is compared apples-to-apples.
+        $router->controller(\App\Controllers\ApiController::class, function (\Azera\Core\Router $r) {
+            $r->get('/api/items', '::indexAction');
+            $r->get('/api/items/{id:int}', '::showAction');
+            $r->post('/api/items', '::createAction');
+        });
+
         return $ctx;
     }
 

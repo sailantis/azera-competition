@@ -57,7 +57,8 @@ Options:
   --requests=<csv>        Comma-separated "METHOD URI" requests to benchmark
                           (default: "GET /","GET /items","GET /items/1",
                            "POST /items",
-                           "GET /items-qb","GET /items-qb/1","POST /items-qb")
+                           "GET /items-qb","GET /items-qb/1","POST /items-qb",
+                           "GET /api/items","GET /api/items/1","POST /api/items")
   --seed                  Reset & reseed the SQLite DB before running (prevents
                           POST /items from accumulating rows across runs)
   --rows=N                Row count when --seed is used (default: 1000)
@@ -82,13 +83,18 @@ $seedRows    = isset($opts['rows']) ? (int) $opts['rows'] : 1000;
 $requests    = isset($opts['requests'])
     ? array_map('trim', explode(',', $opts['requests']))
     : [
+        // HTML benchmark endpoints
         'GET /',
         'GET /items',
         'GET /items/1',
         'POST /items',
         'GET /items-qb',
         'GET /items-qb/1',
-        'POST /items-qb'
+        'POST /items-qb',
+        // REST API endpoints (JSON serialization category)
+        'GET /api/items',
+        'GET /api/items/1',
+        'POST /api/items',
     ];
 
 // Normalize requests to [method, uri] pairs
