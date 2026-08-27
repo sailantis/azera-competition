@@ -103,6 +103,35 @@ $requests = array_map(function (string $r): array {
     return [strtoupper(trim($parts[0])), trim($parts[1] ?? '/')];
 }, $requests);
 
+// --- Feature categories ----------------------------------------------------
+// Maps a request label ("GET /items") to a competition feature.  The winners
+// table groups endpoints by feature and only compares frameworks that
+// actually support that feature.
+$featureMap = [
+    'GET /'            => 'routing',
+    'GET /items'       => 'orm',
+    'GET /items/1'     => 'orm',
+    'POST /items'      => 'orm',
+    'GET /items-qb'    => 'query-builder',
+    'GET /items-qb/1'  => 'query-builder',
+    'POST /items-qb'   => 'query-builder',
+    'GET /api/items'   => 'rest-api',
+    'GET /api/items/1' => 'rest-api',
+    'POST /api/items'  => 'rest-api',
+];
+
+// Which features each adapter supports.  An adapter that lacks a feature is
+// excluded from that feature's winners comparison (e.g. a framework without
+// AOP simply doesn't take part in the AOP race).
+$adapterFeatures = [
+    'azera'       => ['routing', 'orm', 'query-builder', 'rest-api'],
+    'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api'],
+    'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api'],
+    'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api'],
+    'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api'],
+    'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api'],
+];
+
 // --- Adapter registry ------------------------------------------------------
 
 $adapterClasses = [
@@ -197,7 +226,7 @@ function writeResults(string $prefix, array $results): void
     fclose($fp);
 }
 
-function writeReport(string $prefix, array $results): void
+function writeReport(string $prefix, array $results, array $featureMap, array $adapterFeatures): void
 {
     $lines = [
         "# Benchmark report — {$results['env']['timestamp']}",
@@ -236,6 +265,134 @@ function writeReport(string $prefix, array $results): void
         }
         $lines[] = '';
     }
+
+    // --- Per-feature winners table ----------------------------------------
+    // For each feature, compare only the frameworks that support it and
+    // declare a winner per request (lowest trimmed mean).  A framework
+    // without the feature simply doesn't take part.
+    $lines[] = '## Winners by Feature';
+    $lines[] = '';
+    $lines[] = 'For each feature, only frameworks that support it are compared.';
+    $lines[] = 'Winner = lowest trimmed mean (ms) for that request.';
+    $lines[] = '';
+
+    // Build a lookup: app => mode => request => trimmed_mean_ms
+    $byApp = [];
+    foreach ($results['apps'] as $app) {
+        foreach ($app['modes'] as $modeName => $mode) {
+            foreach ($mode['requests'] as $req) {
+                $byApp[$app['app']][$modeName][$req['request']] = $req['trimmed_mean_ms'];
+            }
+        }
+    }
+
+    // Determine which modes were actually measured.
+    $modes = [];
+    foreach ($results['apps'] as $app) {
+        foreach (array_keys($app['modes']) as $m) {
+            $modes[$m] = true;
+        }
+    }
+    $modes = array_keys($modes);
+
+    // Group requests by feature.
+    $features = [];
+    foreach ($featureMap as $reqLabel => $feature) {
+        $features[$feature][] = $reqLabel;
+    }
+
+    foreach ($features as $feature => $reqLabels) {
+        $lines[] = "### {$feature}";
+        $lines[] = '';
+        $lines[] = '| Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) |';
+        $lines[] = '|---|---|---:|---|---:|---:|';
+
+        foreach ($reqLabels as $reqLabel) {
+            foreach ($modes as $modeName) {
+                // Collect participants that support this feature and have a measurement.
+                $participants = [];
+                foreach ($results['apps'] as $app) {
+                    $appKey = $app['app'];
+                    if (!in_array($feature, $adapterFeatures[$appKey] ?? [], true)) {
+                        continue;
+                    }
+                    if (!isset($byApp[$appKey][$modeName][$reqLabel])) {
+                        continue;
+                    }
+                    $participants[$appKey] = $byApp[$appKey][$modeName][$reqLabel];
+                }
+
+                if (count($participants) < 2) {
+                    // Not enough competitors for a meaningful race.
+                    $lines[] = "| {$reqLabel} ({$modeName}) | — | — | — | — | — |";
+                    continue;
+                }
+
+                asort($participants);
+                $ranked = array_keys($participants);
+                $winner = $ranked[0];
+                $runner = $ranked[1] ?? null;
+                $margin = $runner !== null
+                    ? $participants[$runner] - $participants[$winner]
+                    : 0.0;
+
+                $lines[] = sprintf(
+                    '| %s (%s) | **%s** | %.4f | %s | %.4f | %.4f |',
+                    $reqLabel,
+                    $modeName,
+                    $winner,
+                    $participants[$winner],
+                    $runner ?? '—',
+                    $runner !== null ? $participants[$runner] : 0.0,
+                    $margin
+                );
+            }
+        }
+        $lines[] = '';
+    }
+
+    // --- Win count summary -------------------------------------------------
+    $lines[] = '## Win Count';
+    $lines[] = '';
+    $lines[] = 'Number of requests each framework won (lowest trimmed mean), per mode.';
+    $lines[] = '';
+    $lines[] = '| Framework | ' . implode(' | ', $modes) . ' | Total |';
+    $lines[] = '|---|' . str_repeat('---:|', count($modes)) . '---:|';
+
+    $winCounts = [];
+    foreach ($results['apps'] as $app) {
+        $winCounts[$app['app']] = array_fill_keys($modes, 0);
+    }
+
+    foreach ($features as $feature => $reqLabels) {
+        foreach ($reqLabels as $reqLabel) {
+            foreach ($modes as $modeName) {
+                $participants = [];
+                foreach ($results['apps'] as $app) {
+                    $appKey = $app['app'];
+                    if (!in_array($feature, $adapterFeatures[$appKey] ?? [], true)) {
+                        continue;
+                    }
+                    if (!isset($byApp[$appKey][$modeName][$reqLabel])) {
+                        continue;
+                    }
+                    $participants[$appKey] = $byApp[$appKey][$modeName][$reqLabel];
+                }
+                if (count($participants) < 2) {
+                    continue;
+                }
+                asort($participants);
+                $winner = array_key_first($participants);
+                $winCounts[$winner][$modeName]++;
+            }
+        }
+    }
+
+    foreach ($winCounts as $appKey => $counts) {
+        $total = array_sum($counts);
+        $lines[] = '| ' . $appKey . ' | ' . implode(' | ', $counts) . ' | ' . $total . ' |';
+    }
+    $lines[] = '';
 
     file_put_contents($prefix . '.md', implode("\n", $lines));
 }
@@ -382,7 +539,7 @@ foreach ($apps as $key) {
 
 if ($outPrefix !== null) {
     writeResults($outPrefix, $results);
-    writeReport($outPrefix, $results);
+    writeReport($outPrefix, $results, $featureMap, $adapterFeatures);
     echo "\nWrote: {$outPrefix}.json, {$outPrefix}.csv, {$outPrefix}.md\n";
 }
 
