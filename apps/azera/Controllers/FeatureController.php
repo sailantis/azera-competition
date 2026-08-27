@@ -6,6 +6,12 @@
  *   GET  /features           — overview page
  *   GET  /features/aop        — #[Transactional] AOP demo (insert in a transaction)
  *   GET  /features/cache      — #[Cache] AOP demo (cached DB count)
+ *   GET  /features/log        — #[Log] AOP demo (method entry/exit logging)
+ *   GET  /features/retry      — #[Retry] AOP demo (retry a flaky method)
+ *   GET  /features/db-events  — Db event pipeline demo
+ *   GET  /features/validation — Validator demo (valid + invalid payloads)
+ *   GET  /features/config     — Config dot-notation demo
+ *   GET  /features/request-scoped — RequestScoped lifecycle demo
  *   GET  /features/events     — PSR-14 event dispatch + listener demo
  *   GET  /features/rate-limit — RateLimiter demo (max 5 requests / 60s)
  *   GET  /features/security   — Hasher + CSRF token demo
@@ -18,12 +24,14 @@ use App\Events\ItemCreated;
 use App\Services\DbEventLog;
 use App\Services\FeatureService;
 use App\Services\MemoryLogger;
+use App\Services\RequestCounter;
 use Azera\AppContext;
 use Azera\Core\Controller;
 use Azera\Http\Response;
 use Azera\Security\CsrfMiddleware;
 use Azera\Security\Hasher;
 use Azera\Security\RateLimiter;
+use Azera\Validation\Validator;
 
 class FeatureController extends Controller
 {
@@ -39,6 +47,9 @@ class FeatureController extends Controller
                 ['url' => '/features/log', 'title' => 'AOP #[Log]', 'desc' => 'Log method entry/exit/duration via the #[Log] advice'],
                 ['url' => '/features/retry', 'title' => 'AOP #[Retry]', 'desc' => 'Retry a failing method up to N times via the #[Retry] advice'],
                 ['url' => '/features/db-events', 'title' => 'Db Events', 'desc' => 'Observe QueryExecuted / StatementPrepared / Transaction events'],
+                ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate and coerce input via the Validator'],
+                ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Dot-notation access to a nested config array'],
+                ['url' => '/features/request-scoped', 'title' => 'RequestScoped', 'desc' => 'Reset per-request state via clearRequestScope()'],
                 ['url' => '/features/events', 'title' => 'PSR-14 Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'Allow max 5 requests per 60 seconds'],
                 ['url' => '/features/security', 'title' => 'Security (Hasher + CSRF)', 'desc' => 'Password hashing and CSRF token protection'],
@@ -245,6 +256,96 @@ class FeatureController extends Controller
             'feature'     => 'Db Events',
             'description' => 'Database dispatches QueryExecuted, StatementPrepared, TransactionStarted, TransactionCommitted via PSR-14.',
             'events'      => $log->all(),
+        ]);
+    }
+
+    /**
+     * GET /features/validation — demonstrate the Validator.
+     *
+     * Validates a sample payload (valid and invalid) and shows the
+     * validated/coerced data plus any error messages.
+     */
+    public function validationAction(): Response
+    {
+        // A valid payload — all rules pass.
+        $valid = new Validator([
+            'name'  => 'Ada Lovelace',
+            'email' => 'ada@example.com',
+            'age'   => '36',
+            'tags'  => ['math', 'code'],
+        ]);
+        $valid->field('name')->required()->string()->min(2)->max(100);
+        $valid->field('email')->required()->email()->max(255);
+        $valid->field('age')->optional()->int()->min(18)->max(120);
+        $valid->field('tags')->optional()->list(fn($f) => $f->string()->max(50));
+
+        // An invalid payload — several rules fail.
+        $invalid = new Validator([
+            'name'  => 'X',
+            'email' => 'not-an-email',
+            'age'   => '150',
+        ]);
+        $invalid->field('name')->required()->string()->min(2)->max(100);
+        $invalid->field('email')->required()->email()->max(255);
+        $invalid->field('age')->optional()->int()->min(18)->max(120);
+
+        return Response::json([
+            'feature'     => 'Validation',
+            'description' => 'Validator coerces and validates input; errors are keyed by dot-path field name.',
+            'valid_payload' => [
+                'passed'   => !$valid->fails(),
+                'data'     => $valid->validated(),
+                'errors'   => $valid->errors(),
+            ],
+            'invalid_payload' => [
+                'passed'   => !$invalid->fails(),
+                'data'     => $invalid->validated(),
+                'errors'   => $invalid->errors(),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /features/config — demonstrate the Config dot-notation service.
+     */
+    public function configAction(): Response
+    {
+        $config = $this->context()->config();
+
+        return Response::json([
+            'feature'     => 'Config',
+            'description' => 'Dot-notation access to a nested configuration array.',
+            'app_name'    => $config->get('app.name'),
+            'db_dsn'      => $config->get('db.dsn'),
+            'missing'     => $config->get('does.not.exist', 'fallback'),
+            'has_app'     => $config->has('app'),
+            'all'         => $config->all(),
+        ]);
+    }
+
+    /**
+     * GET /features/request-scoped — demonstrate the RequestScoped lifecycle.
+     *
+     * Increments a request-scoped counter.  In a long-lived worker the
+     * counter is reset by clearRequestScope() between requests; here we
+     * call it explicitly to show the reset works.
+     */
+    public function requestScopedAction(RequestCounter $counter): Response
+    {
+        $before = $counter->count();
+        $after  = $counter->increment();
+
+        // Simulate the end of a request: clear request-scoped state.
+        $this->context()->clearRequestScope();
+
+        $afterReset = $counter->count();
+
+        return Response::json([
+            'feature'     => 'RequestScoped',
+            'description' => 'Services implementing RequestScoped are reset by clearRequestScope() between requests.',
+            'count_before' => $before,
+            'count_after'  => $after,
+            'count_after_reset' => $afterReset,
         ]);
     }
 }

@@ -111,6 +111,19 @@ class Bootstrap
         // which is already available as a registered service.
         $ctx->set(\App\Services\FeatureService::class);
 
+        // --- RequestScoped demo service ---
+        // Registered as a class string so AppContext::build() instantiates
+        // it once; clearRequestScope() calls its resetState() hook.
+        $ctx->set(\App\Services\RequestCounter::class);
+
+        // --- Config ---
+        // Register a Config instance with a small nested array so the
+        // /features/config demo can read dot-notation keys.
+        $ctx->set(\Azera\Config\Config::class, new \Azera\Config\Config([
+            'app' => ['name' => 'azera-competition', 'env' => 'bench'],
+            'db'  => ['dsn' => 'sqlite:data/bench.sqlite', 'driver' => 'sqlite'],
+        ]));
+
         // --- Session middleware (needed for CSRF demo) ---
         // IMPORTANT: registered as a NAMED GROUP, NOT globally. In CLI
         // mode (verify.php / run.php) output is echoed before dispatch, so
@@ -134,6 +147,9 @@ class Bootstrap
             $r->get('/features/log', '::logAction');
             $r->get('/features/retry', '::retryAction');
             $r->get('/features/db-events', '::dbEventsAction');
+            $r->get('/features/validation', '::validationAction');
+            $r->get('/features/config', '::configAction');
+            $r->get('/features/request-scoped', '::requestScopedAction');
             $r->get('/features/events', '::eventsAction');
             $r->get('/features/rate-limit', '::rateLimitAction');
 
