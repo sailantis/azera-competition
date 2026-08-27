@@ -55,10 +55,8 @@ Options:
   --out=<prefix>          Write JSON + CSV + Markdown report with this prefix
   --clear-cache           Clear template caches before running
   --requests=<csv>        Comma-separated "METHOD URI" requests to benchmark
-                          (default: "GET /","GET /items","GET /items/1",
-                           "POST /items",
-                           "GET /items-qb","GET /items-qb/1","POST /items-qb",
-                           "GET /api/items","GET /api/items/1","POST /api/items")
+                          (default: all benchmark + REST API + feature routes;
+                           see the $requests array in run.php)
   --seed                  Reset & reseed the SQLite DB before running (prevents
                           POST /items from accumulating rows across runs)
   --rows=N                Row count when --seed is used (default: 1000)
@@ -95,6 +93,19 @@ $requests    = isset($opts['requests'])
         'GET /api/items',
         'GET /api/items/1',
         'POST /api/items',
+        // Feature demo endpoints (each framework participates only if it
+        // supports the underlying feature — see $adapterFeatures)
+        'GET /features/aop',
+        'GET /features/cache',
+        'GET /features/log',
+        'GET /features/retry',
+        'GET /features/pipeline',
+        'GET /features/db-events',
+        'GET /features/events',
+        'GET /features/validation',
+        'GET /features/config',
+        'GET /features/request-scoped',
+        'GET /features/rate-limit',
     ];
 
 // Normalize requests to [method, uri] pairs
@@ -108,28 +119,39 @@ $requests = array_map(function (string $r): array {
 // table groups endpoints by feature and only compares frameworks that
 // actually support that feature.
 $featureMap = [
-    'GET /'            => 'routing',
-    'GET /items'       => 'orm',
-    'GET /items/1'     => 'orm',
-    'POST /items'      => 'orm',
-    'GET /items-qb'    => 'query-builder',
-    'GET /items-qb/1'  => 'query-builder',
-    'POST /items-qb'   => 'query-builder',
-    'GET /api/items'   => 'rest-api',
-    'GET /api/items/1' => 'rest-api',
-    'POST /api/items'  => 'rest-api',
+    'GET /'                        => 'routing',
+    'GET /items'                   => 'orm',
+    'GET /items/1'                 => 'orm',
+    'POST /items'                  => 'orm',
+    'GET /items-qb'                => 'query-builder',
+    'GET /items-qb/1'              => 'query-builder',
+    'POST /items-qb'               => 'query-builder',
+    'GET /api/items'               => 'rest-api',
+    'GET /api/items/1'             => 'rest-api',
+    'POST /api/items'              => 'rest-api',
+    'GET /features/aop'            => 'aop',
+    'GET /features/cache'          => 'cache',
+    'GET /features/log'            => 'aop',
+    'GET /features/retry'          => 'aop',
+    'GET /features/pipeline'       => 'aop',
+    'GET /features/db-events'      => 'db-events',
+    'GET /features/events'         => 'events',
+    'GET /features/validation'     => 'validation',
+    'GET /features/config'         => 'config',
+    'GET /features/request-scoped' => 'request-scoped',
+    'GET /features/rate-limit'     => 'rate-limiter',
 ];
 
 // Which features each adapter supports.  An adapter that lacks a feature is
 // excluded from that feature's winners comparison (e.g. a framework without
 // AOP simply doesn't take part in the AOP race).
 $adapterFeatures = [
-    'azera'       => ['routing', 'orm', 'query-builder', 'rest-api'],
-    'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api'],
-    'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api'],
-    'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api'],
-    'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api'],
-    'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api'],
+    'azera'       => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+    'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'events', 'validation', 'config'],
+    'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'events', 'validation', 'config'],
+    'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'events', 'validation', 'config'],
+    'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api', 'validation'],
+    'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api', 'validation'],
 ];
 
 // --- Adapter registry ------------------------------------------------------
