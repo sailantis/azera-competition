@@ -1,0 +1,100 @@
+{
+    "env": {
+        "php_version": "8.2.23",
+        "os": "WINNT 10.0",
+        "opcache": true,
+        "sapi": "cli",
+        "timestamp": "2026-08-05T22:54:37+00:00"
+    },
+    "apps": [
+        {
+            "app": "azera",
+            "modes": {
+                "warm": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.025144150000000042,
+                            "mean_ms": 0.025201000000000147,
+                            "median_ms": 0.0213,
+                            "p95_ms": 0.0385,
+                            "peak_mem": 2097152
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.316964025,
+                            "mean_ms": 0.31901142999999854,
+                            "median_ms": 0.2689,
+                            "p95_ms": 0.5064,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.20064486249999997,
+                            "mean_ms": 0.20022619000000064,
+                            "median_ms": 0.1711,
+                            "p95_ms": 0.323,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 2.9080471,
+                            "mean_ms": 2.9046970399999843,
+                            "median_ms": 2.7919,
+                            "p95_ms": 3.5921,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "PUT \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.09707043750000002,
+                            "mean_ms": 0.10037693000000021,
+                            "median_ms": 0.0788,
+                            "p95_ms": 0.1685,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.301193575,
+                            "mean_ms": 0.30214478999999994,
+                            "median_ms": 0.2612,
+                            "p95_ms": 0.4802,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items-qb\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.20068245,
+                            "mean_ms": 0.20108306000000017,
+                            "median_ms": 0.1699,
+                            "p95_ms": 0.3228,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "POST \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.096799875,
+                            "mean_ms": 0.09690685999999989,
+                            "median_ms": 0.0777,
+                            "p95_ms": 0.1627,
+                            "peak_mem": 4194304
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

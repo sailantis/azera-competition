@@ -1,0 +1,263 @@
+<?php
+/**
+ * Azera benchmark bootstrap.
+ *
+ * Wires AppContext with SQLite, ClarityEngine views, and the 4 benchmark
+ * routes.  Called by AzeraAdapter::bootstrap().
+ */
+
+namespace App;
+
+use App\Controllers\BenchController;
+use App\Models\Item;
+use Azera\AppContext;
+use Azera\Db\Database;
+use Azera\Db\DatabaseManager;
+use Azera\Cache\ArrayCache;
+use Azera\Event\EventDispatcher;
+use Azera\Queue\SyncQueue;
+use Azera\Aop\TransactionalInterceptor;
+use Azera\Aop\CacheInterceptor;
+use Azera\Aop\Transactional;
+use Azera\Aop\Cache as CacheAdvice;
+use Psr\Log\LoggerInterface;
+use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\SimpleCache\CacheInterface;
+use Azera\Queue\QueueInterface;
+
+class Bootstrap
+{
+    public static function boot(string $dbPath): AppContext
+    {
+        // Fresh singleton for cold-mode reproducibility
+        AppContext::setInstance(new AppContext());
+        $ctx = AppContext::instance();
+
+        // Reset benchmark state for cold-mode reproducibility
+        \App\Middleware\RequestContextMiddleware::reset();
+
+        // --- Database (SQLite) ---
+        // Use a factory so we can configure PRAGMAs right after connecting.
+        $ctx->dbManager()->set('default', function () use ($dbPath) {
+            $db = new Database('sqlite:' . $dbPath);
+            // WAL mode + busy timeout so POST (write) iterations don't lock
+            $db->query('PRAGMA journal_mode = WAL');
+            $db->query('PRAGMA busy_timeout = 5000');
+            return $db;
+        });
+
+        // Tell the Item model to use the default role
+        //Item::setDefaultRole('default');
+
+        // --- Views (Clarity) ---
+        $ctx->view()
+            ->setExtension('.clarity.html')
+            ->setViewPath(__DIR__ . '/Views')
+            ->setVars([
+                'locale'   => 'en_US',
+                'platform' => 'desktop',
+            ]);
+
+        // --- Routes ---
+        $router = $ctx->router();
+
+        // Benchmark endpoints (the ones we actually time).
+        // Use the controller() group with a callback so the group stack
+        // is automatically restored afterwards.
+        $router->controller(BenchController::class, function (\Azera\Core\Router $r) {
+            $r->get('/', '::indexAction');
+            // ORM endpoints (model hydration)
+            $r->get('/items', '::listAction');
+            $r->get('/items/{id:int}', '::showAction');
+            $r->post('/items', '::createAction');
+
+            // Query Builder endpoints (no model hydration)
+            $r->get('/items-qb', '::listQbAction');
+            $r->get('/items-qb/{id:int}', '::showQbAction');
+            $r->post('/items-qb', '::createQbAction');
+        });
+
+        // --- Fill routes ---
+        // 100 dummy routes to simulate a real project's route table.
+        // We never dispatch these — they exist only so the router has a
+        // realistic number of entries to search through on every match.
+        // Mix of static, parametric, grouped, and multi-method routes.
+        self::registerFillerRoutes($router, 100);
+
+        // --- Dispatcher + Global Middleware ---
+        $dispatcher = $ctx->dispatcher();
+        $dispatcher->setBaseNamespace('\\App\\Controllers');
+
+        // Global middleware pipeline (runs on every dispatched request):
+        //   1. SecurityHeadersMiddleware — sets common security headers
+        //      on the response (X-Frame-Options, X-Content-Type-Options, etc.)
+        //   2. RequestContextMiddleware — reads Accept-Language + User-Agent
+        //      from request headers, picks a locale, stamps view vars
+        // This mirrors typical real-app middleware stacks and adds realistic
+        // per-request overhead that all full-stack frameworks pay.
+        $dispatcher->addMiddleware(new \App\Middleware\SecurityHeadersMiddleware());
+        $dispatcher->addMiddleware(new \App\Middleware\RequestContextMiddleware());
+
+        // --- Enterprise Infrastructure (PSR-3/14/16 + AOP) ---
+        self::registerEnterpriseServices($ctx);
+
+        // --- FeatureService (autowired so AOP proxy is generated) ---
+        // Registered as a class string (no factory) so AppContext::build()
+        // generates the AOP proxy.  The constructor receives AppContext
+        // which is already available as a registered service.
+        $ctx->set(\App\Services\FeatureService::class);
+
+        // --- Session middleware (needed for CSRF demo) ---
+        // IMPORTANT: registered as a NAMED GROUP, NOT globally. In CLI
+        // mode (verify.php / run.php) output is echoed before dispatch, so
+        // session_start() fails ("headers already sent") and leaves
+        // $_SESSION null, which crashes SessionMiddleware. Scoping it to
+        // only the /features/security routes keeps the benchmark endpoints
+        // free of session overhead (fair comparison with the other 5
+        // frameworks) while preserving the CSRF demo over HTTP.
+        $dispatcher->defineMiddlewareGroup('session', [
+            new \Azera\Http\SessionMiddleware(),
+        ]);
+
+        // --- Feature Demo Routes ---
+        // Endpoints that exercise the new enterprise features (AOP,
+        // events, cache, logging, security).  These don't interfere
+        // with benchmark routes.
+        $router->controller(\App\Controllers\FeatureController::class, function (\Azera\Core\Router $r) {
+            $r->get('/features', '::indexAction');
+            $r->get('/features/aop', '::aopAction');
+            $r->get('/features/cache', '::cacheAction');
+            $r->get('/features/events', '::eventsAction');
+            $r->get('/features/rate-limit', '::rateLimitAction');
+
+            // CSRF demo needs a real session — apply the 'session' group
+            // only to these routes.
+            $r->middleware('session', function () use ($r) {
+                $r->get('/features/security', '::securityAction');
+                $r->post('/features/security', '::securityPostAction');
+            });
+        });
+
+        return $ctx;
+    }
+
+    /**
+     * Register enterprise infrastructure services (PSR-3 Logger, PSR-14
+     * Event Dispatcher, PSR-16 Cache, Queue) and AOP interceptors.
+     *
+     * This wires the new framework subsystems into the benchmark app so
+     * we can validate them on a real Azera app without touching the
+     * production sailantis-homepage.
+     */
+    private static function registerEnterpriseServices(AppContext $ctx): void
+    {
+        // --- PSR-3 Logger ---
+        // Register NullLogger so listener constructors that type-hint
+        // LoggerInterface can be autowired.  Swap to Monolog for real logs.
+        $ctx->set(LoggerInterface::class, fn() => new \Azera\Log\NullLogger());
+
+        // --- PSR-14 Event Dispatcher ---
+        $ctx->set(EventDispatcherInterface::class, function () {
+            $dispatcher = new EventDispatcher();
+            $dispatcher->listen(
+                \App\Events\ItemCreated::class,
+                \App\Events\Listener\ItemCreatedListener::class,
+            );
+            return $dispatcher;
+        });
+
+        // --- PSR-16 Cache ---
+        $ctx->set(CacheInterface::class, fn() => new ArrayCache());
+
+        // --- Queue ---
+        $ctx->set(QueueInterface::class, fn() => new SyncQueue());
+
+        // --- AOP Interceptors ---
+        // Enable proxy generation for #[Advised] classes.
+        // AOP cache dir for file-based proxy generation.
+        $ctx->setAopCacheDir(__DIR__ . '/../../data/aop');
+
+        $ctx->registerInterceptor(
+            Transactional::class,
+            new TransactionalInterceptor($ctx->dbManager()),
+        );
+        $ctx->registerInterceptor(
+            CacheAdvice::class,
+            new CacheInterceptor($ctx->cache()),
+        );
+    }
+
+    /**
+     * Register N dummy routes that simulate a larger application.
+     *
+     * The routes are deliberately varied:
+     *   - Static routes (/about, /contact, /api/v1/users, ...)
+     *   - Parametric routes (/users/{id}, /blog/{slug}, /api/v1/users/{id}/posts/{postId}, ...)
+     *   - Grouped routes (prefix + namespace + controller)
+     *   - Multi-method routes (GET + POST on the same path)
+     *
+     * All handlers point to BenchController::indexAction so no extra
+     * controller classes are needed; we never actually dispatch them.
+     */
+    private static function registerFillerRoutes(\Azera\Core\Router $router, int $count): void
+    {
+        $controllers = ['User', 'Post', 'Comment', 'Category', 'Tag', 'Order', 'Product', 'Page', 'Setting', 'Search'];
+        $actions     = ['index', 'show', 'create', 'update', 'delete', 'edit', 'list', 'search'];
+        $sections    = ['admin', 'api', 'api/v1', 'api/v2', 'dashboard', 'panel', 'manage'];
+        $slugPool    = ['hello-world', 'getting-started', 'first-post', 'welcome', 'about-us', 'faq', 'docs', 'changelog'];
+
+        $registered = 0;
+        $i          = 0;
+
+        while ($registered < $count) {
+            $controller = $controllers[$i % count($controllers)];
+            $action     = $actions[$i % count($actions)];
+            $section    = $sections[$i % count($sections)];
+            $slug       = $slugPool[$i % count($slugPool)];
+            $id         = $i + 1;
+
+            // Pattern 1: static route e.g. /admin/users/index
+            $path1 = "/{$section}/{$controller}/{$action}";
+            $router->add(['GET', 'POST'], $path1);
+            $registered += 2; // two methods
+
+            if ($registered >= $count) {
+                break;
+            }
+
+            // Pattern 2: parametric route e.g. /api/v1/users/{id}
+            $path2 = "/{$section}/{$controller}/{param{$id}:int}";
+            $router->get($path2);
+            $registered++;
+
+            if ($registered >= $count) {
+                break;
+            }
+
+            // Pattern 3: nested parametric e.g. /api/v1/users/{id}/posts/{postId}
+            $path3 = "/{$section}/{$controller}/{param{$id}:int}/posts/{post{$id}:int}";
+            $router->get($path3);
+            $registered++;
+
+            if ($registered >= $count) {
+                break;
+            }
+
+            // Pattern 4: slug parametric e.g. /blog/hello-world
+            $path4 = "/blog/{$slug}";
+            $router->get($path4);
+            $registered++;
+
+            if ($registered >= $count) {
+                break;
+            }
+
+            // Pattern 5: wildcard e.g. /assets/css/{file:*}
+            $path5 = "/assets/" . strtolower($controller) . "/{file{$id}:*}";
+            $router->get($path5);
+            $registered++;
+
+            $i++;
+        }
+    }
+}

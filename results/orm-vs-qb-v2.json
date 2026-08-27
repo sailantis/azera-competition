@@ -1,0 +1,90 @@
+{
+    "env": {
+        "php_version": "8.2.23",
+        "os": "WINNT 10.0",
+        "opcache": true,
+        "sapi": "cli",
+        "timestamp": "2026-08-06T00:39:16+00:00"
+    },
+    "apps": [
+        {
+            "app": "azera",
+            "modes": {
+                "warm": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.030229662499999962,
+                            "mean_ms": 0.030153420000000215,
+                            "median_ms": 0.0248,
+                            "p95_ms": 0.0452,
+                            "peak_mem": 2097152
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.3706535499999999,
+                            "mean_ms": 0.3693160399999989,
+                            "median_ms": 0.3156,
+                            "p95_ms": 0.5806,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.20103781250000008,
+                            "mean_ms": 0.20240248000000025,
+                            "median_ms": 0.1717,
+                            "p95_ms": 0.324,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 2.8932989125,
+                            "mean_ms": 2.90160722,
+                            "median_ms": 2.7915,
+                            "p95_ms": 3.4664,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.3424539875,
+                            "mean_ms": 0.34345721,
+                            "median_ms": 0.2874,
+                            "p95_ms": 0.5453,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items-qb\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.20063203749999994,
+                            "mean_ms": 0.20029163000000066,
+                            "median_ms": 0.1694,
+                            "p95_ms": 0.3228,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "POST \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 3.011681875,
+                            "mean_ms": 3.013106750000014,
+                            "median_ms": 2.9068,
+                            "p95_ms": 3.6594,
+                            "peak_mem": 4194304
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

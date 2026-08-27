@@ -1,6 +1,25 @@
-composer.phar
 /vendor/
+/data/aop/
+/data/bench.sqlite
+/data/bench.sqlite-journal
+/data/bench.sqlite-wal
+/data/bench.sqlite-shm
 
-# Commit your application's lock file https://getcomposer.org/doc/01-basic-usage.md#commit-your-composer-lock-file-to-version-control
-# You may choose to ignore a library lock file http://getcomposer.org/doc/02-libraries.md#lock-file
-# composer.lock
+# Per-app compiled template caches
+apps/*/cache/
+apps/*/storage/
+apps/*/writable/
+apps/*/tmp/
+
+# Results (keep committed baselines if desired; ignore transient runs)
+results/transient/
+
+# OS / IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Composer
+composer.phar
+# Keep composer.lock for reproducible benchmark installs (this is an application)

@@ -1,0 +1,56 @@
+{
+  "name": "azera/competition",
+  "description": "Azera Competition - PHP framework benchmarks (routing + templates + models over SQLite).",
+  "type": "application",
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../clarity-engine"
+    },
+    {
+      "type": "path",
+      "url": "../azera-framework"
+    }
+  ],
+  "require": {
+    "php": ">=8.2",
+    "ext-mbstring": "*",
+    "ext-pdo": "*",
+    "sailantis/clarity-engine": "dev-main",
+    "sailantis/azera-framework": "dev-main",
+    "illuminate/database": "^11.0",
+    "illuminate/routing": "^11.0",
+    "illuminate/http": "^11.0",
+    "illuminate/view": "^11.0",
+    "illuminate/events": "^11.0",
+    "illuminate/container": "^11.0",
+    "symfony/http-kernel": "^7.0",
+    "symfony/routing": "^7.0",
+    "symfony/http-foundation": "^7.0",
+    "symfony/event-dispatcher": "^7.0",
+    "twig/twig": "3.27",
+    "league/plates": "^3.6",
+    "doctrine/orm": "^3.0",
+    "doctrine/dbal": "^4.0",
+    "spiral/core": "^3.0",
+    "spiral/http": "^3.0",
+    "spiral/router": "^3.0",
+    "spiral/views": "^3.0",
+    "spiral/stempler-bridge": "^3.0",
+    "spiral/cycle-bridge": "^2.9",
+    "cycle/database": "^2.9",
+    "cycle/orm": "^2.0",
+    "codeigniter4/framework": "^4.5",
+    "cakephp/orm": "^5.0",
+    "cakephp/http": "^5.0",
+    "cakephp/core": "^5.0"
+  },
+  "license": "MIT",
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "config": {
+    "audit": {
+      "block-insecure": false
+    }
+  }
+}

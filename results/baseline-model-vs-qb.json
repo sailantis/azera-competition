@@ -1,0 +1,70 @@
+{
+    "env": {
+        "php_version": "8.2.23",
+        "os": "WINNT 10.0",
+        "opcache": true,
+        "sapi": "cli",
+        "timestamp": "2026-08-05T21:36:08+00:00"
+    },
+    "apps": [
+        {
+            "app": "azera",
+            "modes": {
+                "warm": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.026397337499999972,
+                            "mean_ms": 0.026342879999999826,
+                            "median_ms": 0.0215,
+                            "p95_ms": 0.0398,
+                            "peak_mem": 2097152
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.3230823375,
+                            "mean_ms": 0.32339296999999906,
+                            "median_ms": 0.2746,
+                            "p95_ms": 0.5148,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.2136907750000001,
+                            "mean_ms": 0.21248376000000108,
+                            "median_ms": 0.1785,
+                            "p95_ms": 0.3375,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 2.9257692124999997,
+                            "mean_ms": 2.9154632900000106,
+                            "median_ms": 2.8005,
+                            "p95_ms": 3.7206,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "PUT \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.10958063749999998,
+                            "mean_ms": 0.11052563000000014,
+                            "median_ms": 0.0962,
+                            "p95_ms": 0.1809,
+                            "peak_mem": 4194304
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}
