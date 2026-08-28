@@ -1,6 +1,7 @@
 /vendor/
 /temp/
 /data/aop/
+/data/cache/
 /data/bench.sqlite
 /data/bench.sqlite-journal
 /data/bench.sqlite-wal

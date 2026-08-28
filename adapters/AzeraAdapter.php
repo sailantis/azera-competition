@@ -17,6 +17,12 @@ class AzeraAdapter implements WebAppAdapter
     public function __construct()
     {
         $this->dbPath = __DIR__ . '/../data/bench.sqlite';
+        // Ensure the data directory exists so SQLite can create/open the DB
+        // file (on a fresh clone the data/ dir may not be present).
+        $dataDir = dirname($this->dbPath);
+        if (!is_dir($dataDir)) {
+            @mkdir($dataDir, 0777, true);
+        }
     }
 
     public function name(): string

@@ -54,9 +54,18 @@ class Bootstrap
         //Item::setDefaultRole('default');
 
         // --- Views (Clarity) ---
+        // Cache compiled templates in a project-local directory instead of
+        // the shared sys_get_temp_dir()/clarity_cache.  On shared hosts the
+        // webserver may already own /tmp/clarity_cache, which makes the CLI
+        // user's mkdir() fail with "Permission denied".
+        $cacheDir = __DIR__ . '/../../data/cache';
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0777, true);
+        }
         $ctx->view()
             ->setExtension('.clarity.html')
             ->setViewPath(__DIR__ . '/Views')
+            ->setCachePath($cacheDir)
             ->setVars([
                 'locale'   => 'en_US',
                 'platform' => 'desktop',
