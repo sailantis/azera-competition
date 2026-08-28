@@ -25,9 +25,9 @@ spl_autoload_register(function (string $class): void {
     }
     $relative = substr($class, strlen($prefix));
     $file     = __DIR__ . '/../apps/azera/' . str_replace('\\', '/', $relative) . '.php';
-    if (is_file($file)) {
-        require $file;
-    }
+    //if (is_file($file)) {
+    require $file;
+    //}
 });
 
 $dbPath = __DIR__ . '/../data/bench.sqlite';

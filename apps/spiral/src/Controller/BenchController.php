@@ -43,7 +43,7 @@ class BenchController
     public function index(): Response
     {
         return $this->response->html(
-            $this->views->render('home', []),
+            $this->views->render('home', self::viewGlobals()),
         );
     }
 
@@ -61,11 +61,11 @@ class BenchController
             ->orderBy('id', 'ASC')
             ->fetchAll();
 
-        $html = $this->views->render('items', [
+        $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
             'baseUrl'    => '/items',
             'items'      => $rows,
             'pagination' => self::pagination($page, $count),
-        ]);
+        ]));
 
         return $this->response->html($html);
     }
@@ -85,7 +85,7 @@ class BenchController
         }
 
         return $this->response->html(
-            $this->views->render('item', ['item' => $item]),
+            $this->views->render('item', \array_merge(self::viewGlobals(), ['item' => $item])),
         );
     }
 
@@ -99,7 +99,7 @@ class BenchController
      */
     public function create(): Response
     {
-        $now = \date('Y-m-d H:i:s');
+        $now  = \date('Y-m-d H:i:s');
         $repo = $this->orm->getRepository(Item::class);
 
         $item = $repo->findByPK(self::SENTINEL_ORM_ID);
@@ -107,7 +107,7 @@ class BenchController
             $item = new Item('Created Item ' . $now, $now);
             $item->id = self::SENTINEL_ORM_ID;
         } else {
-            $item->title = 'Created Item ' . $now;
+            $item->title      = 'Created Item ' . $now;
             $item->created_at = $now;
         }
 
@@ -136,11 +136,15 @@ class BenchController
             ->offset(($page - 1) * self::PAGE_SIZE)
             ->fetchAll();
 
-        $html = $this->views->render('items', [
+        // Cast plain arrays to stdClass so the view can use $item->id
+        // syntax uniformly (same as showQb and the ORM path).
+        $items = \array_map(static fn(array $row): object => (object) $row, $rows);
+
+        $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
             'baseUrl'    => '/items-qb',
-            'items'      => $rows,
+            'items'      => $items,
             'pagination' => self::pagination($page, $count),
-        ]);
+        ]));
 
         return $this->response->html($html);
     }
@@ -161,7 +165,7 @@ class BenchController
         }
 
         return $this->response->html(
-            $this->views->render('item', ['item' => (object) $row]),
+            $this->views->render('item', \array_merge(self::viewGlobals(), ['item' => (object) $row])),
         );
     }
 
@@ -212,5 +216,19 @@ class BenchController
             'hasPrevious'  => $page > 1,
             'hasNext'      => $page < $lastPage,
         ];
+    }
+
+    /**
+     * View globals — locale and platform variables passed to every template,
+     * mirroring azera's RequestContextMiddleware which stamps these into the
+     * view engine. Since the benchmark adapter dispatches through the router
+     * directly (not Spiral's HTTP middleware pipeline), we pass them as
+     * render data instead.
+     *
+     * @return array<string, string>
+     */
+    private static function viewGlobals(): array
+    {
+        return ['locale' => 'en_US', 'platform' => 'desktop'];
     }
 }

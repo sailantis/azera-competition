@@ -62,7 +62,7 @@ class ApiController
      */
     public function create(): Response
     {
-        $now = \date('Y-m-d H:i:s');
+        $now  = \date('Y-m-d H:i:s');
         $repo = $this->orm->getRepository(Item::class);
 
         $item = $repo->findByPK(self::SENTINEL_API_ID);
@@ -70,7 +70,7 @@ class ApiController
             $item = new Item('API Item ' . $now, $now);
             $item->id = self::SENTINEL_API_ID;
         } else {
-            $item->title = 'API Item ' . $now;
+            $item->title      = 'API Item ' . $now;
             $item->created_at = $now;
         }
 

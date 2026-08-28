@@ -15,7 +15,6 @@ use Laminas\Diactoros\ServerRequest;
 use Laminas\Diactoros\Uri;
 use Spiral\Boot\Environment;
 use Spiral\Core\Container;
-use Spiral\Http\Http;
 use Spiral\Router\RouterInterface;
 
 class SpiralAdapter implements WebAppAdapter
@@ -36,7 +35,8 @@ class SpiralAdapter implements WebAppAdapter
                 return;
             }
             $relative = substr($class, strlen($prefix));
-            $file = __DIR__ . '/../apps/spiral/src/' . str_replace('\\', '/', $relative) . '.php';
+            $file     = __DIR__ . '/../apps/spiral/src/' . str_replace('\\', '/', $relative) . '.php';
+            // Guard required when multiple adapters share one process.
             if (is_file($file)) {
                 require $file;
             }
@@ -57,14 +57,14 @@ class SpiralAdapter implements WebAppAdapter
         $kernel->bootstrapped(static function () use (&$container, $kernelRef): void {
             // AbstractKernel::$container is protected readonly — read it via
             // reflection once boot completes (no public accessor exists).
-            $prop = new \ReflectionProperty(\Spiral\Boot\AbstractKernel::class, 'container');
+            $prop      = new \ReflectionProperty(\Spiral\Boot\AbstractKernel::class, 'container');
             $container = $prop->getValue($kernelRef);
         });
 
         $kernel->run(new Environment([
-            'APP_DEBUG'              => false,
-            'VIEW_CACHE'             => true,
-            'CYCLE_SCHEMA_CACHE'     => true,
+            'APP_DEBUG'               => false,
+            'VIEW_CACHE'              => true,
+            'CYCLE_SCHEMA_CACHE'      => true,
             'TOKENIZER_CACHE_TARGETS' => true,
         ]));
 

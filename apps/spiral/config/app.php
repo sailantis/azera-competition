@@ -8,13 +8,13 @@ declare(strict_types=1);
  */
 
 return [
-    'name' => 'Azera Competition (Spiral)',
-    'version' => '1.0.0',
+    'name'      => 'Azera Competition (Spiral)',
+    'version'   => '1.0.0',
     'benchmark' => [
-        'pageSize' => 20,
+        'pageSize'    => 20,
         'sentinelIds' => [
             'orm' => 999999,
-            'qb' => 999997,
+            'qb'  => 999997,
             'api' => 999998,
         ],
     ],

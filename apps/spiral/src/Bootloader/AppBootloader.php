@@ -20,11 +20,11 @@ final class AppBootloader extends Bootloader
 {
     /** PSR-17 factories (laminas-diactoros, already installed). */
     protected const BINDINGS = [
-        \Psr\Http\Message\ResponseFactoryInterface::class        => \Laminas\Diactoros\ResponseFactory::class,
-        \Psr\Http\Message\UriFactoryInterface::class             => \Laminas\Diactoros\UriFactory::class,
-        \Psr\Http\Message\ServerRequestFactoryInterface::class   => \Laminas\Diactoros\ServerRequestFactory::class,
-        \Psr\Http\Message\StreamFactoryInterface::class          => \Laminas\Diactoros\StreamFactory::class,
-        \Psr\Http\Message\UploadedFileFactoryInterface::class    => \Laminas\Diactoros\UploadedFileFactory::class,
+        \Psr\Http\Message\ResponseFactoryInterface::class      => \Laminas\Diactoros\ResponseFactory::class,
+        \Psr\Http\Message\UriFactoryInterface::class           => \Laminas\Diactoros\UriFactory::class,
+        \Psr\Http\Message\ServerRequestFactoryInterface::class => \Laminas\Diactoros\ServerRequestFactory::class,
+        \Psr\Http\Message\StreamFactoryInterface::class        => \Laminas\Diactoros\StreamFactory::class,
+        \Psr\Http\Message\UploadedFileFactoryInterface::class  => \Laminas\Diactoros\UploadedFileFactory::class,
     ];
 
     public function __construct(

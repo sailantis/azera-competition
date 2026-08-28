@@ -21,11 +21,20 @@ final class LogInterceptor implements InterceptorInterface
 
     public function intercept(CallContextInterface $context, HandlerInterface $handler): mixed
     {
-        $this->entries[] = 'log:before ' . $context->getTarget()->getPath('.');
+        $target = $context->getTarget();
+        // getPath() returns an array and takes no delimiter argument; closure targets
+        // created via Target::fromClosure() have an empty path, so fall back to the
+        // callable's reflection name for a readable log entry.
+        $path  = $target->getPath();
+        $label = $path === []
+            ? ($target->getReflection()?->getName() ?? 'closure')
+            : implode('.', $path);
+
+        $this->entries[] = 'log:before ' . $label;
 
         $result = $handler->handle($context);
 
-        $this->entries[] = 'log:after ' . $context->getTarget()->getPath('.');
+        $this->entries[] = 'log:after ' . $label;
 
         return $result;
     }

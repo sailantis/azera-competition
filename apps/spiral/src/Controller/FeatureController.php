@@ -22,6 +22,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Spiral\Cache\CacheStorageProviderInterface;
 use Spiral\Config\ConfiguratorInterface;
 use Spiral\Http\ResponseWrapper;
+use Spiral\Views\ViewsInterface;
 use Spiral\Validator\FilterDefinition;
 use Spiral\Validator\Validation;
 
@@ -36,7 +37,31 @@ class FeatureController
         private readonly ORMInterface $orm,
         private readonly EntityManagerInterface $em,
         private readonly ResponseWrapper $response,
+        private readonly ViewsInterface $views,
     ) {}
+
+    /**
+     * GET /features — overview page listing all feature demos.
+     */
+    public function index(): Response
+    {
+        $html = $this->views->render('features', [
+            'locale'   => 'en_US',
+            'platform' => 'desktop',
+            'features' => [
+                ['url' => '/features/aop', 'title' => 'AOP Interceptors', 'desc' => 'Insert a row inside an interceptor-managed DB transaction'],
+                ['url' => '/features/cache', 'title' => 'Cache (PSR-16)', 'desc' => 'Cache a method result via Spiral\'s PSR-16 cache storage'],
+                ['url' => '/features/log', 'title' => 'AOP Logging', 'desc' => 'Log method entry/exit via the LogInterceptor'],
+                ['url' => '/features/retry', 'title' => 'AOP Retry', 'desc' => 'Retry a failing method up to N times via the RetryInterceptor'],
+                ['url' => '/features/pipeline', 'title' => 'AOP Pipeline (direct)', 'desc' => 'Explicit interceptor pipeline — no proxy generation'],
+                ['url' => '/features/events', 'title' => 'PSR-14 Events', 'desc' => 'Dispatch an event and show listener output'],
+                ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate input via spiral/validator'],
+                ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Configuration access through Spiral\'s Config service'],
+            ],
+        ]);
+
+        return $this->response->html($html);
+    }
 
     /**
      * GET /features/aop — create an item through an interceptor pipeline.
@@ -66,8 +91,8 @@ class FeatureController
         $cache = $this->cache->storage('array');
         $key   = 'items:count';
 
-        $start     = \microtime(true);
-        $count     = $cache->get($key);
+        $start = \microtime(true);
+        $count = $cache->get($key);
         if ($count === null) {
             $count = $this->orm->getRepository(Item::class)->select()->count();
             $cache->set($key, $count, 60);

@@ -1,25 +1,59 @@
-<h1>Items</h1>
-<table>
+<extends:layouts.app/>
+
+<block:title>Items</block:title>
+
+<block:content>
+    <header>
+        <h1>{{ strtoupper('Items') }}</h1>
+        <p>Showing {{ count($items) }} items.</p>
+    </header>
+
+    <table>
     <thead>
-        <tr><th>ID</th><th>Title</th><th>Created</th></tr>
+        <tr>
+            <th>#</th>
+            <th>Title</th>
+            <th>Created</th>
+            <th>Badge</th>
+        </tr>
     </thead>
     <tbody>
-        @foreach($items as $item)
-        <tr>
-            <td>{{ $item->id }}</td>
+        @foreach($items as $idx => $item)
+        <tr @if($idx % 2 == 0)class="even"@endif>
+            <td><a href="{{ $baseUrl }}/{{ $item->id }}">{{ $item->id }}</a></td>
             <td>{{ $item->title }}</td>
             <td>{{ $item->created_at }}</td>
+            <td>
+                @if($item->id % 100 == 0)
+                <span class="badge">Pinned</span>
+                @elseif($item->id % 10 == 0)
+                <span class="badge">Featured</span>
+                @else
+                <span class="badge">Standard</span>
+                @endif
+            </td>
         </tr>
         @endforeach
     </tbody>
-</table>
-<div class="pagination">
-    <span>Page {{ $pagination['currentPage'] }} of {{ $pagination['lastPage'] }}</span>
-    @if($pagination['hasPrevious'])
-    <a href="{{ $baseUrl }}?page={{ $pagination['previousPage'] }}">&laquo; Prev</a>
-    @endif
-    @if($pagination['hasNext'])
-    <a href="{{ $baseUrl }}?page={{ $pagination['nextPage'] }}">Next &raquo;</a>
-    @endif
-    <span>{{ $pagination['totalItems'] }} items</span>
-</div>
+    </table>
+
+    <div class="pagination">
+        <span class="page-info">
+        Showing {{ $pagination['firstItem'] }}–{{ $pagination['lastItem'] }}
+        of {{ $pagination['totalItems'] }} items
+        </span>
+        <span class="page-nav">
+        @if($pagination['hasPrevious'])
+        <a href="{{ $baseUrl }}?page={{ $pagination['previousPage'] }}">← Previous</a>
+        @else
+        <span class="disabled">← Previous</span>
+        @endif
+        <span class="page-current">Page {{ $pagination['currentPage'] }} / {{ $pagination['lastPage'] }}</span>
+        @if($pagination['hasNext'])
+        <a href="{{ $baseUrl }}?page={{ $pagination['nextPage'] }}">Next →</a>
+        @else
+        <span class="disabled">Next →</span>
+        @endif
+        </span>
+    </div>
+</block:content>

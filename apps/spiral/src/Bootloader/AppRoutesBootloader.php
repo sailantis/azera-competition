@@ -73,6 +73,9 @@ final class AppRoutesBootloader extends RoutesBootloader
             ->methods('POST');
 
         // --- Feature demo endpoints --------------------------------------
+        $routes->add('features:index', '/features')
+            ->action(FeatureController::class, 'index')
+            ->methods('GET');
         $routes->add('feature:aop', '/features/aop')
             ->action(FeatureController::class, 'aop')
             ->methods('GET');

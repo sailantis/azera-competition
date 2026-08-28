@@ -1,0 +1,444 @@
+{
+    "env": {
+        "php_version": "8.3.31",
+        "os": "WINNT 10.0",
+        "opcache": true,
+        "sapi": "cli",
+        "timestamp": "2026-08-28T21:51:43+00:00"
+    },
+    "apps": [
+        {
+            "app": "azera",
+            "modes": {
+                "warm": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.072559,
+                            "mean_ms": 0.0743182,
+                            "median_ms": 0.0618,
+                            "p95_ms": 0.1211,
+                            "peak_mem": 2097152
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.22243033333333329,
+                            "mean_ms": 0.21907479999999985,
+                            "median_ms": 0.1953,
+                            "p95_ms": 0.3411,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.16241566666666665,
+                            "mean_ms": 0.15947259999999994,
+                            "median_ms": 0.1411,
+                            "p95_ms": 0.2708,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.6041390000000004,
+                            "mean_ms": 2.605025199999999,
+                            "median_ms": 2.5144,
+                            "p95_ms": 2.8216,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items-qb",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.22770133333333323,
+                            "mean_ms": 0.22902059999999996,
+                            "median_ms": 0.2249,
+                            "p95_ms": 0.3294,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items-qb\/1",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.14539533333333332,
+                            "mean_ms": 0.14650659999999982,
+                            "median_ms": 0.1309,
+                            "p95_ms": 0.2019,
+                            "peak_mem": 6291456
+                        },
+                        {
+                            "request": "POST \/items-qb",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.7098693333333332,
+                            "mean_ms": 2.714855000000001,
+                            "median_ms": 2.5649,
+                            "p95_ms": 3.5024,
+                            "peak_mem": 6291456
+                        },
+                        {
+                            "request": "GET \/api\/items",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.07018066666666667,
+                            "mean_ms": 0.06725060000000002,
+                            "median_ms": 0.0667,
+                            "p95_ms": 0.111,
+                            "peak_mem": 6291456
+                        },
+                        {
+                            "request": "GET \/api\/items\/1",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.038713,
+                            "mean_ms": 0.038299000000000034,
+                            "median_ms": 0.0323,
+                            "p95_ms": 0.0667,
+                            "peak_mem": 6291456
+                        },
+                        {
+                            "request": "POST \/api\/items",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.8141816666666664,
+                            "mean_ms": 2.8371171999999993,
+                            "median_ms": 2.6647,
+                            "p95_ms": 4.1803,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/features\/aop",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.829061333333333,
+                            "mean_ms": 2.819051200000002,
+                            "median_ms": 2.625,
+                            "p95_ms": 4.7871,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/features\/cache",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.012435333333333326,
+                            "mean_ms": 0.012622600000000006,
+                            "median_ms": 0.0117,
+                            "p95_ms": 0.015,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/features\/log",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.012955666666666666,
+                            "mean_ms": 0.01400279999999998,
+                            "median_ms": 0.0113,
+                            "p95_ms": 0.0225,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/features\/retry",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.010050333333333335,
+                            "mean_ms": 0.0096286,
+                            "median_ms": 0.0094,
+                            "p95_ms": 0.0117,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/features\/pipeline",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.012208999999999998,
+                            "mean_ms": 0.012486000000000008,
+                            "median_ms": 0.0102,
+                            "p95_ms": 0.0202,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/db-events",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.7756306666666664,
+                            "mean_ms": 2.7656137999999992,
+                            "median_ms": 2.6581,
+                            "p95_ms": 3.0482,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/events",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.7414046666666674,
+                            "mean_ms": 2.9263317999999994,
+                            "median_ms": 2.5567,
+                            "p95_ms": 4.7374,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/validation",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.02355333333333334,
+                            "mean_ms": 0.022488599999999987,
+                            "median_ms": 0.0219,
+                            "p95_ms": 0.0307,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/config",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.006961333333333336,
+                            "mean_ms": 0.007300000000000002,
+                            "median_ms": 0.0065,
+                            "p95_ms": 0.0091,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/request-scoped",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.010233999999999998,
+                            "mean_ms": 0.0106562,
+                            "median_ms": 0.0094,
+                            "p95_ms": 0.0185,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/rate-limit",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.01068000000000001,
+                            "mean_ms": 0.010693799999999982,
+                            "median_ms": 0.0106,
+                            "p95_ms": 0.0119,
+                            "peak_mem": 10485760
+                        }
+                    ]
+                },
+                "cold": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.06671899999999999,
+                            "mean_ms": 0.07098699999999997,
+                            "median_ms": 0.0588,
+                            "p95_ms": 0.1131,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.2655526666666667,
+                            "mean_ms": 0.26686079999999995,
+                            "median_ms": 0.2418,
+                            "p95_ms": 0.3985,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.1648773333333333,
+                            "mean_ms": 0.16512540000000003,
+                            "median_ms": 0.1349,
+                            "p95_ms": 0.2766,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.817657,
+                            "mean_ms": 2.8375320000000017,
+                            "median_ms": 2.6087,
+                            "p95_ms": 4.7485,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/items-qb",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.225784,
+                            "mean_ms": 0.23247719999999997,
+                            "median_ms": 0.205,
+                            "p95_ms": 0.3569,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/items-qb\/1",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.16139133333333336,
+                            "mean_ms": 0.1622868,
+                            "median_ms": 0.1408,
+                            "p95_ms": 0.2417,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "POST \/items-qb",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.7699999999999996,
+                            "mean_ms": 2.7830116,
+                            "median_ms": 2.5973,
+                            "p95_ms": 4.7632,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/api\/items",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.08923333333333333,
+                            "mean_ms": 0.08814420000000003,
+                            "median_ms": 0.0646,
+                            "p95_ms": 0.1528,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/api\/items\/1",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.06545366666666667,
+                            "mean_ms": 0.06501740000000003,
+                            "median_ms": 0.0392,
+                            "p95_ms": 0.1114,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "POST \/api\/items",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.866571333333333,
+                            "mean_ms": 2.8667132000000013,
+                            "median_ms": 2.6738,
+                            "p95_ms": 4.8189,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/aop",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.776638333333333,
+                            "mean_ms": 2.768959200000002,
+                            "median_ms": 2.5766,
+                            "p95_ms": 4.7213,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/cache",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5979403333333333,
+                            "mean_ms": 0.5968584,
+                            "median_ms": 0.0128,
+                            "p95_ms": 0.0167,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/log",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.012367000000000001,
+                            "mean_ms": 0.01517059999999999,
+                            "median_ms": 0.011,
+                            "p95_ms": 0.0261,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/retry",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.008813000000000001,
+                            "mean_ms": 0.009039000000000028,
+                            "median_ms": 0.0079,
+                            "p95_ms": 0.0119,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/pipeline",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.015601666666666666,
+                            "mean_ms": 0.015071200000000003,
+                            "median_ms": 0.0135,
+                            "p95_ms": 0.0218,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/db-events",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 3.479159333333333,
+                            "mean_ms": 3.512097799999999,
+                            "median_ms": 2.6078,
+                            "p95_ms": 4.7565,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/events",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 2.8384313333333324,
+                            "mean_ms": 2.8815299999999984,
+                            "median_ms": 2.7618,
+                            "p95_ms": 4.4293,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/validation",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.020787,
+                            "mean_ms": 0.0208924,
+                            "median_ms": 0.0201,
+                            "p95_ms": 0.0303,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/config",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.011173666666666665,
+                            "mean_ms": 0.010746800000000013,
+                            "median_ms": 0.01,
+                            "p95_ms": 0.0186,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/request-scoped",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.007964,
+                            "mean_ms": 0.008095599999999988,
+                            "median_ms": 0.0075,
+                            "p95_ms": 0.0121,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/features\/rate-limit",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.008879,
+                            "mean_ms": 0.00996779999999999,
+                            "median_ms": 0.0068,
+                            "p95_ms": 0.016,
+                            "peak_mem": 10485760
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

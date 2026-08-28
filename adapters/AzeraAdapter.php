@@ -35,6 +35,8 @@ class AzeraAdapter implements WebAppAdapter
             }
             $relative = substr($class, strlen($prefix));
             $file     = __DIR__ . '/../apps/azera/' . str_replace('\\', '/', $relative) . '.php';
+            // Guard: other benchmark apps (e.g. App\Spiral\...) share the App\
+            // prefix but live elsewhere — let their autoloaders handle them.
             if (is_file($file)) {
                 require $file;
             }

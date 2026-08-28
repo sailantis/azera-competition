@@ -5,7 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>
-        {% block title %}Benchmark{% endblock %}— Azera Competition
+        <block:title>Benchmark</block:title>
+        — Azera Competition
     </title>
     <style>
         body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
@@ -49,12 +50,12 @@
     </nav>
     <hr>
     <div class="content">
-        {% block content %}{% endblock %}
+        <block:content></block:content>
     </div>
     <footer class="meta">
-        Rendered with ClarityEngine — Azera Competition Benchmark
-        {% if locale %}| Locale: {{ locale }}{% endif %}
-        {% if platform %}| Platform: {{ platform }}{% endif %}
+        Rendered with Stempler — Azera Competition Benchmark
+        @if($locale)| Locale: {{ $locale }}@endif
+        @if($platform)| Platform: {{ $platform }}@endif
     </footer>
 </body>
 
