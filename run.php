@@ -327,7 +327,7 @@ function writeReport(string $prefix, array $results, array $featureMap, array $a
         $lines[] = "### {$feature}";
         $lines[] = '';
         $lines[] = '| Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |';
-        $lines[] = '|---|---|---:|---|---:|---:|---:|---:|';
+        $lines[] = '|---|---|---:|---|---:|---:|---:|';
 
         foreach ($reqLabels as $reqLabel) {
             foreach ($modes as $modeName) {
