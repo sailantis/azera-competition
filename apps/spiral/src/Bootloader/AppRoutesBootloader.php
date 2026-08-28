@@ -100,6 +100,15 @@ final class AppRoutesBootloader extends RoutesBootloader
         $routes->add('feature:config', '/features/config')
             ->action(FeatureController::class, 'config')
             ->methods('GET');
+        $routes->add('feature:db-events', '/features/db-events')
+            ->action(FeatureController::class, 'dbEvents')
+            ->methods('GET');
+        $routes->add('feature:request-scoped', '/features/request-scoped')
+            ->action(FeatureController::class, 'requestScoped')
+            ->methods('GET');
+        $routes->add('feature:rate-limit', '/features/rate-limit')
+            ->action(FeatureController::class, 'rateLimit')
+            ->methods('GET');
 
         // --- Filler routes (route-table size parity with azera app) ------
         foreach (\range(1, 100) as $i) {

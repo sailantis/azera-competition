@@ -14,7 +14,11 @@ use Cycle\Database\Config;
 
 return [
     'logger' => [
-        'default' => null,
+        // Route all Cycle DBAL driver logs (query lines with {elapsed,
+        // rowCount} context, Begin/Commit transaction messages) into the
+        // `database` channel. Spiral's LoggerFactory reads this config;
+        // the DbEventLog listener in AppBootloader consumes the LogEvents.
+        'default' => 'database',
         'drivers' => [],
     ],
 

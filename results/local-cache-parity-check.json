@@ -1,0 +1,49 @@
+{
+    "env": {
+        "php_version": "8.3.31",
+        "os": "WINNT 10.0",
+        "opcache": true,
+        "sapi": "cli",
+        "timestamp": "2026-08-28T23:03:56+00:00"
+    },
+    "apps": [
+        {
+            "app": "azera",
+            "modes": {
+                "cold": {
+                    "requests": [
+                        {
+                            "request": "GET \/features\/cache",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.605699,
+                            "mean_ms": 0.611016,
+                            "median_ms": 0.0122,
+                            "p95_ms": 0.0189,
+                            "peak_mem": 4194304
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "app": "spiral",
+            "modes": {
+                "cold": {
+                    "requests": [
+                        {
+                            "request": "GET \/features\/cache",
+                            "iterations_per_run": 100,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.9161766666666665,
+                            "mean_ms": 1.0504144000000002,
+                            "median_ms": 0.2469,
+                            "p95_ms": 0.4983,
+                            "peak_mem": 23068672
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

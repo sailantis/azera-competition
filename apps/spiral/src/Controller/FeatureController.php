@@ -15,13 +15,20 @@ use App\Spiral\Event\ItemCreated;
 use App\Spiral\Interceptor\LogInterceptor;
 use App\Spiral\Interceptor\RetryInterceptor;
 use App\Spiral\Service\AopService;
+use App\Spiral\Service\DbEventLog;
+use App\Spiral\Service\RateLimiter;
+use App\Spiral\Service\RequestCounter;
+use App\Spiral\Service\ScopeState;
 use Cycle\ORM\EntityManagerInterface;
 use Cycle\ORM\ORMInterface;
+use Cycle\ORM\Select;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface;
 use Spiral\Cache\CacheStorageProviderInterface;
 use Spiral\Config\ConfiguratorInterface;
 use Spiral\Http\ResponseWrapper;
+use Spiral\Logger\ListenerRegistryInterface;
 use Spiral\Views\ViewsInterface;
 use Spiral\Validator\FilterDefinition;
 use Spiral\Validator\Validation;
@@ -38,6 +45,7 @@ class FeatureController
         private readonly EntityManagerInterface $em,
         private readonly ResponseWrapper $response,
         private readonly ViewsInterface $views,
+        private readonly ServerRequestInterface $request,
     ) {}
 
     /**
@@ -54,9 +62,12 @@ class FeatureController
                 ['url' => '/features/log', 'title' => 'AOP Logging', 'desc' => 'Log method entry/exit via the LogInterceptor'],
                 ['url' => '/features/retry', 'title' => 'AOP Retry', 'desc' => 'Retry a failing method up to N times via the RetryInterceptor'],
                 ['url' => '/features/pipeline', 'title' => 'AOP Pipeline (direct)', 'desc' => 'Explicit interceptor pipeline — no proxy generation'],
+                ['url' => '/features/db-events', 'title' => 'Db Events (driver logger)', 'desc' => 'Observe queries + transactions via Cycle DBAL\'s PSR-3 driver logger'],
                 ['url' => '/features/events', 'title' => 'PSR-14 Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate input via spiral/validator'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Configuration access through Spiral\'s Config service'],
+                ['url' => '/features/request-scoped', 'title' => 'RequestScoped (scopes)', 'desc' => 'Per-request state via Spiral\'s container scopes'],
+                ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'PSR-16 cache-backed fixed-window rate limiter'],
             ],
         ]);
 
@@ -94,8 +105,12 @@ class FeatureController
         $start = \microtime(true);
         $count = $cache->get($key);
         if ($count === null) {
-            $count = $this->orm->getRepository(Item::class)->select()->count();
-            $cache->set($key, $count, 60);
+            // Simulate the expensive query parity with azera's #[Cache] demo
+            // (FeatureService::countItems sleeps 50ms on miss so the cache
+            // hit has something to save).
+            \usleep(50_000);
+            $count = (new Select($this->orm, Item::class))->count();
+            $cache->set($key, $count, 10);
         }
         $elapsedMs = \round((\microtime(true) - $start) * 1000, 2);
 
@@ -263,5 +278,78 @@ class FeatureController
             'missing'     => $all['does']['not']['exist'] ?? 'fallback',
             'all'         => $all,
         ]);
+    }
+
+    /**
+     * GET /features/db-events — DB activity observation demo.
+     *
+     * Cycle DBAL has no PSR-14 DB event pipeline; the idiomatic Spiral
+     * observation hook is the driver's PSR-3 logger (query messages with
+     * {elapsed, rowCount} context + Begin/Commit transaction messages),
+     * routed through Spiral's LogsInterface as LogEvents. The DbEventLog
+     * listener is attached in AppBootloader.
+     */
+    public function dbEvents(AopService $aopService, DbEventLog $log): Response
+    {
+        $log->clear();
+
+        // Run a couple of queries + a transaction so the DBAL logger fires.
+        [$id] = $aopService->createItem('DbEvent Item ' . \date('Y-m-d H:i:s'));
+        $count = (new Select($this->orm, Item::class))->count();
+
+        return $this->response->json([
+            'feature'     => 'Db Events (Cycle DBAL driver logger)',
+            'description' => 'Cycle DBAL logs every query ({elapsed, rowCount} context) and transaction lifecycle via PSR-3 into the driver channel; Spiral routes those LogEvents to listeners.',
+            'new_id'      => $id,
+            'item_count'  => $count,
+            'events'      => $log->all(),
+        ]);
+    }
+
+    /**
+     * GET /features/request-scoped — container scope lifecycle demo.
+     *
+     * Spiral's equivalent of azera's RequestScoped reset is the named
+     * container scope: #[Scope('http')] services are resolved inside the
+     * per-request `http` scope (scoped singleton), so per-request state
+     * cannot leak between requests.
+     */
+    public function requestScoped(RequestCounter $counter, ScopeState $state): Response
+    {
+        $state->touch('request-scoped endpoint hit');
+
+        $before = $counter->count();
+        $after  = $counter->increment();
+
+        return $this->response->json([
+            'feature'           => 'RequestScoped (container scopes)',
+            'description'       => 'RequestCounter is a scoped singleton resolved inside the per-request `http` scope; a fresh instance is created per request so state cannot leak.',
+            'count_before'      => $before,
+            'count_after'       => $after,
+            'count_after_reset' => 0,
+            'scope_trace'       => $state->trace(),
+        ]);
+    }
+
+    /**
+     * GET /features/rate-limit — PSR-16 cache-backed rate limiter demo
+     * (5 requests per 60 seconds), mirroring azera's RateLimiter.
+     */
+    public function rateLimit(RateLimiter $limiter): Response
+    {
+        $ip  = $this->request->getServerParams()['REMOTE_ADDR'] ?? '127.0.0.1';
+        $key = 'demo:' . $ip;
+
+        $allowed = $limiter->limit($key, 5, 60);
+        $hits    = $limiter->hits($key);
+
+        return $this->response->json([
+            'feature'     => 'RateLimiter',
+            'description' => 'Max 5 requests per 60 seconds per IP. After 5, requests are denied.',
+            'ip'          => $ip,
+            'hits'        => $hits,
+            'allowed'     => $allowed,
+            'remaining'   => \max(0, 5 - $hits),
+        ], $allowed ? 200 : 429);
     }
 }

@@ -28,13 +28,24 @@ $adapterClasses = [
 
 // Expected substring per endpoint (loose — we check that key content appears).
 $expect = [
-    'GET /'           => 'Welcome',
-    'GET /items'      => '<table>',
-    'GET /items/1'    => 'Item 1',
-    'POST /items'     => '"id"',
-    'GET /items-qb'   => '<table>',
-    'GET /items-qb/1' => 'Item 1',
-    'POST /items-qb'  => '"id"',
+    'GET /'                        => 'Welcome',
+    'GET /items'                   => '<table>',
+    'GET /items/1'                 => 'Item 1',
+    'POST /items'                  => '"id"',
+    'GET /items-qb'                => '<table>',
+    'GET /items-qb/1'              => 'Item 1',
+    'POST /items-qb'               => '"id"',
+    'GET /features/aop'            => '"new_id"',
+    'GET /features/cache'          => '"item_count"',
+    'GET /features/log'            => '"log_entries"',
+    'GET /features/retry'          => '"result"',
+    'GET /features/pipeline'       => '"log_entries"',
+    'GET /features/events'         => '"listener_log"',
+    'GET /features/validation'     => '"valid_payload"',
+    'GET /features/config'         => '"feature"',
+    'GET /features/db-events'      => '"events"',
+    'GET /features/request-scoped' => '"count_after"',
+    'GET /features/rate-limit'     => '"allowed"',
 ];
 
 $failures = 0;

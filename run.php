@@ -149,7 +149,7 @@ $adapterFeatures = [
     'azera'       => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
     'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'events', 'validation', 'config'],
     'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'events', 'validation', 'config'],
-    'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'events', 'validation', 'config'],
+    'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
     'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api', 'validation'],
     'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api', 'validation'],
 ];
@@ -326,8 +326,8 @@ function writeReport(string $prefix, array $results, array $featureMap, array $a
     foreach ($features as $feature => $reqLabels) {
         $lines[] = "### {$feature}";
         $lines[] = '';
-        $lines[] = '| Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) |';
-        $lines[] = '|---|---|---:|---|---:|---:|';
+        $lines[] = '| Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |';
+        $lines[] = '|---|---|---:|---|---:|---:|---:|---:|';
 
         foreach ($reqLabels as $reqLabel) {
             foreach ($modes as $modeName) {
@@ -346,7 +346,7 @@ function writeReport(string $prefix, array $results, array $featureMap, array $a
 
                 if (count($participants) < 2) {
                     // Not enough competitors for a meaningful race.
-                    $lines[] = "| {$reqLabel} ({$modeName}) | — | — | — | — | — |";
+                    $lines[] = "| {$reqLabel} ({$modeName}) | — | — | — | — | — | — |";
                     continue;
                 }
 
@@ -357,16 +357,22 @@ function writeReport(string $prefix, array $results, array $featureMap, array $a
                 $margin = $runner !== null
                     ? $participants[$runner] - $participants[$winner]
                     : 0.0;
+                // Speed-up: how many times faster the winner is than the
+                // runner-up (runner-up trimmed mean / winner trimmed mean).
+                $speedup = $runner !== null
+                    ? sprintf('%.1fx', $participants[$runner] / $participants[$winner])
+                    : '—';
 
                 $lines[] = sprintf(
-                    '| %s (%s) | **%s** | %.4f | %s | %.4f | %.4f |',
+                    '| %s (%s) | **%s** | %.4f | %s | %.4f | %.4f | %s |',
                     $reqLabel,
                     $modeName,
                     $winner,
                     $participants[$winner],
                     $runner ?? '—',
                     $runner !== null ? $participants[$runner] : 0.0,
-                    $margin
+                    $margin,
+                    $speedup
                 );
             }
         }
