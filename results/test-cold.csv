@@ -1,5 +1,0 @@
-app,mode,request,iterations_per_run,runs,trimmed_mean_ms,mean_ms,median_ms,p95_ms,peak_mem
-azera,warm,"GET /",1000,3,0.0246039,0.025287366666667,0.021,0.0377,2097152
-azera,warm,"GET /items",1000,3,1.4817577,1.5231353666667,1.3503,2.2192,4194304
-azera,warm,"GET /items/1",1000,3,0.2143692,0.21474223333333,0.1821,0.3321,4194304
-azera,warm,"POST /items",1000,3,0.9379531,0.92070116666666,0.8783,1.1272,4194304

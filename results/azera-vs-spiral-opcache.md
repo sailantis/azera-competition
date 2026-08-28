@@ -111,14 +111,14 @@ Winner = lowest trimmed mean (ms) for that request.
 ### routing
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET / (warm) | **azera** | 0.0152 | spiral | 0.2684 | 0.2532 | 17.7x |
 | GET / (cold) | **azera** | 0.0151 | spiral | 0.2704 | 0.2552 | 17.9x |
 
 ### orm
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /items (warm) | **azera** | 0.1023 | spiral | 1.3701 | 1.2678 | 13.4x |
 | GET /items (cold) | **azera** | 0.1122 | spiral | 2.3219 | 2.2097 | 20.7x |
 | GET /items/1 (warm) | **azera** | 0.0519 | spiral | 0.3480 | 0.2961 | 6.7x |
@@ -129,7 +129,7 @@ Winner = lowest trimmed mean (ms) for that request.
 ### query-builder
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /items-qb (warm) | **azera** | 0.0927 | spiral | 0.3815 | 0.2888 | 4.1x |
 | GET /items-qb (cold) | **azera** | 0.1093 | spiral | 0.9504 | 0.8411 | 8.7x |
 | GET /items-qb/1 (warm) | **azera** | 0.0492 | spiral | 0.3164 | 0.2672 | 6.4x |
@@ -140,7 +140,7 @@ Winner = lowest trimmed mean (ms) for that request.
 ### rest-api
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /api/items (warm) | **azera** | 0.0527 | spiral | 0.3571 | 0.3044 | 6.8x |
 | GET /api/items (cold) | **azera** | 0.0529 | spiral | 0.3573 | 0.3045 | 6.8x |
 | GET /api/items/1 (warm) | **azera** | 0.0365 | spiral | 0.3138 | 0.2773 | 8.6x |
@@ -151,7 +151,7 @@ Winner = lowest trimmed mean (ms) for that request.
 ### aop
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /features/aop (warm) | **azera** | 0.1840 | spiral | 0.5541 | 0.3701 | 3.0x |
 | GET /features/aop (cold) | **azera** | 0.1775 | spiral | 0.5557 | 0.3782 | 3.1x |
 | GET /features/log (warm) | **azera** | 0.0123 | spiral | 0.2804 | 0.2682 | 22.8x |
@@ -164,49 +164,49 @@ Winner = lowest trimmed mean (ms) for that request.
 ### cache
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /features/cache (warm) | **azera** | 0.0139 | spiral | 0.2851 | 0.2712 | 20.5x |
 | GET /features/cache (cold) | **azera** | 0.0640 | spiral | 0.3435 | 0.2795 | 5.4x |
 
 ### db-events
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /features/db-events (warm) | **azera** | 0.1830 | spiral | 2.2514 | 2.0683 | 12.3x |
 | GET /features/db-events (cold) | **azera** | 0.2392 | spiral | 2.8438 | 2.6045 | 11.9x |
 
 ### events
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /features/events (warm) | **azera** | 0.1903 | spiral | 0.6640 | 0.4737 | 3.5x |
 | GET /features/events (cold) | **azera** | 0.1931 | spiral | 0.6787 | 0.4857 | 3.5x |
 
 ### validation
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /features/validation (warm) | **azera** | 0.0179 | spiral | 0.3141 | 0.2962 | 17.6x |
 | GET /features/validation (cold) | **azera** | 0.0183 | spiral | 0.3174 | 0.2991 | 17.4x |
 
 ### config
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /features/config (warm) | **azera** | 0.0087 | spiral | 0.2815 | 0.2727 | 32.2x |
 | GET /features/config (cold) | **azera** | 0.0090 | spiral | 0.2858 | 0.2768 | 31.7x |
 
 ### request-scoped
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /features/request-scoped (warm) | **azera** | 0.0081 | spiral | 0.3006 | 0.2925 | 37.0x |
 | GET /features/request-scoped (cold) | **azera** | 0.0085 | spiral | 0.3048 | 0.2963 | 35.9x |
 
 ### rate-limiter
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
-|---|---|---:|---|---:|---:|---:|---:|
+|---|---|---:|---|---:|---:|---:|
 | GET /features/rate-limit (warm) | **azera** | 0.0090 | spiral | 0.3026 | 0.2937 | 33.7x |
 | GET /features/rate-limit (cold) | **azera** | 0.0096 | spiral | 0.3105 | 0.3009 | 32.3x |
 
