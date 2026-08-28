@@ -1,6 +1,6 @@
 {
   "name": "azera/competition",
-  "description": "Azera Competition - PHP framework benchmarks (routing + templates + models over SQLite).",
+  "description": "Azera Competition - PHP framework benchmarks.",
   "type": "application",
   "repositories": [
     {
@@ -43,7 +43,10 @@
     "codeigniter4/framework": "^4.5",
     "cakephp/orm": "^5.0",
     "cakephp/http": "^5.0",
-    "cakephp/core": "^5.0"
+    "cakephp/core": "^5.0",
+    "spiral/framework": "^3.17",
+    "spiral/validator": "^1.8",
+    "spiral-packages/league-event": "^1.0"
   },
   "license": "MIT",
   "minimum-stability": "dev",
@@ -51,6 +54,9 @@
   "config": {
     "audit": {
       "block-insecure": false
+    },
+    "allow-plugins": {
+      "spiral/composer-publish-plugin": true
     }
   }
 }

@@ -1,9 +1,13 @@
 /vendor/
+/temp/
 /data/aop/
 /data/bench.sqlite
 /data/bench.sqlite-journal
 /data/bench.sqlite-wal
 /data/bench.sqlite-shm
+
+# Spiral kernel runtime dir (tokenizer listener cache)
+/runtime/
 
 # Per-app compiled template caches
 apps/*/cache/
