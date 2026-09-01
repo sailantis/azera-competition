@@ -20,13 +20,13 @@ class Item
     #[ORM\Id]
     #[ORM\Column(type: 'integer')]
     #[ORM\GeneratedValue]
-    #[ORM\Id] #[ORM\Column(type: 'integer')] #[ORM\GeneratedValue] public int $id;
+    public int $id;
 
     #[ORM\Column(type: 'string')]
-    #[ORM\Column(type: 'string')] public string $title;
+    public string $title;
 
     #[ORM\Column(type: 'string')]
-    #[ORM\Column(type: 'string')] public string $created_at;
+    public string $created_at;
 
     public function __construct(string $title, string $createdAt)
     {
