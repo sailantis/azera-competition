@@ -35,7 +35,9 @@ class BenchController
         private readonly ViewsInterface $views,
         private readonly ResponseWrapper $response,
         private readonly Request $request,
-    ) {}
+    )
+    {
+    }
 
     /**
      * GET / — welcome page via Stempler template (no DB).
@@ -90,19 +92,26 @@ class BenchController
     }
 
     /**
-     * POST /items — upsert a sentinel item via the ORM, return id as JSON.
+     * POST /items — upsert a sentinel item via the ORM, render the item
+     * detail template with a flash message.
      *
      * Fixed sentinel ID keeps the row count stable across benchmark runs.
      * ORM upsert semantics: load the sentinel entity if it exists (→ state
      * MANAGED, persisted as UPDATE), else build a new one with the fixed PK
      * (→ state NEW, persisted as INSERT). Mirrors azera's Item::upsert().
+     *
+     * Unlike POST /api/items (pure JSON), this renders the show template
+     * with an inline flash banner ("created" on INSERT, "updated" after).
+     * The find-before-write already distinguishes INSERT vs UPDATE, so no
+     * extra probe is needed.
      */
     public function create(): Response
     {
         $now  = \date('Y-m-d H:i:s');
         $repo = $this->orm->getRepository(Item::class);
 
-        $item = $repo->findByPK(self::SENTINEL_ORM_ID);
+        $item    = $repo->findByPK(self::SENTINEL_ORM_ID);
+        $existed = $item !== null;
         if ($item === null) {
             $item = new Item('Created Item ' . $now, $now);
             $item->id = self::SENTINEL_ORM_ID;
@@ -114,7 +123,12 @@ class BenchController
         $this->em->persist($item);
         $this->em->run();
 
-        return $this->response->json(['id' => $item->id]);
+        return $this->response->html(
+            $this->views->render('item', \array_merge(self::viewGlobals(), [
+                'item'  => $item,
+                'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',
+            ])),
+        );
     }
 
     /* -------------------------------------------------------------
@@ -170,20 +184,43 @@ class BenchController
     }
 
     /**
-     * POST /items-qb — upsert via the query builder (INSERT ON CONFLICT).
+     * POST /items-qb — upsert via the query builder, render the item detail
+     * template with a flash message.
+     *
+     * Same render treatment as POST /items: detail template + flash, so the
+     * two HTML write endpoints stay symmetric (POST /api/items remains the
+     * pure JSON write measurement). The ON CONFLICT upsert stays as-is; the
+     * EXISTS probe distinguishes INSERT from UPDATE for the flash.
      */
     public function createQb(): Response
     {
+        $now = \date('Y-m-d H:i:s');
+
+        $existed = $this->db->select()
+            ->from('items')
+            ->where('id', self::SENTINEL_QB_ID)
+            ->limit(1)
+            ->fetchAll() !== [];
+
         $this->db->insert('items')
             ->values([
                 'id'         => self::SENTINEL_QB_ID,
-                'title'      => 'QB Item ' . \date('Y-m-d H:i:s'),
-                'created_at' => \date('Y-m-d H:i:s'),
+                'title'      => 'Created Item ' . $now,
+                'created_at' => $now,
             ])
             ->onConflict('id')
             ->run();
 
-        return $this->response->json(['id' => self::SENTINEL_QB_ID]);
+        return $this->response->html(
+            $this->views->render('item', \array_merge(self::viewGlobals(), [
+                'item' => (object) [
+                    'id'         => self::SENTINEL_QB_ID,
+                    'title'      => 'Created Item ' . $now,
+                    'created_at' => $now,
+                ],
+                'flash' => 'Item #' . self::SENTINEL_QB_ID . ($existed ? ' updated' : ' created') . ' ✓',
+            ])),
+        );
     }
 
     /**

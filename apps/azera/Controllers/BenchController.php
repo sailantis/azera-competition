@@ -73,23 +73,36 @@ class BenchController extends Controller
     }
 
     /**
-     * POST /items — upsert a sentinel item via Model ORM, return id as JSON.
+     * POST /items — upsert a sentinel item via Model ORM, render the item
+     * detail template with a flash message.
      *
      * Uses Item::upsert() (INSERT ... ON CONFLICT DO UPDATE) with a fixed
      * sentinel ID (999999) so the row count stays stable across benchmark
      * runs.  This exercises the full ORM write path: model instantiation,
      * __performWrite(), saveState(), and the query builder's upsert
      * compilation.
+     *
+     * Unlike POST /api/items (pure JSON), this renders the show template
+     * with an inline flash banner ("created" on INSERT, "updated" after).
+     * The exists() probe adds the same SELECT the other frameworks' write
+     * paths pay, keeping the SELECT + write + render sequence comparable.
      */
     public function createAction(): Response
     {
+        $existed = Item::exists(['id' => 999999]);
+
         $item = Item::upsert([
             'id'         => 999999,
             'title'      => 'Created Item ' . date('Y-m-d H:i:s'),
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 
-        return Response::json(['id' => $item->id]);
+        $html = $this->view()->render('items.show', [
+            'item'  => $item,
+            'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',
+        ]);
+
+        return Response::html($html);
     }
 
     /* -------------------------------------------------------------
@@ -156,11 +169,17 @@ class BenchController extends Controller
      * Builder (Query::raw() = literal table names, no model mapping or
      * hydration). POST /items (ORM) vs POST /items-qb (QB) gives a clean
      * ORM-vs-builder write comparison on the same method.
+     *
+     * Same render treatment as POST /items: detail template + flash, so
+     * the two HTML write endpoints stay symmetric (POST /api/items remains
+     * the pure JSON write measurement).
      */
     public function createQbAction(): Response
     {
         $title      = 'Created Item ' . date('Y-m-d H:i:s');
         $created_at = date('Y-m-d H:i:s');
+
+        $existed = Query::raw()->table('items')->where('id', 999997)->exists();
 
         Query::raw()
             ->table('items')
@@ -171,6 +190,15 @@ class BenchController extends Controller
                 'created_at' => $created_at,
             ]);
 
-        return Response::json(['id' => 999997]);
+        $html = $this->view()->render('items.show', [
+            'item' => (object) [
+                'id'         => 999997,
+                'title'      => $title,
+                'created_at' => $created_at,
+            ],
+            'flash' => 'Item #999997' . ($existed ? ' updated' : ' created') . ' ✓',
+        ]);
+
+        return Response::html($html);
     }
 }

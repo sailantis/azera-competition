@@ -7,6 +7,10 @@
 ?>
 <h1>Item <?= h((string) $item->id) ?></h1>
 
+<?php if (!empty($flash)): ?>
+    <div class="flash"><?= h($flash) ?></div>
+<?php endif; ?>
+
 <table>
 <tbody>
     <tr>

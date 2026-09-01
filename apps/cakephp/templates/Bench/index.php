@@ -23,6 +23,17 @@
     <li><a href="/api/items">/api/items</a> — REST API (JSON, ORM hydration)</li>
 </ul>
 
+<h2>Try it</h2>
+<p>Trigger the write + render POST endpoints directly from the browser:</p>
+<div class="actions">
+    <form method="post" action="/items">
+        <button type="submit">POST /items (ORM + flash)</button>
+    </form>
+    <form method="post" action="/items-qb">
+        <button type="submit">POST /items-qb (query builder + flash)</button>
+    </form>
+</div>
+
 <h2>What is measured?</h2>
 <table>
 <tbody>
@@ -40,7 +51,7 @@
     </tr>
     <tr>
         <th>POST /items</th>
-        <td>Routing + middleware + model upsert (ORM write path)</td>
+        <td>Routing + middleware + model upsert (ORM write path) + template + flash</td>
     </tr>
     <tr>
         <th>GET /items-qb</th>

@@ -6,27 +6,28 @@ A reproducible, in-process benchmark that compares **Azera** against popular ful
 
 ## What is measured?
 
-Each framework implements the **same 4 endpoints** against a shared SQLite `items` table:
+Each framework implements the **same benchmark endpoints** against a shared SQLite `items` table:
 
-| Endpoint | What it exercises |
-|---|---|
-| `GET /` | Router + dispatcher + plain-text response (routing overhead only) |
-| `GET /items` | Router + controller + `Item::all()` via ORM + list template render |
-| `GET /items/{id}` | Router + controller + `Item::find(id)` via ORM + single-item template render |
-| `POST /items` | Router + controller + ORM insert (write path) → JSON response with new id |
+| Endpoint          | What it exercises                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| `GET /`           | Router + dispatcher + plain-text response (routing overhead only)                                     |
+| `GET /items`      | Router + controller + `Item::all()` via ORM + list template render                                    |
+| `GET /items/{id}` | Router + controller + `Item::find(id)` via ORM + single-item template render                          |
+| `POST /items`     | Router + controller + ORM upsert (write path) + item detail template render with flash message (HTML) |
+| `POST /api/items` | Router + controller + ORM upsert (write path) → JSON response with new id                             |
 
 The harness dispatches synthetic requests **in-process** (no real HTTP socket) so we measure framework overhead, not PHP-FPM / web server cost. This mirrors the approach used by `azera-framework/benchmarks/view-engine`.
 
 ## Frameworks
 
-| Framework | Template engine | Model / ORM |
-|---|---|---|
-| **Azera** | Clarity | Azera Model + Query Builder |
-| **Laravel** | Blade | Eloquent |
-| **Symfony** | Twig | Doctrine ORM / DBAL |
-| **Spiral** | Stempler | Cycle ORM / DBAL |
-| **CodeIgniter 4** | CI4 View parser | CI4 Model / QueryBuilder |
-| **CakePHP 5** | CakePHP View (`.ctp`) | CakePHP ORM / Table |
+| Framework         | Template engine       | Model / ORM                 |
+| ----------------- | --------------------- | --------------------------- |
+| **Azera**         | Clarity               | Azera Model + Query Builder |
+| **Laravel**       | Blade                 | Eloquent                    |
+| **Symfony**       | Twig                  | Doctrine ORM / DBAL         |
+| **Spiral**        | Stempler              | Cycle ORM / DBAL            |
+| **CodeIgniter 4** | CI4 View parser       | CI4 Model / QueryBuilder    |
+| **CakePHP 5**     | CakePHP View (`.ctp`) | CakePHP ORM / Table         |
 
 All six ship built-in template engines and model/DB layers, so the comparison is apples-to-apples for a full-stack workload.
 
@@ -69,7 +70,7 @@ Run `php run.php --help` for all options.
    (`bootstrap()`, `dispatch(string $method, string $uri): string`, `name()`).
 3. Add the framework to `composer.json` `require`.
 4. Add the adapter key to `run.php`'s adapter map.
-5. Run `php verify.php` to confirm your adapter produces the expected output for all 4 endpoints.
+5. Run `php verify.php` to confirm your adapter produces the expected output for all benchmark endpoints.
 
 ## Fairness caveats
 

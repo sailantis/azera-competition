@@ -68,10 +68,16 @@ final class BenchController extends AppController
     }
 
     /**
-     * POST /items — upsert the sentinel item via the ORM Table, JSON id.
+     * POST /items — upsert the sentinel item via the ORM Table, render the
+     * item detail template with a flash message.
      *
      * get-or-new-then-save mirrors azera's Item::upsert() semantics with a
      * fixed sentinel id so row count stays stable across runs.
+     *
+     * Unlike POST /api/items (pure JSON), this renders the show template
+     * with an inline flash banner ("created" on INSERT, "updated" after).
+     * The find-before-write already distinguishes INSERT vs UPDATE, so no
+     * extra probe is needed.
      */
     public function create(): \Cake\Http\Response
     {
@@ -88,6 +94,7 @@ final class BenchController extends AppController
             ]);
             $entity->setNew(true);
             $entity->setSource('Items');
+            $existed = false;
         } else {
             $existing->set('title', 'Created Item ' . $now);
             // save() short-circuits when no field is dirty, and set() only
@@ -98,12 +105,17 @@ final class BenchController extends AppController
             // flag so every request exercises the real ORM write path, like
             // azera's Item::upsert() and CI4's update().
             $existing->setDirty('title', true);
-            $entity = $existing;
+            $entity  = $existing;
+            $existed = true;
         }
 
         $table->save($entity);
 
-        return $this->json(['id' => $sentinel]);
+        $this->set('title', 'Item ' . $sentinel);
+        $this->set('item', $entity);
+        $this->set('flash', 'Item #' . $sentinel . ($existed ? ' updated' : ' created') . ' ✓');
+
+        return $this->render('show');
     }
 
     /* -------------------------------------------------------------
@@ -164,10 +176,23 @@ final class BenchController extends AppController
      * POST /items-qb — upsert the QB sentinel row via the database query
      * builder (InsertQuery + ON CONFLICT epilog), mirroring the other
      * frameworks' builder write paths (azera Query::upsert(), CI4 upsert()).
+     *
+     * Same render treatment as POST /items: detail template + flash, so the
+     * two HTML write endpoints stay symmetric (POST /api/items remains the
+     * pure JSON write measurement). The EXISTS probe distinguishes INSERT
+     * from UPDATE for the flash.
      */
     public function createQb(): \Cake\Http\Response
     {
         $now = date('Y-m-d H:i:s');
+
+        $existing = Db::connection()
+            ->selectQuery(['id'], 'items')
+            ->where(['id' => Benchmark::SENTINEL_QB_ID])
+            ->execute()
+            ->fetch(\PDO::FETCH_ASSOC);
+        $existed = $existing !== false;
+
         Db::connection()
             ->insertQuery('items', [
                 'id'         => Benchmark::SENTINEL_QB_ID,
@@ -177,7 +202,15 @@ final class BenchController extends AppController
             ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title')
             ->rowCountAndClose();
 
-        return $this->json(['id' => Benchmark::SENTINEL_QB_ID]);
+        $this->set('title', 'Item ' . Benchmark::SENTINEL_QB_ID);
+        $this->set('item', $this->toObject([
+            'id'         => Benchmark::SENTINEL_QB_ID,
+            'title'      => 'Created Item ' . $now,
+            'created_at' => $now,
+        ]));
+        $this->set('flash', 'Item #' . Benchmark::SENTINEL_QB_ID . ($existed ? ' updated' : ' created') . ' ✓');
+
+        return $this->render('show_qb');
     }
 
     /**

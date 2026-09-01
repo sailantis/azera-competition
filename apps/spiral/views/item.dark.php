@@ -3,6 +3,9 @@
 <block:title>Item {{ $item->id }}</block:title>
 
 <block:content>
+    @if(!empty($flash))
+    <div class="flash">{{ $flash }}</div>
+    @endif
     <h1>Item {{ $item->id }}</h1>
 
     <table>

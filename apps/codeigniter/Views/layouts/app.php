@@ -21,6 +21,16 @@
 
         .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.8rem; background: #e8f0fe; color: #1a73e8; }
 
+        .flash { padding: 0.6rem 1rem; border-radius: 3px; background: #e6f4ea; color: #137333; border: 1px solid #b7dfc4; margin-bottom: 1rem; }
+
+        .actions { display: flex; gap: 1rem; margin: 1rem 0; }
+
+        .actions form { margin: 0; }
+
+        .actions button { padding: 0.5rem 1.1rem; border: 1px solid #1a73e8; border-radius: 3px; background: #fff; color: #1a73e8; font: inherit; cursor: pointer; }
+
+        .actions button:hover { background: #e8f0fe; }
+
         .meta { color: #666; font-size: 0.85rem; margin-top: 1rem; }
 
         .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding: 0.5rem 0; }

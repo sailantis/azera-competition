@@ -63,10 +63,16 @@ final class Bench extends BaseController
     }
 
     /**
-     * POST /items — upsert the sentinel item via the ORM / model, JSON id.
+     * POST /items — upsert the sentinel item via the ORM / model, render
+     * the item detail template with a flash message.
      *
      * find-then-insert-or-update mirrors azera's Item::upsert() semantics
      * with a fixed sentinel id so row count stays stable across runs.
+     *
+     * Unlike POST /api/items (pure JSON), this renders the item template
+     * with an inline flash banner ("created" on INSERT, "updated" after).
+     * The find-before-write already distinguishes INSERT vs UPDATE, so no
+     * extra probe is needed.
      */
     public function create(): \CodeIgniter\HTTP\ResponseInterface|string
     {
@@ -80,13 +86,23 @@ final class Bench extends BaseController
                 'title'      => 'Created Item ' . $now,
                 'created_at' => $now,
             ]);
+            $existed = false;
         } else {
             $model->db->table('items')
                 ->where('id', self::SENTINEL_ORM_ID)
                 ->update(['title' => 'Created Item ' . $now]);
+            $existed = true;
         }
 
-        return $this->response->setJSON(['id' => self::SENTINEL_ORM_ID]);
+        return view('item', [
+            'title' => 'Item ' . self::SENTINEL_ORM_ID,
+            'item'  => (object) [
+                'id'         => self::SENTINEL_ORM_ID,
+                'title'      => 'Created Item ' . $now,
+                'created_at' => $now,
+            ],
+            'flash' => 'Item #' . self::SENTINEL_ORM_ID . ($existed ? ' updated' : ' created') . ' ✓',
+        ] + $this->viewGlobals());
     }
 
     /* -------------------------------------------------------------
@@ -131,11 +147,21 @@ final class Bench extends BaseController
     }
 
     /**
-     * POST /items-qb — upsert the QB sentinel row via raw SQL builder.
+     * POST /items-qb — upsert the QB sentinel row via raw SQL builder,
+     * render the item detail template with a flash message.
+     *
+     * Same render treatment as POST /items: detail template + flash, so the
+     * two HTML write endpoints stay symmetric (POST /api/items remains the
+     * pure JSON write measurement). The upsert() is a plain write — the
+     * EXISTS probe distinguishes INSERT from UPDATE for the flash.
      */
     public function createQb(): \CodeIgniter\HTTP\ResponseInterface|string
     {
         $title = 'Created Item ' . date('Y-m-d H:i:s');
+
+        $existed = $this->db()->table('items')
+            ->where('id', self::SENTINEL_QB_ID)
+            ->countAllResults() > 0;
 
         $this->db()->table('items')->upsert([
             'id'         => self::SENTINEL_QB_ID,
@@ -143,7 +169,15 @@ final class Bench extends BaseController
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 
-        return $this->response->setJSON(['id' => self::SENTINEL_QB_ID]);
+        return view('item', [
+            'title' => 'Item ' . self::SENTINEL_QB_ID,
+            'item'  => (object) [
+                'id'         => self::SENTINEL_QB_ID,
+                'title'      => $title,
+                'created_at' => date('Y-m-d H:i:s'),
+            ],
+            'flash' => 'Item #' . self::SENTINEL_QB_ID . ($existed ? ' updated' : ' created') . ' ✓',
+        ] + $this->viewGlobals());
     }
 
     /**

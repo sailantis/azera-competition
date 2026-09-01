@@ -3,6 +3,10 @@
 <?= $this->section('content') ?>
 <h1>Item <?= (int) $item->id ?></h1>
 
+<?php if (!empty($flash)): ?>
+    <div class="flash"><?= esc($flash) ?></div>
+<?php endif; ?>
+
 <table>
 <tbody>
     <tr>
