@@ -45,6 +45,14 @@ final class Kernel extends BaseKernel
         // Keep the app cache alive across the many synthetic requests the
         // benchmark harness dispatches in one process (see the pass docblock).
         $container->addCompilerPass(new PersistentAppCachePass());
+
+        // Ensure the compiled container is invalidated when the compiler pass
+        // (or this kernel) changes, so a stale container can never keep the
+        // old reset behaviour on another machine.
+        $container->addResource(new \Symfony\Component\Config\Resource\FileResource(__FILE__));
+        $container->addResource(new \Symfony\Component\Config\Resource\FileResource(
+            __DIR__ . '/DependencyInjection/PersistentAppCachePass.php'
+        ));
     }
 
     public function getProjectDir(): string

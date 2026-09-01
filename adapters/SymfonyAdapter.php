@@ -83,6 +83,15 @@ class SymfonyAdapter implements WebAppAdapter
 
             $response = $this->kernel->handle($request, HttpKernelInterface::MAIN_REQUEST, false);
 
+            // Symfony expects a request/terminate lifecycle. In a long-lived
+            // benchmark process the terminate phase triggers the
+            // services_resetter (kernel.reset tagged services such as the
+            // Doctrine EntityManager and request-scoped state). Without this,
+            // ORM identity-map state accumulates and request-scoped services
+            // leak across dispatches, which shows up as growing latency on
+            // longer-running servers.
+            $this->kernel->terminate($request, $response);
+
             return (string) $response->getContent();
         } catch (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e) {
             return 'Not Found';
