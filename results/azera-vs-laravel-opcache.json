@@ -1,0 +1,877 @@
+{
+    "env": {
+        "php_version": "8.3.6",
+        "os": "Linux 6.8.0-124-generic",
+        "opcache": true,
+        "sapi": "cli",
+        "timestamp": "2026-09-01T21:03:39+00:00"
+    },
+    "apps": [
+        {
+            "app": "azera",
+            "modes": {
+                "warm": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.015468688000000003,
+                            "mean_ms": 0.015597046599999964,
+                            "median_ms": 0.014552,
+                            "p95_ms": 0.023467,
+                            "peak_mem": 2097152
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.10738861066666662,
+                            "mean_ms": 0.10691868579999991,
+                            "median_ms": 0.099815,
+                            "p95_ms": 0.139112,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.054491653666666674,
+                            "mean_ms": 0.0546592458,
+                            "median_ms": 0.049968,
+                            "p95_ms": 0.073855,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.38695488299999964,
+                            "mean_ms": 0.3988129018000001,
+                            "median_ms": 0.353964,
+                            "p95_ms": 0.537502,
+                            "peak_mem": 16777216
+                        },
+                        {
+                            "request": "GET \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.09213973800000007,
+                            "mean_ms": 0.09233788260000002,
+                            "median_ms": 0.087595,
+                            "p95_ms": 0.113449,
+                            "peak_mem": 20971520
+                        },
+                        {
+                            "request": "GET \/items-qb\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.04897184966666664,
+                            "mean_ms": 0.0490229047999999,
+                            "median_ms": 0.046119,
+                            "p95_ms": 0.063245,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "POST \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.23300012466666664,
+                            "mean_ms": 0.2331871464000003,
+                            "median_ms": 0.222656,
+                            "p95_ms": 0.307722,
+                            "peak_mem": 31457280
+                        },
+                        {
+                            "request": "GET \/api\/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.05423202200000002,
+                            "mean_ms": 0.054530992600000015,
+                            "median_ms": 0.050632,
+                            "p95_ms": 0.075705,
+                            "peak_mem": 33554432
+                        },
+                        {
+                            "request": "GET \/api\/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.03876194666666666,
+                            "mean_ms": 0.03861366299999995,
+                            "median_ms": 0.035539,
+                            "p95_ms": 0.052786,
+                            "peak_mem": 35651584
+                        },
+                        {
+                            "request": "POST \/api\/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.19669150966666668,
+                            "mean_ms": 0.19798233979999966,
+                            "median_ms": 0.19058,
+                            "p95_ms": 0.247385,
+                            "peak_mem": 39845888
+                        },
+                        {
+                            "request": "GET \/features\/aop",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.17848667133333326,
+                            "mean_ms": 0.17967119440000032,
+                            "median_ms": 0.171321,
+                            "p95_ms": 0.220779,
+                            "peak_mem": 48234496
+                        },
+                        {
+                            "request": "GET \/features\/cache",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.012975554666666672,
+                            "mean_ms": 0.012943509000000034,
+                            "median_ms": 0.012289,
+                            "p95_ms": 0.017709,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/log",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.013161792666666672,
+                            "mean_ms": 0.013182454199999997,
+                            "median_ms": 0.012066,
+                            "p95_ms": 0.019261,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/retry",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.009610873666666665,
+                            "mean_ms": 0.00961470419999999,
+                            "median_ms": 0.009076,
+                            "p95_ms": 0.014594,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/pipeline",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.014018854333333323,
+                            "mean_ms": 0.013981565200000011,
+                            "median_ms": 0.01343,
+                            "p95_ms": 0.019545,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/db-events",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.1842800606666665,
+                            "mean_ms": 0.1873835878000007,
+                            "median_ms": 0.174485,
+                            "p95_ms": 0.239555,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/events",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.19347393400000013,
+                            "mean_ms": 0.19382405460000027,
+                            "median_ms": 0.176202,
+                            "p95_ms": 0.240069,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/validation",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.017967399,
+                            "mean_ms": 0.018008841399999982,
+                            "median_ms": 0.017191,
+                            "p95_ms": 0.02394,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/config",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.008860968000000004,
+                            "mean_ms": 0.008927428999999973,
+                            "median_ms": 0.008333,
+                            "p95_ms": 0.012457,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/request-scoped",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.008301411000000003,
+                            "mean_ms": 0.008303055800000018,
+                            "median_ms": 0.0079,
+                            "p95_ms": 0.010906,
+                            "peak_mem": 50331648
+                        },
+                        {
+                            "request": "GET \/features\/rate-limit",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.009298160000000001,
+                            "mean_ms": 0.009525251200000012,
+                            "median_ms": 0.008958,
+                            "p95_ms": 0.012472,
+                            "peak_mem": 50331648
+                        }
+                    ]
+                },
+                "cold": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.016982724999999997,
+                            "mean_ms": 0.0169892368,
+                            "median_ms": 0.014776,
+                            "p95_ms": 0.024307,
+                            "peak_mem": 4194304
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.10843758366666667,
+                            "mean_ms": 0.10936224160000024,
+                            "median_ms": 0.099401,
+                            "p95_ms": 0.142393,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.05477465666666664,
+                            "mean_ms": 0.054715311799999986,
+                            "median_ms": 0.049997,
+                            "p95_ms": 0.075163,
+                            "peak_mem": 12582912
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.3966649390000001,
+                            "mean_ms": 0.39515415700000056,
+                            "median_ms": 0.348556,
+                            "p95_ms": 0.545103,
+                            "peak_mem": 18874368
+                        },
+                        {
+                            "request": "GET \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.09645974666666661,
+                            "mean_ms": 0.09631854759999972,
+                            "median_ms": 0.089018,
+                            "p95_ms": 0.122739,
+                            "peak_mem": 18874368
+                        },
+                        {
+                            "request": "GET \/items-qb\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.048994165666666666,
+                            "mean_ms": 0.04939564600000001,
+                            "median_ms": 0.046593,
+                            "p95_ms": 0.064824,
+                            "peak_mem": 18874368
+                        },
+                        {
+                            "request": "POST \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.25064073566666667,
+                            "mean_ms": 0.2500549631999996,
+                            "median_ms": 0.221085,
+                            "p95_ms": 0.33664,
+                            "peak_mem": 23068672
+                        },
+                        {
+                            "request": "GET \/api\/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.05436739099999999,
+                            "mean_ms": 0.05422519199999999,
+                            "median_ms": 0.050086,
+                            "p95_ms": 0.072823,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/api\/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.03709214033333333,
+                            "mean_ms": 0.03771809519999992,
+                            "median_ms": 0.034742,
+                            "p95_ms": 0.052572,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "POST \/api\/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.20901153166666664,
+                            "mean_ms": 0.24106271440000004,
+                            "median_ms": 0.197841,
+                            "p95_ms": 0.377452,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/aop",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.19007061499999986,
+                            "mean_ms": 0.18702727099999963,
+                            "median_ms": 0.17024,
+                            "p95_ms": 0.248053,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/cache",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.06410460099999998,
+                            "mean_ms": 0.0641661026,
+                            "median_ms": 0.012545,
+                            "p95_ms": 0.018037,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/log",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.012708959666666663,
+                            "mean_ms": 0.012802828999999988,
+                            "median_ms": 0.012091,
+                            "p95_ms": 0.017276,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/retry",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.010022010666666662,
+                            "mean_ms": 0.010007527800000013,
+                            "median_ms": 0.009179,
+                            "p95_ms": 0.013762,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/pipeline",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.014557924333333331,
+                            "mean_ms": 0.014623785400000032,
+                            "median_ms": 0.01374,
+                            "p95_ms": 0.019887,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/db-events",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.24187856133333344,
+                            "mean_ms": 0.23748730919999936,
+                            "median_ms": 0.166538,
+                            "p95_ms": 0.277858,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/events",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.14646946766666671,
+                            "mean_ms": 0.14662680059999988,
+                            "median_ms": 0.138206,
+                            "p95_ms": 0.186548,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/validation",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.018831859666666666,
+                            "mean_ms": 0.018936967800000024,
+                            "median_ms": 0.017397,
+                            "p95_ms": 0.028403,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/config",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.008769855333333335,
+                            "mean_ms": 0.008761179399999998,
+                            "median_ms": 0.00849,
+                            "p95_ms": 0.012995,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/request-scoped",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.008456821000000002,
+                            "mean_ms": 0.008657187399999974,
+                            "median_ms": 0.008044,
+                            "p95_ms": 0.014101,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "GET \/features\/rate-limit",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.009419287666666658,
+                            "mean_ms": 0.009463268000000006,
+                            "median_ms": 0.008962,
+                            "p95_ms": 0.014322,
+                            "peak_mem": 25165824
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "app": "laravel",
+            "modes": {
+                "warm": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.9254120593333339,
+                            "mean_ms": 0.9241209211999978,
+                            "median_ms": 0.894286,
+                            "p95_ms": 1.122436,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5730132129999993,
+                            "mean_ms": 0.5738342317999997,
+                            "median_ms": 0.553749,
+                            "p95_ms": 0.739886,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5748140203333332,
+                            "mean_ms": 0.5816761057999992,
+                            "median_ms": 0.561851,
+                            "p95_ms": 0.731214,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5768843549999999,
+                            "mean_ms": 0.5763512250000001,
+                            "median_ms": 0.561192,
+                            "p95_ms": 0.70716,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.570159056333333,
+                            "mean_ms": 0.5716004084000011,
+                            "median_ms": 0.551318,
+                            "p95_ms": 0.731187,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/items-qb\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5701677769999999,
+                            "mean_ms": 0.5728221806000001,
+                            "median_ms": 0.558875,
+                            "p95_ms": 0.691275,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "POST \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5839971196666666,
+                            "mean_ms": 0.5836572559999985,
+                            "median_ms": 0.562931,
+                            "p95_ms": 0.741764,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/api\/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.22505310966666667,
+                            "mean_ms": 0.22563931520000005,
+                            "median_ms": 0.217785,
+                            "p95_ms": 0.277564,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/api\/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.6488682613333335,
+                            "mean_ms": 0.650305760999999,
+                            "median_ms": 0.635708,
+                            "p95_ms": 0.787393,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "POST \/api\/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5837079470000005,
+                            "mean_ms": 0.5835904588000003,
+                            "median_ms": 0.568351,
+                            "p95_ms": 0.719422,
+                            "peak_mem": 12582912
+                        },
+                        {
+                            "request": "GET \/features\/aop",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.29631012166666665,
+                            "mean_ms": 0.2961846945999992,
+                            "median_ms": 0.256034,
+                            "p95_ms": 0.348667,
+                            "peak_mem": 12582912
+                        },
+                        {
+                            "request": "GET \/features\/cache",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.21772467966666675,
+                            "mean_ms": 0.21790033459999977,
+                            "median_ms": 0.209109,
+                            "p95_ms": 0.270047,
+                            "peak_mem": 12582912
+                        },
+                        {
+                            "request": "GET \/features\/log",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.19750123133333344,
+                            "mean_ms": 0.19717446839999914,
+                            "median_ms": 0.18787,
+                            "p95_ms": 0.254466,
+                            "peak_mem": 14680064
+                        },
+                        {
+                            "request": "GET \/features\/retry",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5500085929999999,
+                            "mean_ms": 0.550079520599999,
+                            "median_ms": 0.540235,
+                            "p95_ms": 0.872146,
+                            "peak_mem": 16777216
+                        },
+                        {
+                            "request": "GET \/features\/pipeline",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.19217700900000015,
+                            "mean_ms": 0.19183156240000016,
+                            "median_ms": 0.183914,
+                            "p95_ms": 0.226471,
+                            "peak_mem": 16777216
+                        },
+                        {
+                            "request": "GET \/features\/db-events",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.3585515049999999,
+                            "mean_ms": 0.36563073139999913,
+                            "median_ms": 0.339375,
+                            "p95_ms": 0.476273,
+                            "peak_mem": 16777216
+                        },
+                        {
+                            "request": "GET \/features\/events",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.35335014300000017,
+                            "mean_ms": 0.34976527939999896,
+                            "median_ms": 0.323566,
+                            "p95_ms": 0.445415,
+                            "peak_mem": 16777216
+                        },
+                        {
+                            "request": "GET \/features\/validation",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.8534132853333337,
+                            "mean_ms": 0.8564678882000007,
+                            "median_ms": 0.827719,
+                            "p95_ms": 1.062713,
+                            "peak_mem": 18874368
+                        },
+                        {
+                            "request": "GET \/features\/config",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.2021472243333334,
+                            "mean_ms": 0.20447767819999965,
+                            "median_ms": 0.193819,
+                            "p95_ms": 0.26055,
+                            "peak_mem": 18874368
+                        },
+                        {
+                            "request": "GET \/features\/request-scoped",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.3543137773333334,
+                            "mean_ms": 0.35737693220000033,
+                            "median_ms": 0.352021,
+                            "p95_ms": 0.532445,
+                            "peak_mem": 18874368
+                        },
+                        {
+                            "request": "GET \/features\/rate-limit",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.23327091466666658,
+                            "mean_ms": 0.23350271520000052,
+                            "median_ms": 0.226353,
+                            "p95_ms": 0.283308,
+                            "peak_mem": 18874368
+                        }
+                    ]
+                },
+                "cold": {
+                    "requests": [
+                        {
+                            "request": "GET \/",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.7548592089999996,
+                            "mean_ms": 0.7559696350000005,
+                            "median_ms": 0.739912,
+                            "p95_ms": 0.89286,
+                            "peak_mem": 8388608
+                        },
+                        {
+                            "request": "GET \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.4881337196666662,
+                            "mean_ms": 0.48611995080000053,
+                            "median_ms": 0.471999,
+                            "p95_ms": 0.597223,
+                            "peak_mem": 10485760
+                        },
+                        {
+                            "request": "GET \/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.48387058766666674,
+                            "mean_ms": 0.4834128440000005,
+                            "median_ms": 0.468177,
+                            "p95_ms": 0.600279,
+                            "peak_mem": 12582912
+                        },
+                        {
+                            "request": "POST \/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.47926995833333336,
+                            "mean_ms": 0.4787900273999997,
+                            "median_ms": 0.463513,
+                            "p95_ms": 0.582942,
+                            "peak_mem": 14680064
+                        },
+                        {
+                            "request": "GET \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.489766957666667,
+                            "mean_ms": 0.48770609899999934,
+                            "median_ms": 0.471922,
+                            "p95_ms": 0.605513,
+                            "peak_mem": 16777216
+                        },
+                        {
+                            "request": "GET \/items-qb\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.48817685333333355,
+                            "mean_ms": 0.48929421779999954,
+                            "median_ms": 0.477017,
+                            "p95_ms": 0.590857,
+                            "peak_mem": 18874368
+                        },
+                        {
+                            "request": "POST \/items-qb",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.4883391663333334,
+                            "mean_ms": 0.4869806281999997,
+                            "median_ms": 0.473163,
+                            "p95_ms": 0.593957,
+                            "peak_mem": 20971520
+                        },
+                        {
+                            "request": "GET \/api\/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.226694823,
+                            "mean_ms": 0.22705956460000037,
+                            "median_ms": 0.217906,
+                            "p95_ms": 0.276983,
+                            "peak_mem": 23068672
+                        },
+                        {
+                            "request": "GET \/api\/items\/1",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5525072949999998,
+                            "mean_ms": 0.5521028982000006,
+                            "median_ms": 0.536646,
+                            "p95_ms": 0.666754,
+                            "peak_mem": 25165824
+                        },
+                        {
+                            "request": "POST \/api\/items",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.5028431436666668,
+                            "mean_ms": 0.5012471275999986,
+                            "median_ms": 0.485033,
+                            "p95_ms": 0.631193,
+                            "peak_mem": 27262976
+                        },
+                        {
+                            "request": "GET \/features\/aop",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.2761849330000001,
+                            "mean_ms": 0.27567082479999955,
+                            "median_ms": 0.251859,
+                            "p95_ms": 0.34478,
+                            "peak_mem": 31457280
+                        },
+                        {
+                            "request": "GET \/features\/cache",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.27015585133333325,
+                            "mean_ms": 0.26967899320000027,
+                            "median_ms": 0.20639,
+                            "p95_ms": 0.265603,
+                            "peak_mem": 33554432
+                        },
+                        {
+                            "request": "GET \/features\/log",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.1905730296666667,
+                            "mean_ms": 0.19117946019999998,
+                            "median_ms": 0.183357,
+                            "p95_ms": 0.229813,
+                            "peak_mem": 35651584
+                        },
+                        {
+                            "request": "GET \/features\/retry",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.2679941253333334,
+                            "mean_ms": 0.2681362139999998,
+                            "median_ms": 0.260813,
+                            "p95_ms": 0.355187,
+                            "peak_mem": 37748736
+                        },
+                        {
+                            "request": "GET \/features\/pipeline",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.19463431199999995,
+                            "mean_ms": 0.19622536419999997,
+                            "median_ms": 0.185769,
+                            "p95_ms": 0.250364,
+                            "peak_mem": 39845888
+                        },
+                        {
+                            "request": "GET \/features\/db-events",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.3606334853333332,
+                            "mean_ms": 0.3562236857999992,
+                            "median_ms": 0.331756,
+                            "p95_ms": 0.450011,
+                            "peak_mem": 41943040
+                        },
+                        {
+                            "request": "GET \/features\/events",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.3418624133333334,
+                            "mean_ms": 0.3417349740000003,
+                            "median_ms": 0.3191,
+                            "p95_ms": 0.425427,
+                            "peak_mem": 44040192
+                        },
+                        {
+                            "request": "GET \/features\/validation",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.8319443263333332,
+                            "mean_ms": 0.8358136416000008,
+                            "median_ms": 0.809082,
+                            "p95_ms": 0.988772,
+                            "peak_mem": 48234496
+                        },
+                        {
+                            "request": "GET \/features\/config",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.19845731833333333,
+                            "mean_ms": 0.19954883960000025,
+                            "median_ms": 0.191151,
+                            "p95_ms": 0.245944,
+                            "peak_mem": 48234496
+                        },
+                        {
+                            "request": "GET \/features\/request-scoped",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.23321478966666667,
+                            "mean_ms": 0.23266594360000004,
+                            "median_ms": 0.224775,
+                            "p95_ms": 0.308869,
+                            "peak_mem": 52428800
+                        },
+                        {
+                            "request": "GET \/features\/rate-limit",
+                            "iterations_per_run": 1000,
+                            "runs": 5,
+                            "trimmed_mean_ms": 0.2396376519999999,
+                            "mean_ms": 0.24139032080000097,
+                            "median_ms": 0.227926,
+                            "p95_ms": 0.331235,
+                            "peak_mem": 54525952
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}
