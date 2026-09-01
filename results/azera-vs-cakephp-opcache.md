@@ -1,4 +1,4 @@
-# Benchmark report — 2026-09-01T14:13:34+00:00
+# Benchmark report — 2026-09-01T15:27:17+00:00
 
 ## Environment
 
@@ -13,95 +13,95 @@
 
 | Mode | Request | Iter/Run | Runs | Trimmed Mean (ms) | Mean (ms) | Median (ms) | p95 (ms) | Peak mem |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| warm | GET / | 1000 | 5 | 0.0154 | 0.0156 | 0.0146 | 0.0237 | 2,097,152 |
-| warm | GET /items | 1000 | 5 | 0.1049 | 0.1051 | 0.0994 | 0.1305 | 8,388,608 |
-| warm | GET /items/1 | 1000 | 5 | 0.0531 | 0.0528 | 0.0494 | 0.0689 | 10,485,760 |
-| warm | POST /items | 1000 | 5 | 0.3043 | 0.3132 | 0.2823 | 0.4302 | 14,680,064 |
-| warm | GET /items-qb | 1000 | 5 | 0.0987 | 0.0987 | 0.0926 | 0.1325 | 18,874,368 |
-| warm | GET /items-qb/1 | 1000 | 5 | 0.0534 | 0.0539 | 0.0484 | 0.0735 | 20,971,520 |
-| warm | POST /items-qb | 1000 | 5 | 0.2048 | 0.2067 | 0.1709 | 0.2976 | 25,165,824 |
-| warm | GET /api/items | 1000 | 5 | 0.0541 | 0.0552 | 0.0505 | 0.0783 | 27,262,976 |
-| warm | GET /api/items/1 | 1000 | 5 | 0.0387 | 0.0384 | 0.0348 | 0.0547 | 31,457,280 |
-| warm | POST /api/items | 1000 | 5 | 0.1999 | 0.1996 | 0.1911 | 0.2580 | 35,651,584 |
-| warm | GET /features/aop | 1000 | 5 | 0.1839 | 0.1860 | 0.1740 | 0.2334 | 44,040,192 |
-| warm | GET /features/cache | 1000 | 5 | 0.0137 | 0.0137 | 0.0128 | 0.0199 | 44,040,192 |
-| warm | GET /features/log | 1000 | 5 | 0.0130 | 0.0130 | 0.0122 | 0.0189 | 44,040,192 |
-| warm | GET /features/retry | 1000 | 5 | 0.0101 | 0.0101 | 0.0092 | 0.0152 | 44,040,192 |
-| warm | GET /features/pipeline | 1000 | 5 | 0.0144 | 0.0144 | 0.0136 | 0.0201 | 44,040,192 |
-| warm | GET /features/db-events | 1000 | 5 | 0.2028 | 0.2079 | 0.1781 | 0.2914 | 44,040,192 |
-| warm | GET /features/events | 1000 | 5 | 0.1876 | 0.1901 | 0.1769 | 0.2473 | 44,040,192 |
-| warm | GET /features/validation | 1000 | 5 | 0.0179 | 0.0181 | 0.0173 | 0.0253 | 44,040,192 |
-| warm | GET /features/config | 1000 | 5 | 0.0092 | 0.0092 | 0.0086 | 0.0135 | 44,040,192 |
-| warm | GET /features/request-scoped | 1000 | 5 | 0.0089 | 0.0089 | 0.0081 | 0.0132 | 44,040,192 |
-| warm | GET /features/rate-limit | 1000 | 5 | 0.0095 | 0.0095 | 0.0089 | 0.0141 | 44,040,192 |
-| cold | GET / | 1000 | 5 | 0.0160 | 0.0162 | 0.0148 | 0.0236 | 44,040,192 |
-| cold | GET /items | 1000 | 5 | 0.1178 | 0.1169 | 0.1086 | 0.1534 | 44,040,192 |
-| cold | GET /items/1 | 1000 | 5 | 0.0550 | 0.0556 | 0.0500 | 0.0770 | 46,137,344 |
-| cold | POST /items | 1000 | 5 | 0.2250 | 0.2349 | 0.1969 | 0.3465 | 46,137,344 |
-| cold | GET /items-qb | 1000 | 5 | 0.1024 | 0.1030 | 0.0956 | 0.1283 | 46,137,344 |
-| cold | GET /items-qb/1 | 1000 | 5 | 0.0510 | 0.0509 | 0.0471 | 0.0703 | 46,137,344 |
-| cold | POST /items-qb | 1000 | 5 | 0.1934 | 0.1946 | 0.1717 | 0.2448 | 46,137,344 |
-| cold | GET /api/items | 1000 | 5 | 0.0583 | 0.0592 | 0.0522 | 0.0877 | 46,137,344 |
-| cold | GET /api/items/1 | 1000 | 5 | 0.0393 | 0.0396 | 0.0354 | 0.0576 | 46,137,344 |
-| cold | POST /api/items | 1000 | 5 | 0.2467 | 0.2479 | 0.1970 | 0.3858 | 46,137,344 |
-| cold | GET /features/aop | 1000 | 5 | 0.1907 | 0.1903 | 0.1724 | 0.2423 | 46,137,344 |
-| cold | GET /features/cache | 1000 | 5 | 0.0644 | 0.0645 | 0.0126 | 0.0193 | 46,137,344 |
-| cold | GET /features/log | 1000 | 5 | 0.0130 | 0.0136 | 0.0123 | 0.0189 | 46,137,344 |
-| cold | GET /features/retry | 1000 | 5 | 0.0097 | 0.0097 | 0.0092 | 0.0149 | 46,137,344 |
-| cold | GET /features/pipeline | 1000 | 5 | 0.0144 | 0.0146 | 0.0137 | 0.0209 | 46,137,344 |
-| cold | GET /features/db-events | 1000 | 5 | 0.2381 | 0.2574 | 0.1767 | 0.3128 | 46,137,344 |
-| cold | GET /features/events | 1000 | 5 | 0.1819 | 0.1845 | 0.1738 | 0.2253 | 46,137,344 |
-| cold | GET /features/validation | 1000 | 5 | 0.0184 | 0.0187 | 0.0174 | 0.0259 | 46,137,344 |
-| cold | GET /features/config | 1000 | 5 | 0.0090 | 0.0090 | 0.0085 | 0.0119 | 46,137,344 |
-| cold | GET /features/request-scoped | 1000 | 5 | 0.0087 | 0.0087 | 0.0081 | 0.0114 | 46,137,344 |
-| cold | GET /features/rate-limit | 1000 | 5 | 0.0096 | 0.0098 | 0.0090 | 0.0130 | 46,137,344 |
+| warm | GET / | 1000 | 5 | 0.0167 | 0.0167 | 0.0148 | 0.0249 | 2,097,152 |
+| warm | GET /items | 1000 | 5 | 0.1120 | 0.1110 | 0.1017 | 0.1522 | 8,388,608 |
+| warm | GET /items/1 | 1000 | 5 | 0.0565 | 0.0567 | 0.0507 | 0.0800 | 10,485,760 |
+| warm | POST /items | 1000 | 5 | 0.2962 | 0.3090 | 0.2844 | 0.4122 | 14,680,064 |
+| warm | GET /items-qb | 1000 | 5 | 0.0984 | 0.0992 | 0.0897 | 0.1362 | 18,874,368 |
+| warm | GET /items-qb/1 | 1000 | 5 | 0.0524 | 0.0528 | 0.0480 | 0.0732 | 20,971,520 |
+| warm | POST /items-qb | 1000 | 5 | 0.1973 | 0.2044 | 0.1746 | 0.2881 | 25,165,824 |
+| warm | GET /api/items | 1000 | 5 | 0.0583 | 0.0585 | 0.0514 | 0.0866 | 27,262,976 |
+| warm | GET /api/items/1 | 1000 | 5 | 0.0387 | 0.0391 | 0.0353 | 0.0553 | 31,457,280 |
+| warm | POST /api/items | 1000 | 5 | 0.2142 | 0.2200 | 0.1956 | 0.2980 | 35,651,584 |
+| warm | GET /features/aop | 1000 | 5 | 0.1993 | 0.1977 | 0.1771 | 0.2631 | 44,040,192 |
+| warm | GET /features/cache | 1000 | 5 | 0.0134 | 0.0134 | 0.0124 | 0.0187 | 44,040,192 |
+| warm | GET /features/log | 1000 | 5 | 0.0134 | 0.0135 | 0.0121 | 0.0204 | 44,040,192 |
+| warm | GET /features/retry | 1000 | 5 | 0.0099 | 0.0101 | 0.0091 | 0.0160 | 44,040,192 |
+| warm | GET /features/pipeline | 1000 | 5 | 0.0155 | 0.0157 | 0.0138 | 0.0243 | 44,040,192 |
+| warm | GET /features/db-events | 1000 | 5 | 0.2083 | 0.2062 | 0.1765 | 0.2979 | 44,040,192 |
+| warm | GET /features/events | 1000 | 5 | 0.2068 | 0.2021 | 0.1802 | 0.2833 | 44,040,192 |
+| warm | GET /features/validation | 1000 | 5 | 0.0189 | 0.0190 | 0.0175 | 0.0274 | 44,040,192 |
+| warm | GET /features/config | 1000 | 5 | 0.0090 | 0.0091 | 0.0084 | 0.0133 | 44,040,192 |
+| warm | GET /features/request-scoped | 1000 | 5 | 0.0089 | 0.0088 | 0.0080 | 0.0128 | 44,040,192 |
+| warm | GET /features/rate-limit | 1000 | 5 | 0.0095 | 0.0096 | 0.0089 | 0.0134 | 44,040,192 |
+| cold | GET / | 1000 | 5 | 0.0160 | 0.0161 | 0.0149 | 0.0242 | 44,040,192 |
+| cold | GET /items | 1000 | 5 | 0.1147 | 0.1151 | 0.1064 | 0.1525 | 44,040,192 |
+| cold | GET /items/1 | 1000 | 5 | 0.0545 | 0.0548 | 0.0500 | 0.0747 | 46,137,344 |
+| cold | POST /items | 1000 | 5 | 0.2497 | 0.2603 | 0.2036 | 0.4243 | 46,137,344 |
+| cold | GET /items-qb | 1000 | 5 | 0.1051 | 0.1048 | 0.0969 | 0.1346 | 46,137,344 |
+| cold | GET /items-qb/1 | 1000 | 5 | 0.0519 | 0.0519 | 0.0477 | 0.0719 | 46,137,344 |
+| cold | POST /items-qb | 1000 | 5 | 0.1852 | 0.1887 | 0.1743 | 0.2629 | 46,137,344 |
+| cold | GET /api/items | 1000 | 5 | 0.0558 | 0.0558 | 0.0509 | 0.0772 | 46,137,344 |
+| cold | GET /api/items/1 | 1000 | 5 | 0.0387 | 0.0385 | 0.0353 | 0.0533 | 46,137,344 |
+| cold | POST /api/items | 1000 | 5 | 0.2339 | 0.2370 | 0.2035 | 0.3449 | 46,137,344 |
+| cold | GET /features/aop | 1000 | 5 | 0.1902 | 0.1952 | 0.1762 | 0.2552 | 46,137,344 |
+| cold | GET /features/cache | 1000 | 5 | 0.0650 | 0.0650 | 0.0126 | 0.0211 | 46,137,344 |
+| cold | GET /features/log | 1000 | 5 | 0.0128 | 0.0129 | 0.0121 | 0.0182 | 46,137,344 |
+| cold | GET /features/retry | 1000 | 5 | 0.0098 | 0.0101 | 0.0092 | 0.0148 | 46,137,344 |
+| cold | GET /features/pipeline | 1000 | 5 | 0.0151 | 0.0151 | 0.0138 | 0.0218 | 46,137,344 |
+| cold | GET /features/db-events | 1000 | 5 | 0.2394 | 0.2548 | 0.1793 | 0.2922 | 46,137,344 |
+| cold | GET /features/events | 1000 | 5 | 0.2256 | 0.2216 | 0.1814 | 0.3403 | 46,137,344 |
+| cold | GET /features/validation | 1000 | 5 | 0.0205 | 0.0205 | 0.0180 | 0.0311 | 46,137,344 |
+| cold | GET /features/config | 1000 | 5 | 0.0096 | 0.0096 | 0.0086 | 0.0155 | 46,137,344 |
+| cold | GET /features/request-scoped | 1000 | 5 | 0.0089 | 0.0090 | 0.0081 | 0.0145 | 46,137,344 |
+| cold | GET /features/rate-limit | 1000 | 5 | 0.0094 | 0.0095 | 0.0089 | 0.0132 | 46,137,344 |
 
 ### cakephp
 
 | Mode | Request | Iter/Run | Runs | Trimmed Mean (ms) | Mean (ms) | Median (ms) | p95 (ms) | Peak mem |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| warm | GET / | 1000 | 5 | 0.2855 | 0.2857 | 0.2630 | 0.3767 | 48,234,496 |
-| warm | GET /items | 1000 | 5 | 0.7501 | 0.7477 | 0.6964 | 0.9375 | 50,331,648 |
-| warm | GET /items/1 | 1000 | 5 | 0.5003 | 0.4987 | 0.4701 | 0.6159 | 50,331,648 |
-| warm | POST /items | 1000 | 5 | 0.2331 | 0.2342 | 0.2175 | 0.2991 | 52,428,800 |
-| warm | GET /items-qb | 1000 | 5 | 0.5146 | 0.5115 | 0.4712 | 0.6692 | 54,525,952 |
-| warm | GET /items-qb/1 | 1000 | 5 | 0.4173 | 0.4177 | 0.3875 | 0.5701 | 54,525,952 |
-| warm | POST /items-qb | 1000 | 5 | 0.1329 | 0.1319 | 0.1142 | 0.1744 | 56,623,104 |
-| warm | GET /api/items | 1000 | 5 | 0.2939 | 0.2937 | 0.2735 | 0.3940 | 56,623,104 |
-| warm | GET /api/items/1 | 1000 | 5 | 0.2620 | 0.2645 | 0.2431 | 0.3524 | 56,623,104 |
-| warm | POST /api/items | 1000 | 5 | 0.1297 | 0.1329 | 0.1156 | 0.1710 | 58,720,256 |
-| warm | GET /features/aop | 1000 | 5 | 0.4024 | 0.3953 | 0.3363 | 0.5355 | 58,720,256 |
-| warm | GET /features/cache | 1000 | 5 | 0.1156 | 0.1178 | 0.1015 | 0.1488 | 58,720,256 |
-| warm | GET /features/log | 1000 | 5 | 0.1087 | 0.1089 | 0.0920 | 0.1396 | 60,817,408 |
-| warm | GET /features/retry | 1000 | 5 | 0.1037 | 0.1038 | 0.0904 | 0.1287 | 62,918,656 |
-| warm | GET /features/pipeline | 1000 | 5 | 0.1061 | 0.1061 | 0.0910 | 0.1316 | 62,918,656 |
-| warm | GET /features/db-events | 1000 | 5 | 1.0477 | 1.0472 | 1.0049 | 1.2875 | 62,918,656 |
-| warm | GET /features/events | 1000 | 5 | 0.3967 | 0.3969 | 0.3711 | 0.5208 | 65,015,808 |
-| warm | GET /features/validation | 1000 | 5 | 0.1963 | 0.1963 | 0.1822 | 0.2360 | 65,015,808 |
-| warm | GET /features/config | 1000 | 5 | 0.0966 | 0.0966 | 0.0866 | 0.1102 | 67,112,960 |
-| warm | GET /features/request-scoped | 1000 | 5 | 0.0993 | 0.1003 | 0.0873 | 0.1251 | 67,112,960 |
-| warm | GET /features/rate-limit | 1000 | 5 | 0.1147 | 0.1141 | 0.0997 | 0.1417 | 67,112,960 |
-| cold | GET / | 1000 | 5 | 0.3097 | 0.3091 | 0.2877 | 0.3658 | 69,210,112 |
-| cold | GET /items | 1000 | 5 | 1.3524 | 1.3552 | 1.3020 | 1.5403 | 71,307,264 |
-| cold | GET /items/1 | 1000 | 5 | 0.5490 | 0.5525 | 0.5182 | 0.7113 | 71,307,264 |
-| cold | POST /items | 1000 | 5 | 0.2432 | 0.2490 | 0.2256 | 0.3131 | 71,307,264 |
-| cold | GET /items-qb | 1000 | 5 | 1.1401 | 1.1381 | 1.0974 | 1.2956 | 75,501,568 |
-| cold | GET /items-qb/1 | 1000 | 5 | 0.4483 | 0.4482 | 0.4228 | 0.5276 | 79,699,968 |
-| cold | POST /items-qb | 1000 | 5 | 0.1500 | 0.1550 | 0.1330 | 0.1815 | 79,699,968 |
-| cold | GET /api/items | 1000 | 5 | 0.2919 | 0.2923 | 0.2714 | 0.3799 | 79,699,968 |
-| cold | GET /api/items/1 | 1000 | 5 | 0.2762 | 0.2775 | 0.2567 | 0.3581 | 79,699,968 |
-| cold | POST /api/items | 1000 | 5 | 0.1518 | 0.1570 | 0.1323 | 0.1913 | 79,699,968 |
-| cold | GET /features/aop | 1000 | 5 | 0.4394 | 0.4502 | 0.3869 | 0.5983 | 79,699,968 |
-| cold | GET /features/cache | 1000 | 5 | 0.1146 | 0.1242 | 0.1005 | 0.1393 | 79,699,968 |
-| cold | GET /features/log | 1000 | 5 | 0.1020 | 0.1030 | 0.0896 | 0.1258 | 79,699,968 |
-| cold | GET /features/retry | 1000 | 5 | 0.1067 | 0.1066 | 0.0916 | 0.1330 | 81,793,024 |
-| cold | GET /features/pipeline | 1000 | 5 | 0.1058 | 0.1055 | 0.0905 | 0.1306 | 81,793,024 |
-| cold | GET /features/db-events | 1000 | 5 | 1.2335 | 1.2197 | 1.1803 | 1.4425 | 83,890,176 |
-| cold | GET /features/events | 1000 | 5 | 0.4067 | 0.4058 | 0.3793 | 0.5402 | 83,890,176 |
-| cold | GET /features/validation | 1000 | 5 | 0.2098 | 0.2105 | 0.1886 | 0.2901 | 83,890,176 |
-| cold | GET /features/config | 1000 | 5 | 0.1019 | 0.1023 | 0.0884 | 0.1227 | 85,987,328 |
-| cold | GET /features/request-scoped | 1000 | 5 | 0.1005 | 0.1005 | 0.0880 | 0.1189 | 85,987,328 |
-| cold | GET /features/rate-limit | 1000 | 5 | 0.1129 | 0.1138 | 0.0992 | 0.1403 | 88,084,480 |
+| warm | GET / | 1000 | 5 | 0.2889 | 0.2874 | 0.2657 | 0.3659 | 48,234,496 |
+| warm | GET /items | 1000 | 5 | 0.7250 | 0.7242 | 0.6740 | 0.8917 | 50,331,648 |
+| warm | GET /items/1 | 1000 | 5 | 0.5024 | 0.5037 | 0.4709 | 0.6676 | 50,331,648 |
+| warm | POST /items | 1000 | 5 | 0.3757 | 0.3786 | 0.3378 | 0.4949 | 52,428,800 |
+| warm | GET /items-qb | 1000 | 5 | 0.5120 | 0.5127 | 0.4741 | 0.6648 | 54,525,952 |
+| warm | GET /items-qb/1 | 1000 | 5 | 0.4104 | 0.4118 | 0.3804 | 0.5558 | 54,525,952 |
+| warm | POST /items-qb | 1000 | 5 | 0.1354 | 0.1383 | 0.1181 | 0.1939 | 56,623,104 |
+| warm | GET /api/items | 1000 | 5 | 0.2999 | 0.3018 | 0.2767 | 0.4245 | 56,623,104 |
+| warm | GET /api/items/1 | 1000 | 5 | 0.2736 | 0.2761 | 0.2534 | 0.3837 | 56,623,104 |
+| warm | POST /api/items | 1000 | 5 | 0.1366 | 0.1405 | 0.1168 | 0.1742 | 58,720,256 |
+| warm | GET /features/aop | 1000 | 5 | 0.3752 | 0.3745 | 0.3329 | 0.5102 | 58,720,256 |
+| warm | GET /features/cache | 1000 | 5 | 0.1159 | 0.1156 | 0.1020 | 0.1436 | 58,720,256 |
+| warm | GET /features/log | 1000 | 5 | 0.1002 | 0.1002 | 0.0897 | 0.1189 | 60,817,408 |
+| warm | GET /features/retry | 1000 | 5 | 0.1036 | 0.1036 | 0.0904 | 0.1261 | 62,918,656 |
+| warm | GET /features/pipeline | 1000 | 5 | 0.1011 | 0.1012 | 0.0886 | 0.1220 | 62,918,656 |
+| warm | GET /features/db-events | 1000 | 5 | 1.0549 | 1.0545 | 1.0044 | 1.2855 | 62,918,656 |
+| warm | GET /features/events | 1000 | 5 | 0.4126 | 0.4176 | 0.3723 | 0.5666 | 65,015,808 |
+| warm | GET /features/validation | 1000 | 5 | 0.2118 | 0.2100 | 0.1903 | 0.2771 | 65,015,808 |
+| warm | GET /features/config | 1000 | 5 | 0.1038 | 0.1038 | 0.0898 | 0.1270 | 67,112,960 |
+| warm | GET /features/request-scoped | 1000 | 5 | 0.1030 | 0.1026 | 0.0882 | 0.1285 | 67,112,960 |
+| warm | GET /features/rate-limit | 1000 | 5 | 0.1168 | 0.1164 | 0.1001 | 0.1469 | 67,112,960 |
+| cold | GET / | 1000 | 5 | 0.3224 | 0.3227 | 0.2963 | 0.4269 | 69,210,112 |
+| cold | GET /items | 1000 | 5 | 1.3950 | 1.3967 | 1.3372 | 1.6327 | 71,307,264 |
+| cold | GET /items/1 | 1000 | 5 | 0.5740 | 0.5736 | 0.5405 | 0.7362 | 71,307,264 |
+| cold | POST /items | 1000 | 5 | 0.4188 | 0.4191 | 0.3947 | 0.5283 | 71,307,264 |
+| cold | GET /items-qb | 1000 | 5 | 1.1983 | 1.1990 | 1.1489 | 1.4332 | 75,501,568 |
+| cold | GET /items-qb/1 | 1000 | 5 | 0.5121 | 0.5105 | 0.4785 | 0.6826 | 79,699,968 |
+| cold | POST /items-qb | 1000 | 5 | 0.1633 | 0.1687 | 0.1405 | 0.2151 | 79,699,968 |
+| cold | GET /api/items | 1000 | 5 | 0.3221 | 0.3234 | 0.2980 | 0.4484 | 79,699,968 |
+| cold | GET /api/items/1 | 1000 | 5 | 0.2835 | 0.2850 | 0.2628 | 0.3734 | 79,699,968 |
+| cold | POST /api/items | 1000 | 5 | 0.1603 | 0.1620 | 0.1426 | 0.2317 | 79,699,968 |
+| cold | GET /features/aop | 1000 | 5 | 0.4499 | 0.4628 | 0.4028 | 0.6334 | 79,699,968 |
+| cold | GET /features/cache | 1000 | 5 | 0.1183 | 0.1276 | 0.1012 | 0.1494 | 79,699,968 |
+| cold | GET /features/log | 1000 | 5 | 0.1105 | 0.1106 | 0.0947 | 0.1417 | 79,699,968 |
+| cold | GET /features/retry | 1000 | 5 | 0.1071 | 0.1073 | 0.0919 | 0.1312 | 81,793,024 |
+| cold | GET /features/pipeline | 1000 | 5 | 0.1066 | 0.1065 | 0.0914 | 0.1343 | 81,793,024 |
+| cold | GET /features/db-events | 1000 | 5 | 1.2959 | 1.2929 | 1.2487 | 1.5655 | 83,890,176 |
+| cold | GET /features/events | 1000 | 5 | 0.4421 | 0.4408 | 0.3879 | 0.6144 | 83,890,176 |
+| cold | GET /features/validation | 1000 | 5 | 0.2140 | 0.2140 | 0.1947 | 0.2752 | 83,890,176 |
+| cold | GET /features/config | 1000 | 5 | 0.1078 | 0.1078 | 0.0924 | 0.1366 | 85,987,328 |
+| cold | GET /features/request-scoped | 1000 | 5 | 0.1060 | 0.1056 | 0.0901 | 0.1329 | 85,987,328 |
+| cold | GET /features/rate-limit | 1000 | 5 | 0.1204 | 0.1207 | 0.1024 | 0.1547 | 88,084,480 |
 
 ## Winners by Feature
 
@@ -112,41 +112,41 @@ Winner = lowest trimmed mean (ms) for that request.
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET / (warm) | **azera** | 0.0154 | cakephp | 0.2855 | 0.2702 | 18.6x |
-| GET / (cold) | **azera** | 0.0160 | cakephp | 0.3097 | 0.2937 | 19.3x |
+| GET / (warm) | **azera** | 0.0167 | cakephp | 0.2889 | 0.2723 | 17.3x |
+| GET / (cold) | **azera** | 0.0160 | cakephp | 0.3224 | 0.3064 | 20.1x |
 
 ### orm
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /items (warm) | **azera** | 0.1049 | cakephp | 0.7501 | 0.6452 | 7.2x |
-| GET /items (cold) | **azera** | 0.1178 | cakephp | 1.3524 | 1.2346 | 11.5x |
-| GET /items/1 (warm) | **azera** | 0.0531 | cakephp | 0.5003 | 0.4472 | 9.4x |
-| GET /items/1 (cold) | **azera** | 0.0550 | cakephp | 0.5490 | 0.4940 | 10.0x |
-| POST /items (warm) | **cakephp** | 0.2331 | azera | 0.3043 | 0.0713 | 1.3x |
-| POST /items (cold) | **azera** | 0.2250 | cakephp | 0.2432 | 0.0182 | 1.1x |
+| GET /items (warm) | **azera** | 0.1120 | cakephp | 0.7250 | 0.6129 | 6.5x |
+| GET /items (cold) | **azera** | 0.1147 | cakephp | 1.3950 | 1.2803 | 12.2x |
+| GET /items/1 (warm) | **azera** | 0.0565 | cakephp | 0.5024 | 0.4459 | 8.9x |
+| GET /items/1 (cold) | **azera** | 0.0545 | cakephp | 0.5740 | 0.5194 | 10.5x |
+| POST /items (warm) | **azera** | 0.2962 | cakephp | 0.3757 | 0.0795 | 1.3x |
+| POST /items (cold) | **azera** | 0.2497 | cakephp | 0.4188 | 0.1691 | 1.7x |
 
 ### query-builder
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /items-qb (warm) | **azera** | 0.0987 | cakephp | 0.5146 | 0.4159 | 5.2x |
-| GET /items-qb (cold) | **azera** | 0.1024 | cakephp | 1.1401 | 1.0377 | 11.1x |
-| GET /items-qb/1 (warm) | **azera** | 0.0534 | cakephp | 0.4173 | 0.3639 | 7.8x |
-| GET /items-qb/1 (cold) | **azera** | 0.0510 | cakephp | 0.4483 | 0.3973 | 8.8x |
-| POST /items-qb (warm) | **cakephp** | 0.1329 | azera | 0.2048 | 0.0719 | 1.5x |
-| POST /items-qb (cold) | **cakephp** | 0.1500 | azera | 0.1934 | 0.0434 | 1.3x |
+| GET /items-qb (warm) | **azera** | 0.0984 | cakephp | 0.5120 | 0.4136 | 5.2x |
+| GET /items-qb (cold) | **azera** | 0.1051 | cakephp | 1.1983 | 1.0933 | 11.4x |
+| GET /items-qb/1 (warm) | **azera** | 0.0524 | cakephp | 0.4104 | 0.3581 | 7.8x |
+| GET /items-qb/1 (cold) | **azera** | 0.0519 | cakephp | 0.5121 | 0.4602 | 9.9x |
+| POST /items-qb (warm) | **cakephp** | 0.1354 | azera | 0.1973 | 0.0619 | 1.5x |
+| POST /items-qb (cold) | **cakephp** | 0.1633 | azera | 0.1852 | 0.0218 | 1.1x |
 
 ### rest-api
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /api/items (warm) | **azera** | 0.0541 | cakephp | 0.2939 | 0.2399 | 5.4x |
-| GET /api/items (cold) | **azera** | 0.0583 | cakephp | 0.2919 | 0.2336 | 5.0x |
-| GET /api/items/1 (warm) | **azera** | 0.0387 | cakephp | 0.2620 | 0.2233 | 6.8x |
-| GET /api/items/1 (cold) | **azera** | 0.0393 | cakephp | 0.2762 | 0.2369 | 7.0x |
-| POST /api/items (warm) | **cakephp** | 0.1297 | azera | 0.1999 | 0.0702 | 1.5x |
-| POST /api/items (cold) | **cakephp** | 0.1518 | azera | 0.2467 | 0.0950 | 1.6x |
+| GET /api/items (warm) | **azera** | 0.0583 | cakephp | 0.2999 | 0.2416 | 5.1x |
+| GET /api/items (cold) | **azera** | 0.0558 | cakephp | 0.3221 | 0.2663 | 5.8x |
+| GET /api/items/1 (warm) | **azera** | 0.0387 | cakephp | 0.2736 | 0.2349 | 7.1x |
+| GET /api/items/1 (cold) | **azera** | 0.0387 | cakephp | 0.2835 | 0.2448 | 7.3x |
+| POST /api/items (warm) | **cakephp** | 0.1366 | azera | 0.2142 | 0.0776 | 1.6x |
+| POST /api/items (cold) | **cakephp** | 0.1603 | azera | 0.2339 | 0.0737 | 1.5x |
 
 ### aop
 
@@ -165,50 +165,50 @@ Winner = lowest trimmed mean (ms) for that request.
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/cache (warm) | **azera** | 0.0137 | cakephp | 0.1156 | 0.1019 | 8.4x |
-| GET /features/cache (cold) | **azera** | 0.0644 | cakephp | 0.1146 | 0.0502 | 1.8x |
+| GET /features/cache (warm) | **azera** | 0.0134 | cakephp | 0.1159 | 0.1025 | 8.7x |
+| GET /features/cache (cold) | **azera** | 0.0650 | cakephp | 0.1183 | 0.0533 | 1.8x |
 
 ### db-events
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/db-events (warm) | **azera** | 0.2028 | cakephp | 1.0477 | 0.8449 | 5.2x |
-| GET /features/db-events (cold) | **azera** | 0.2381 | cakephp | 1.2335 | 0.9954 | 5.2x |
+| GET /features/db-events (warm) | **azera** | 0.2083 | cakephp | 1.0549 | 0.8466 | 5.1x |
+| GET /features/db-events (cold) | **azera** | 0.2394 | cakephp | 1.2959 | 1.0566 | 5.4x |
 
 ### events
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/events (warm) | **azera** | 0.1876 | cakephp | 0.3967 | 0.2091 | 2.1x |
-| GET /features/events (cold) | **azera** | 0.1819 | cakephp | 0.4067 | 0.2248 | 2.2x |
+| GET /features/events (warm) | **azera** | 0.2068 | cakephp | 0.4126 | 0.2057 | 2.0x |
+| GET /features/events (cold) | **azera** | 0.2256 | cakephp | 0.4421 | 0.2165 | 2.0x |
 
 ### validation
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/validation (warm) | **azera** | 0.0179 | cakephp | 0.1963 | 0.1785 | 11.0x |
-| GET /features/validation (cold) | **azera** | 0.0184 | cakephp | 0.2098 | 0.1914 | 11.4x |
+| GET /features/validation (warm) | **azera** | 0.0189 | cakephp | 0.2118 | 0.1929 | 11.2x |
+| GET /features/validation (cold) | **azera** | 0.0205 | cakephp | 0.2140 | 0.1935 | 10.4x |
 
 ### config
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/config (warm) | **azera** | 0.0092 | cakephp | 0.0966 | 0.0874 | 10.5x |
-| GET /features/config (cold) | **azera** | 0.0090 | cakephp | 0.1019 | 0.0930 | 11.3x |
+| GET /features/config (warm) | **azera** | 0.0090 | cakephp | 0.1038 | 0.0949 | 11.6x |
+| GET /features/config (cold) | **azera** | 0.0096 | cakephp | 0.1078 | 0.0983 | 11.3x |
 
 ### request-scoped
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/request-scoped (warm) | **azera** | 0.0089 | cakephp | 0.0993 | 0.0904 | 11.2x |
-| GET /features/request-scoped (cold) | **azera** | 0.0087 | cakephp | 0.1005 | 0.0917 | 11.5x |
+| GET /features/request-scoped (warm) | **azera** | 0.0089 | cakephp | 0.1030 | 0.0941 | 11.6x |
+| GET /features/request-scoped (cold) | **azera** | 0.0089 | cakephp | 0.1060 | 0.0972 | 12.0x |
 
 ### rate-limiter
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/rate-limit (warm) | **azera** | 0.0095 | cakephp | 0.1147 | 0.1052 | 12.1x |
-| GET /features/rate-limit (cold) | **azera** | 0.0096 | cakephp | 0.1129 | 0.1033 | 11.8x |
+| GET /features/rate-limit (warm) | **azera** | 0.0095 | cakephp | 0.1168 | 0.1073 | 12.3x |
+| GET /features/rate-limit (cold) | **azera** | 0.0094 | cakephp | 0.1204 | 0.1110 | 12.8x |
 
 ## Win Count
 
@@ -216,5 +216,5 @@ Number of requests each framework won (lowest trimmed mean), per mode.
 
 | Framework | warm | cold | Total |
 |---|---:|---:|---:|
-| azera | 14 | 15 | 29 |
-| cakephp | 3 | 2 | 5 |
+| azera | 15 | 15 | 30 |
+| cakephp | 2 | 2 | 4 |
