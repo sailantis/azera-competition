@@ -147,7 +147,7 @@ $featureMap = [
 // AOP simply doesn't take part in the AOP race).
 $adapterFeatures = [
     'azera'       => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-    'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'events', 'validation', 'config'],
+    'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
     'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'events', 'validation', 'config'],
     'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
     'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
@@ -496,6 +496,12 @@ function benchRequest(
 }
 
 // --- Main ------------------------------------------------------------------
+// Each app is benchmarked in its own fresh PHP process (run-app.php child):
+// full-stack frameworks define function_exists-guarded global helpers with
+// colliding names (config(), view(), env(), ...), so two of them can never
+// share one process — whichever loads first shadows the other. Separate
+// processes also give every framework identical opcache/jit conditions.
+// The per-request benchmark loop itself lives in run-app.php.
 
 echo "=== azera-competition benchmark ===\n";
 echo "Apps: " . implode(', ', $apps) . "\n";
@@ -508,6 +514,14 @@ $results = [
     'apps' => [],
 ];
 
+$modes = array_keys(array_filter([
+    'warm' => $doWarm,
+    'cold' => $doCold,
+]));
+
+// Serialize the request list once for the child processes ("METHOD URI" CSV).
+$requestArg = implode(',', array_map(fn($r) => "{$r[0]} {$r[1]}", $requests));
+
 foreach ($apps as $key) {
     $key = trim($key);
     if (!isset($adapterClasses[$key])) {
@@ -515,57 +529,54 @@ foreach ($apps as $key) {
         continue;
     }
 
-    $class = $adapterClasses[$key];
-    require_once __DIR__ . "/adapters/{$class}.php";
-
     echo "\n=== App: {$key}\n";
-
-    // Warm and cold modes share one adapter instance; bootstrap is called
-    // appropriately inside benchRequest.
-    /** @var WebAppAdapter $adapter */
-    $adapter = new $class();
 
     $appResult = [
         'app'   => $key,
         'modes' => [],
     ];
 
-    $modes = array_filter([
-        'warm' => $doWarm,
-        'cold' => $doCold,
-    ]);
-
-    foreach (array_keys($modes) as $modeName) {
-        echo " -- mode: {$modeName}\n";
-
+    foreach ($modes as $modeName) {
         // Re-seed per app x mode: the feature endpoints (aop/db-events/
         // events) INSERT a row per request, so a single start-of-run seed
         // would leave the last app measuring GETs (COUNT(*) etc.) against
         // tens of thousands of accumulated rows while the first app saw
-        // ~1k.  Fresh 1k-row table for every measured block keeps the
+        // ~1k. Fresh 1k-row table for every measured block keeps the
         // data-layer cost identical across apps and modes.
+        $seedArgs = '';
         if ($doSeed) {
-            echo "    reseeding database ({$seedRows} rows)...\n";
-            $seedScript  = escapeshellarg(__DIR__ . '/seed.php');
-            $seedRowsArg = escapeshellarg((string) $seedRows);
-            passthru("php {$seedScript} --rows={$seedRowsArg}", $seedExit);
-            if ($seedExit !== 0) {
-                echo "Seed failed (exit {$seedExit}), aborting.\n";
-                exit(1);
-            }
+            $seedArgs = ' --seed --rows=' . (int) $seedRows;
         }
 
-        $modeResult = ['requests' => []];
-        foreach ($requests as $request) {
-            $modeResult['requests'][] = benchRequest(
-                $adapter,
-                $modeName,
-                $request,
-                $itersPerRun,
-                $runs
-            );
+        // Spawn the per-app child process. It writes this app x mode's
+        // result JSON to a temp file; run.php merges it into $results.
+        $tmpJson = tempnam(sys_get_temp_dir(), 'bench-') . '.json';
+        $cmd     = sprintf(
+            '%s %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(__DIR__ . '/run-app.php'),
+            escapeshellarg($key),
+            escapeshellarg($modeName),
+            $itersPerRun,
+            $runs,
+            escapeshellarg($requestArg),
+            escapeshellarg($tmpJson),
+            $seedArgs,
+        );
+
+        passthru($cmd, $childExit);
+        if ($childExit !== 0 || !is_file($tmpJson)) {
+            echo "Child benchmark for {$key} ({$modeName}) failed (exit {$childExit}), aborting.\n";
+            exit(1);
         }
-        $appResult['modes'][$modeName] = $modeResult;
+
+        $modeData = json_decode((string) file_get_contents($tmpJson), true);
+        unlink($tmpJson);
+        if (!is_array($modeData) || !isset($modeData['modes'][$modeName])) {
+            echo "Child benchmark for {$key} ({$modeName}) returned no results, aborting.\n";
+            exit(1);
+        }
+        $appResult['modes'][$modeName] = $modeData['modes'][$modeName];
     }
 
     $results['apps'][] = $appResult;

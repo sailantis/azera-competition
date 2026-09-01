@@ -12,10 +12,10 @@
 /runtime/
 
 # Per-app compiled template caches
-apps/*/cache/
-apps/*/storage/
-apps/*/writable/
-apps/*/tmp/
+apps/**/cache/
+apps/**/storage/
+apps/**/writable/
+apps/**/tmp/
 
 # Results (keep committed baselines if desired; ignore transient runs)
 results/transient/

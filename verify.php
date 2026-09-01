@@ -50,6 +50,10 @@ $expect = [
 
 $failures = 0;
 
+// Each app is verified in its own fresh PHP process (verify-app.php child):
+// full-stack frameworks define function_exists-guarded global helpers with
+// colliding names (config(), view(), env(), ...), so two frameworks can
+// never share one process — whichever loads first shadows the other.
 foreach ($apps as $key) {
     $key = trim($key);
     if (!isset($adapterClasses[$key])) {
@@ -58,32 +62,19 @@ foreach ($apps as $key) {
         continue;
     }
 
-    $class = $adapterClasses[$key];
-    require_once __DIR__ . "/adapters/{$class}.php";
+    $tmpJson = tempnam(sys_get_temp_dir(), 'verify-') . '.json';
+    $cmd     = sprintf(
+        '%s %s --app=%s --out-json=%s',
+        escapeshellarg(PHP_BINARY),
+        escapeshellarg(__DIR__ . '/verify-app.php'),
+        escapeshellarg($key),
+        escapeshellarg($tmpJson),
+    );
 
-    echo "\n=== {$key} ===\n";
-    /** @var WebAppAdapter $adapter */
-    $adapter = new $class();
-    $adapter->bootstrap();
-
-    foreach ($expect as $req => $needle) {
-        [$method, $uri] = explode(' ', $req, 2);
-        try {
-            $body = $adapter->dispatch($method, $uri);
-        } catch (\Throwable $e) {
-            echo "  [FAIL] {$req} — threw: " . $e->getMessage() . "\n";
-            $failures++;
-            continue;
-        }
-
-        if (stripos($body, $needle) === false) {
-            echo "  [FAIL] {$req} — expected substring '{$needle}' not found\n";
-            echo "         got: " . substr($body, 0, 200) . "\n";
-            $failures++;
-            continue;
-        }
-
-        echo "  [ OK ] {$req}\n";
+    passthru($cmd, $childExit);
+    $failures += $childExit;
+    if (is_file($tmpJson)) {
+        unlink($tmpJson);
     }
 }
 
