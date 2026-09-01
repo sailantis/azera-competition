@@ -14,6 +14,7 @@ use App\Laravel\Service\DbEventLog;
 use App\Laravel\Service\RequestCounter;
 use App\Laravel\Service\ScopeState;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -36,6 +37,15 @@ class AppServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../../config/cache.php', 'cache');
         $this->mergeConfigFrom(__DIR__ . '/../../config/database.php', 'database');
         $this->mergeConfigFrom(__DIR__ . '/../../config/view.php', 'view');
+
+        // View globals — locale + platform stamped into EVERY template render
+        // (the layout footer renders them unconditionally). Mirrors azera's
+        // RequestContextMiddleware, which reads Accept-Language + User-Agent
+        // and stamps the detected values into the view engine. The benchmark
+        // adapter dispatches synthetic requests with fixed headers, so the
+        // values are the same deterministic defaults azera and Spiral render.
+        View::share('locale', 'en_US');
+        View::share('platform', 'desktop');
 
         // Laravel 12 scoped flush: reset per-request state after each request.
         $events->listen(\Illuminate\Foundation\Http\Events\RequestHandled::class, function (): void {
