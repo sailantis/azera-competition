@@ -90,6 +90,14 @@ final class BenchController extends AppController
             $entity->setSource('Items');
         } else {
             $existing->set('title', 'Created Item ' . $now);
+            // save() short-circuits when no field is dirty, and set() only
+            // marks dirty if the value actually changed. The title embeds a
+            // second-precision timestamp, so within one benchmark run almost
+            // every POST builds an identical string and would skip the write
+            // entirely (measuring a SELECT, not an upsert). Force the dirty
+            // flag so every request exercises the real ORM write path, like
+            // azera's Item::upsert() and CI4's update().
+            $existing->setDirty('title', true);
             $entity = $existing;
         }
 
