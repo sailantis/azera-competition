@@ -25,6 +25,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
+use App\Symfony\DependencyInjection\PersistentAppCachePass;
 
 final class Kernel extends BaseKernel
 {
@@ -37,6 +38,13 @@ final class Kernel extends BaseKernel
             new TwigBundle(),
             new DoctrineBundle(),
         ];
+    }
+
+    protected function build(ContainerBuilder $container): void
+    {
+        // Keep the app cache alive across the many synthetic requests the
+        // benchmark harness dispatches in one process (see the pass docblock).
+        $container->addCompilerPass(new PersistentAppCachePass());
     }
 
     public function getProjectDir(): string
