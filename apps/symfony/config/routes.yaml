@@ -1,0 +1,109 @@
+# Benchmark routes — parity with the azera app (same paths, same methods,
+# ~100 filler routes so the route table size matches the other frameworks).
+
+home:
+    path: /
+    controller: App\Symfony\Controller\BenchController::index
+    methods: GET
+
+# --- ORM endpoints ---------------------------------------------------------
+items_list:
+    path: /items
+    controller: App\Symfony\Controller\BenchController::list
+    methods: GET
+items_show:
+    path: /items/{id}
+    controller: App\Symfony\Controller\BenchController::show
+    requirements:
+        id: '\d+'
+    methods: GET
+items_create:
+    path: /items
+    controller: App\Symfony\Controller\BenchController::create
+    methods: POST
+
+# --- Query builder endpoints (no ORM hydration) ----------------------------
+items_qb_list:
+    path: /items-qb
+    controller: App\Symfony\Controller\BenchController::listQb
+    methods: GET
+items_qb_show:
+    path: /items-qb/{id}
+    controller: App\Symfony\Controller\BenchController::showQb
+    requirements:
+        id: '\d+'
+    methods: GET
+items_qb_create:
+    path: /items-qb
+    controller: App\Symfony\Controller\BenchController::createQb
+    methods: POST
+
+# --- REST API ---------------------------------------------------------------
+api_items_index:
+    path: /api/items
+    controller: App\Symfony\Controller\ApiController::index
+    methods: GET
+api_items_show:
+    path: /api/items/{id}
+    controller: App\Symfony\Controller\ApiController::show
+    requirements:
+        id: '\d+'
+    methods: GET
+api_items_create:
+    path: /api/items
+    controller: App\Symfony\Controller\ApiController::create
+    methods: POST
+
+# --- Feature demo endpoints -------------------------------------------------
+features_index:
+    path: /features
+    controller: App\Symfony\Controller\FeatureController::index
+    methods: GET
+feature_aop:
+    path: /features/aop
+    controller: App\Symfony\Controller\FeatureController::aop
+    methods: GET
+feature_cache:
+    path: /features/cache
+    controller: App\Symfony\Controller\FeatureController::cache
+    methods: GET
+feature_log:
+    path: /features/log
+    controller: App\Symfony\Controller\FeatureController::log
+    methods: GET
+feature_retry:
+    path: /features/retry
+    controller: App\Symfony\Controller\FeatureController::retry
+    methods: GET
+feature_pipeline:
+    path: /features/pipeline
+    controller: App\Symfony\Controller\FeatureController::pipeline
+    methods: GET
+feature_events:
+    path: /features/events
+    controller: App\Symfony\Controller\FeatureController::events
+    methods: GET
+feature_validation:
+    path: /features/validation
+    controller: App\Symfony\Controller\FeatureController::validation
+    methods: GET
+feature_config:
+    path: /features/config
+    controller: App\Symfony\Controller\FeatureController::config
+    methods: GET
+feature_db_events:
+    path: /features/db-events
+    controller: App\Symfony\Controller\FeatureController::dbEvents
+    methods: GET
+feature_request_scoped:
+    path: /features/request-scoped
+    controller: App\Symfony\Controller\FeatureController::requestScoped
+    methods: GET
+feature_rate_limit:
+    path: /features/rate-limit
+    controller: App\Symfony\Controller\FeatureController::rateLimit
+    methods: GET
+
+# --- Filler routes (route-table size parity with the other apps) -----------
+filler:
+    resource: ../src/Routing/filler_routes.php

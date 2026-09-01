@@ -1,0 +1,15 @@
+framework:
+    secret: 'bench-secret'
+    http_method_override: false
+    handle_all_throwables: true
+    php_errors:
+        log: true
+    # No session, no csrf, no profiler — benchmark dispatch is synthetic
+    # (CLI), matching the other adapters' no-session setup.
+    session:
+        enabled: false
+    router:
+        utf8: true
+    cache:
+        app: cache.adapter.array
+        system: cache.adapter.array

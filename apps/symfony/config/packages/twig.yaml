@@ -1,0 +1,6 @@
+twig:
+    paths:
+        '%kernel.project_dir%/templates': ~
+    cache: '%kernel.project_dir%/../../writable/symfony/twig'
+    strict_variables: false
+    auto_reload: false

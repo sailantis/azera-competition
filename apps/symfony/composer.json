@@ -1,0 +1,11 @@
+{
+  "name": "azera/competition-symfony-app",
+  "description": "Symfony benchmark app for azera-competition (namespace detection mirror of a stock app skeleton).",
+  "type": "project",
+  "autoload": {
+    "psr-4": {
+      "App\\Symfony\\": "src/"
+    }
+  },
+  "license": "MIT"
+}

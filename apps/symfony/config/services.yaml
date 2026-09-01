@@ -1,0 +1,38 @@
+parameters:
+    benchmark.name: 'Azera Competition (Symfony)'
+    benchmark.version: '1.0.0'
+    benchmark.pageSize: 20
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\Symfony\Controller\:
+        resource: '../src/Controller/'
+        tags: ['controller.service_arguments']
+
+    App\Symfony\Service\:
+        resource: '../src/Service/'
+
+    # Request-scoped state: scoped services — a fresh instance per request,
+    # single instance within the request (mirrors Spiral's #[Scope('http')]
+    # and Laravel's $app->scoped()).
+    App\Symfony\Service\RequestCounter:
+        tags:
+            - { name: kernel.reset, method: resetState }
+    App\Symfony\Service\ScopeState: ~
+
+    # DB event log lives for the process (query log accumulates there).
+    App\Symfony\Service\DbEventLog: ~
+
+    # DBAL driver middleware — records query + transaction activity into
+    # DbEventLog (the db-events feature race).
+    App\Symfony\Service\DbEventLoggerMiddleware:
+        tags:
+            - { name: doctrine.middleware }
+
+    # Event listener for ItemCreated (PSR-14 / Symfony EventDispatcher).
+    App\Symfony\EventListener\StampListener:
+        tags:
+            - { name: kernel.event_listener, event: App\Symfony\Event\ItemCreated, method: __invoke }

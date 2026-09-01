@@ -1,0 +1,22 @@
+app,mode,request,iterations_per_run,runs,trimmed_mean_ms,mean_ms,median_ms,p95_ms,peak_mem
+symfony,warm,"GET /",20,2,0.1074975,0.1074975,0.1042,0.1233,4194304
+symfony,warm,"GET /items",20,2,1.86003,1.86003,1.8344,2.0767,6291456
+symfony,warm,"GET /items/1",20,2,0.3474825,0.3474825,0.2308,0.3302,6291456
+symfony,warm,"POST /items",20,2,0.166605,0.166605,0.1379,0.2525,6291456
+symfony,warm,"GET /items-qb",20,2,0.3660075,0.3660075,0.3427,0.5091,6291456
+symfony,warm,"GET /items-qb/1",20,2,0.1915475,0.1915475,0.1844,0.2112,6291456
+symfony,warm,"POST /items-qb",20,2,0.211645,0.211645,0.2069,0.2354,6291456
+symfony,warm,"GET /api/items",20,2,0.3029925,0.3029925,0.2928,0.3535,6291456
+symfony,warm,"GET /api/items/1",20,2,0.2023925,0.2023925,0.1914,0.2587,6291456
+symfony,warm,"POST /api/items",20,2,0.1134075,0.1134075,0.1063,0.1366,6291456
+symfony,warm,"GET /features/aop",20,2,6.1276625,6.1276625,6.2784,6.43,6291456
+symfony,warm,"GET /features/cache",20,2,61.5158775,61.5158775,61.2476,63.1211,6291456
+symfony,warm,"GET /features/log",20,2,0.1089925,0.1089925,0.0977,0.1461,6291456
+symfony,warm,"GET /features/retry",20,2,0.10958,0.10958,0.1051,0.1156,6291456
+symfony,warm,"GET /features/pipeline",20,2,0.100585,0.100585,0.0966,0.1116,6291456
+symfony,warm,"GET /features/db-events",20,2,6.719125,6.719125,6.7141,7.1781,8388608
+symfony,warm,"GET /features/events",20,2,8.9909775,8.9909775,6.3119,20.7432,8388608
+symfony,warm,"GET /features/validation",20,2,0.252125,0.252125,0.2415,0.2863,8388608
+symfony,warm,"GET /features/config",20,2,0.102315,0.102315,0.0981,0.108,8388608
+symfony,warm,"GET /features/request-scoped",20,2,0.105765,0.105765,0.0982,0.1342,8388608
+symfony,warm,"GET /features/rate-limit",20,2,0.1735975,0.1735975,0.1752,0.1878,8388608
