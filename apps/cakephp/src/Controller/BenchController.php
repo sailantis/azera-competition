@@ -161,16 +161,21 @@ final class BenchController extends AppController
     }
 
     /**
-     * POST /items-qb — upsert the QB sentinel row via raw SQL.
+     * POST /items-qb — upsert the QB sentinel row via the database query
+     * builder (InsertQuery + ON CONFLICT epilog), mirroring the other
+     * frameworks' builder write paths (azera Query::upsert(), CI4 upsert()).
      */
     public function createQb(): \Cake\Http\Response
     {
         $now = date('Y-m-d H:i:s');
-        Db::connection()->execute(
-            'INSERT INTO items (id, title, created_at) VALUES (:id, :title, :created_at)
-             ON CONFLICT(id) DO UPDATE SET title = excluded.title',
-            ['id' => Benchmark::SENTINEL_QB_ID, 'title' => 'Created Item ' . $now, 'created_at' => $now],
-        );
+        Db::connection()
+            ->insertQuery('items', [
+                'id'         => Benchmark::SENTINEL_QB_ID,
+                'title'      => 'Created Item ' . $now,
+                'created_at' => $now,
+            ])
+            ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title')
+            ->rowCountAndClose();
 
         return $this->json(['id' => Benchmark::SENTINEL_QB_ID]);
     }

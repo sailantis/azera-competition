@@ -52,18 +52,22 @@ final class ApiController extends AppController
     }
 
     /**
-     * POST /api/items — upsert the API sentinel item, JSON with the id.
+     * POST /api/items — upsert the API sentinel item via the database
+     * query builder (InsertQuery + ON CONFLICT epilog), JSON with the id.
      */
     public function create(): \Cake\Http\Response
     {
         $now      = date('Y-m-d H:i:s');
         $sentinel = Benchmark::SENTINEL_API_ID;
 
-        Db::connection()->execute(
-            'INSERT INTO items (id, title, created_at) VALUES (:id, :title, :created_at)
-             ON CONFLICT(id) DO UPDATE SET title = excluded.title',
-            ['id' => $sentinel, 'title' => 'API Item ' . $now, 'created_at' => $now],
-        );
+        Db::connection()
+            ->insertQuery('items', [
+                'id'         => $sentinel,
+                'title'      => 'API Item ' . $now,
+                'created_at' => $now,
+            ])
+            ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title')
+            ->rowCountAndClose();
 
         return $this->json(['id' => $sentinel]);
     }

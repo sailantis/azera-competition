@@ -11,6 +11,7 @@ namespace App\Controllers;
 use App\Models\Item;
 use Azera\AppContext;
 use Azera\Core\Controller;
+use Azera\Db\Query;
 use Azera\Http\Response;
 
 class BenchController extends Controller
@@ -107,9 +108,10 @@ class BenchController extends Controller
         $page     = (int) $this->request()->query('page', 1);
         $pageSize = 20;
 
-        // Plain Query::new() with a table name — no model bound, so the
-        // Paginator returns plain arrays instead of hydrated models.
-        $paginator = Item::query()->paginate($page, $pageSize);
+        // Table-level Query Builder (Query::raw() = literal table names, no
+        // model mapping) — same approach as CI4 table('items') and Spiral's
+        // db->select()->from('items'). Paginator returns plain arrays.
+        $paginator = Query::raw()->table('items')->paginate($page, $pageSize);
         $items     = $paginator->objects();
 
         $html = $this->view()->render('items.list', [
@@ -138,8 +140,8 @@ class BenchController extends Controller
      */
     public function showQbAction(int $id): Response
     {
-        // Plain query builder — returns a stdClass, not a model.
-        $row = Item::query()->where('id', $id)->select()->fetchObject();
+        // Table-level query builder — returns a stdClass, not a model.
+        $row = Query::raw()->table('items')->where('id', $id)->select()->fetchObject();
         if ($row === null) {
             return Response::text('Not Found', 404);
         }
@@ -150,18 +152,18 @@ class BenchController extends Controller
     }
 
     /**
-     * POST /items-qb — upsert a sentinel item via raw Query Builder.
-     *
-     * Same as the PUT /items endpoint — uses the Query Builder directly
-     * without model overhead.  POST /items (ORM) vs POST /items-qb (QB)
-     * gives a clean ORM-vs-builder write comparison on the same method.
+     * POST /items-qb — upsert a sentinel item via the table-level Query
+     * Builder (Query::raw() = literal table names, no model mapping or
+     * hydration). POST /items (ORM) vs POST /items-qb (QB) gives a clean
+     * ORM-vs-builder write comparison on the same method.
      */
     public function createQbAction(): Response
     {
         $title      = 'Created Item ' . date('Y-m-d H:i:s');
         $created_at = date('Y-m-d H:i:s');
 
-        Item::query()
+        Query::raw()
+            ->table('items')
             ->conflict(['id'])
             ->upsert([
                 'id'         => 999997,
