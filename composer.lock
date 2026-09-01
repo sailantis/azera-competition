@@ -5470,7 +5470,7 @@
             "dist": {
                 "type": "path",
                 "url": "../azera-framework",
-                "reference": "90fadb2f411f7fa64da274a7c175c75ad292922b"
+                "reference": "398d1c041bc510eb7efaeb4f3ffdb9d0c562d6e4"
             },
             "require": {
                 "ext-mbstring": "*",
