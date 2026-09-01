@@ -41,12 +41,10 @@
     "cycle/database": "^2.9",
     "cycle/orm": "^2.0",
     "codeigniter4/framework": "^4.5",
-    "cakephp/orm": "^5.0",
-    "cakephp/http": "^5.0",
-    "cakephp/core": "^5.0",
     "spiral/framework": "^3.17",
     "spiral/validator": "^1.8",
-    "spiral-packages/league-event": "^1.0"
+    "spiral-packages/league-event": "^1.0",
+    "cakephp/cakephp": "5.4"
   },
   "license": "MIT",
   "minimum-stability": "dev",

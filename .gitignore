@@ -1,5 +1,6 @@
 /vendor/
 /temp/
+/writable/
 /data/aop/
 /data/cache/
 /data/bench.sqlite

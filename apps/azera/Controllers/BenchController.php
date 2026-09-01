@@ -11,7 +11,6 @@ namespace App\Controllers;
 use App\Models\Item;
 use Azera\AppContext;
 use Azera\Core\Controller;
-use Azera\Db\Query;
 use Azera\Http\Response;
 
 class BenchController extends Controller

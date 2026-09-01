@@ -150,8 +150,8 @@ $adapterFeatures = [
     'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'events', 'validation', 'config'],
     'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'events', 'validation', 'config'],
     'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-    'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api', 'validation'],
-    'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api', 'validation'],
+    'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+    'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
 ];
 
 // --- Adapter registry ------------------------------------------------------
