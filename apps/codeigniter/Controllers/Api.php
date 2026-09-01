@@ -43,17 +43,32 @@ final class Api extends BaseController
     }
 
     /**
-     * POST /api/items — upsert the API sentinel item, JSON with the id.
+     * POST /api/items — upsert the API sentinel item via the Model (Active
+     * Record), JSON with the id.
+     *
+     * find-then-insert-or-update mirrors azera's Item::upsert() semantics
+     * with a fixed sentinel id so row count stays stable across runs — the
+     * same model-layer write path as Bench::create().  The API category
+     * compares routing + JSON serialization, so every framework sits on
+     * its model layer here (no raw builder shortcut).
      */
     public function create(): \CodeIgniter\HTTP\ResponseInterface|string
     {
-        $now = date('Y-m-d H:i:s');
+        $now   = date('Y-m-d H:i:s');
+        $model = new Item();
 
-        $this->db()->table('items')->upsert([
-            'id'         => self::SENTINEL_API_ID,
-            'title'      => 'API Item ' . $now,
-            'created_at' => $now,
-        ]);
+        $existing = $model->find(self::SENTINEL_API_ID);
+        if ($existing === null) {
+            $model->db->table('items')->insert([
+                'id'         => self::SENTINEL_API_ID,
+                'title'      => 'API Item ' . $now,
+                'created_at' => $now,
+            ]);
+        } else {
+            $model->db->table('items')
+                ->where('id', self::SENTINEL_API_ID)
+                ->update(['title' => 'API Item ' . $now]);
+        }
 
         return $this->response->setJSON(['id' => self::SENTINEL_API_ID]);
     }
