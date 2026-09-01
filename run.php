@@ -497,18 +497,6 @@ function benchRequest(
 
 // --- Main ------------------------------------------------------------------
 
-// --- Optional DB reseed ---------------------------------------------------
-if ($doSeed) {
-    echo "Reseeding database ({$seedRows} rows)...\n";
-    $seedScript  = escapeshellarg(__DIR__ . '/seed.php');
-    $seedRowsArg = escapeshellarg((string) $seedRows);
-    passthru("php {$seedScript} --rows={$seedRowsArg}", $seedExit);
-    if ($seedExit !== 0) {
-        echo "Seed failed (exit {$seedExit}), aborting.\n";
-        exit(1);
-    }
-}
-
 echo "=== azera-competition benchmark ===\n";
 echo "Apps: " . implode(', ', $apps) . "\n";
 echo "Iterations/run: {$itersPerRun}, Runs: {$runs}\n";
@@ -549,6 +537,24 @@ foreach ($apps as $key) {
 
     foreach (array_keys($modes) as $modeName) {
         echo " -- mode: {$modeName}\n";
+
+        // Re-seed per app x mode: the feature endpoints (aop/db-events/
+        // events) INSERT a row per request, so a single start-of-run seed
+        // would leave the last app measuring GETs (COUNT(*) etc.) against
+        // tens of thousands of accumulated rows while the first app saw
+        // ~1k.  Fresh 1k-row table for every measured block keeps the
+        // data-layer cost identical across apps and modes.
+        if ($doSeed) {
+            echo "    reseeding database ({$seedRows} rows)...\n";
+            $seedScript  = escapeshellarg(__DIR__ . '/seed.php');
+            $seedRowsArg = escapeshellarg((string) $seedRows);
+            passthru("php {$seedScript} --rows={$seedRowsArg}", $seedExit);
+            if ($seedExit !== 0) {
+                echo "Seed failed (exit {$seedExit}), aborting.\n";
+                exit(1);
+            }
+        }
+
         $modeResult = ['requests' => []];
         foreach ($requests as $request) {
             $modeResult['requests'][] = benchRequest(
