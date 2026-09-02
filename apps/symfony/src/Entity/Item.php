@@ -19,7 +19,6 @@ class Item
 {
     #[ORM\Id]
     #[ORM\Column(type: 'integer')]
-    #[ORM\GeneratedValue]
     public int $id;
 
     #[ORM\Column(type: 'string')]

@@ -111,18 +111,18 @@ class FeatureController extends AbstractController
 
         // Second call — instant cache hit.
         $start2     = \microtime(true);
-        $item2      = $this-\u003ecache-\u003egetItem($key);
-        $count2     = $item2-\u003eisHit() ? (int) $item2-\u003eget() : null;
+        $item2      = $this->cache->getItem($key);
+        $count2     = $item2->isHit() ? (int) $item2->get() : null;
         $elapsedMs2 = \round((\microtime(true) - $start2) * 1000, 2);
 
         \error_log(\sprintf(
             '[phpthunder-debug] GET /features/cache pid=%d first_hit=%s first_ms=%.2f second_hit=%s second_ms=%.2f adapter=%s',
             \getmypid(),
-            $item-\u003eisHit() ? 'true' : 'false',
+            $item->isHit() ? 'true' : 'false',
             $elapsedMs,
-            $item2-\u003eisHit() ? 'true' : 'false',
+            $item2->isHit() ? 'true' : 'false',
             $elapsedMs2,
-            \get_class($this-\u003ecache),
+            \get_class($this->cache),
         ));
 
         return $this->json([
@@ -210,7 +210,12 @@ class FeatureController extends AbstractController
     public function events(): JsonResponse
     {
         $title = 'Event Item ' . \date('Y-m-d H:i:s');
-        $item  = new Item($title, \date('Y-m-d H:i:s'));
+        // Item uses an assigned identifier (no DB-generated id) so we must
+        // provide a unique id ourselves. Pick a high random id that will
+        // not collide with the seeded 1..N rows or the 999997-999999
+        // sentinel ids used by the benchmark endpoints.
+        $item = new Item($title, \date('Y-m-d H:i:s'));
+        $item->id = \random_int(10_000_000, 99_999_999);
         $this->em->persist($item);
         $this->em->flush();
 
