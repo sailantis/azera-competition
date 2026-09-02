@@ -23,7 +23,9 @@ class FeatureService
 {
     public function __construct(
         private AppContext $ctx,
-    ) {}
+    )
+    {
+    }
 
     /**
      * Create an item inside a transaction.
@@ -75,8 +77,8 @@ class FeatureService
      */
     public function countItemsHit(): bool
     {
-        $cache = $this->ctx-\u003eget('Azera\\Cache\\ArrayCache');
-        return $cache !== null && $cache-\u003ehas('item_count');
+        $cache = $this->ctx->get('Azera\\Cache\\ArrayCache');
+        return $cache !== null && $cache->has('item_count');
     }
     /**
      * Log a message via the #[Log] AOP advice.

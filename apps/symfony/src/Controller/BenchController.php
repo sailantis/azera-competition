@@ -104,15 +104,6 @@ class BenchController extends AbstractController
         $this->em->persist($item);
         $this->em->flush();
 
-        \error_log(\sprintf(
-            '[phpthunder-debug] POST /items pid=%d existed=%s u=%s mem=%d em_unit=%s',
-            \getmypid(),
-            $existed ? 'true' : 'false',
-            \get_current_user(),
-            \memory_get_usage(true),
-            \spl_object_hash($this->em),
-        ));
-
         return $this->render('item.html.twig', \array_merge(self::viewGlobals(), [
             'item'  => $item,
             'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',
