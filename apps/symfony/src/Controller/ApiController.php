@@ -59,7 +59,12 @@ class ApiController extends AbstractController
      */
     public function create(): JsonResponse
     {
-        $now = \date('Y-m-d H:i:s');
+        // Ensure every request actually changes the sentinel row, otherwise
+        // Doctrine's dirty-checking may skip the UPDATE when the timestamp is
+        // unchanged within the same second. A static counter plus microtime
+        // guarantees a unique value on every request.
+        static $counter = 0;
+        $now = \date('Y-m-d H:i:s') . '.' . \microtime(true) . '.' . ++$counter;
 
         $item = $this->em->find(Item::class, self::SENTINEL_API_ID);
         if ($item === null) {

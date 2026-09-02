@@ -89,7 +89,12 @@ class BenchController extends AbstractController
      */
     public function create(): Response
     {
-        $now = \date('Y-m-d H:i:s');
+        // Use a unique value on every request so Doctrine's UnitOfWork
+        // dirty-checking always sees a change and actually issues an UPDATE.
+        // A static counter guarantees uniqueness even when multiple requests
+        // share the same microsecond.
+        static $counter = 0;
+        $now = \date('Y-m-d H:i:s') . '.' . \microtime(true) . '.' . ++$counter;
 
         $item    = $this->em->find(Item::class, self::SENTINEL_ORM_ID);
         $existed = $item !== null;
@@ -168,7 +173,12 @@ class BenchController extends AbstractController
      */
     public function createQb(): Response
     {
-        $now = \date('Y-m-d H:i:s');
+        // Ensure every request actually changes the row, otherwise the
+        // DBAL upsert may still be a no-op in some configurations when the
+        // values are identical. A monotonic counter plus microtime guarantees
+        // uniqueness even within the same second.
+        static $counter = 0;
+        $now = \date('Y-m-d H:i:s') . '.' . \microtime(true) . '.' . ++$counter;
 
         $existed = (bool) $this->connection->fetchOne(
             'SELECT COUNT(*) FROM items WHERE id = :id',
