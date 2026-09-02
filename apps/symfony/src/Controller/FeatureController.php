@@ -115,16 +115,6 @@ class FeatureController extends AbstractController
         $count2     = $item2->isHit() ? (int) $item2->get() : null;
         $elapsedMs2 = \round((\microtime(true) - $start2) * 1000, 2);
 
-        \error_log(\sprintf(
-            '[phpthunder-debug] GET /features/cache pid=%d first_hit=%s first_ms=%.2f second_hit=%s second_ms=%.2f adapter=%s',
-            \getmypid(),
-            $item->isHit() ? 'true' : 'false',
-            $elapsedMs,
-            $item2->isHit() ? 'true' : 'false',
-            $elapsedMs2,
-            \get_class($this->cache),
-        ));
-
         return $this->json([
             'feature'        => 'Cache',
             'description'    => 'First call runs the query (~50ms); second call hits the PSR-6 cache (~0ms).',

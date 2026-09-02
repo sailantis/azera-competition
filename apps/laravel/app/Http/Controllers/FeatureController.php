@@ -92,8 +92,8 @@ class FeatureController
     {
         $key = 'items:count';
 
-        $start = \microtime(true);
-        $count = Cache::get($key);
+        $start    = \microtime(true);
+        $count    = Cache::get($key);
         $firstHit = $count !== null;
         if (!$firstHit) {
             // Simulate the expensive query parity with azera's #[Cache] demo
@@ -109,16 +109,6 @@ class FeatureController
         $start2     = \microtime(true);
         $count2     = Cache::get($key);
         $elapsedMs2 = \round((\microtime(true) - $start2) * 1000, 2);
-
-        \error_log(\sprintf(
-            '[phpthunder-debug] GET /features/cache (laravel) pid=%d first_hit=%s first_ms=%.2f second_hit=%s second_ms=%.2f store=%s',
-            \getmypid(),
-            $firstHit ? 'true' : 'false',
-            $elapsedMs,
-            $count2 !== null ? 'true' : 'false',
-            $elapsedMs2,
-            \get_class(Cache::getStore()),
-        ));
 
         return response()->json([
             'feature'        => 'Cache',

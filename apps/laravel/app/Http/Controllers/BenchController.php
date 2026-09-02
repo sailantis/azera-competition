@@ -91,13 +91,6 @@ class BenchController
         $item->created_at = $now;
         $item->save();
 
-        \error_log(\sprintf(
-            '[phpthunder-debug] POST /items (laravel) pid=%d existed=%s mem=%d',
-            \getmypid(),
-            $existed ? 'true' : 'false',
-            \memory_get_usage(true),
-        ));
-
         return view('item', [
             'item'  => $item,
             'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',

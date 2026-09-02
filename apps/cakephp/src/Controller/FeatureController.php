@@ -94,7 +94,7 @@ final class FeatureController extends AppController
         $key   = 'items-count';
         $count = $pool->get($key);
 
-        $start = microtime(true);
+        $start    = microtime(true);
         $firstHit = $count !== null;
         if (!$firstHit) {
             usleep(50_000); // parity with azera's #[Cache] demo (50ms miss)
@@ -106,16 +106,6 @@ final class FeatureController extends AppController
         $start2     = microtime(true);
         $count2     = $pool->get($key);
         $elapsedMs2 = round((microtime(true) - $start2) * 1000, 2);
-
-        \error_log(\sprintf(
-            '[phpthunder-debug] GET /features/cache (cakephp) pid=%d first_hit=%s first_ms=%.2f second_hit=%s second_ms=%.2f pool=%s',
-            \getmypid(),
-            $firstHit ? 'true' : 'false',
-            $elapsedMs,
-            $count2 !== null ? 'true' : 'false',
-            $elapsedMs2,
-            \get_class($pool),
-        ));
 
         return $this->json([
             'feature'        => 'Cache (Cake cache pool)',
