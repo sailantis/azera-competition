@@ -94,6 +94,13 @@ class FeatureController extends Controller
         $count2     = $service->countItems();
         $elapsedMs2 = round((microtime(true) - $start2) * 1000, 2);
 
+        \error_log(\sprintf(
+            '[phpthunder-debug] GET /features/cache (azera) pid=%d first_ms=%.2f second_ms=%.2f',
+            \getmypid(),
+            $elapsedMs,
+            $elapsedMs2,
+        ));
+
         return Response::json([
             'feature'        => 'AOP #[Cache]',
             'description'    => 'First call runs the query (~50ms); second call hits the cache (~0ms).',

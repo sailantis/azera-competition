@@ -68,7 +68,16 @@ class FeatureService
 
         return (int) ($row['c'] ?? 0);
     }
-
+    /**
+     * Internal hook used by the cache endpoint to inspect whether the
+     * #[Cache] interceptor actually hit without changing the public method
+     * signature used by the benchmark.
+     */
+    public function countItemsHit(): bool
+    {
+        $cache = $this->ctx-\u003eget('Azera\\Cache\\ArrayCache');
+        return $cache !== null && $cache-\u003ehas('item_count');
+    }
     /**
      * Log a message via the #[Log] AOP advice.
      *

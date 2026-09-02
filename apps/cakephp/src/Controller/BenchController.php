@@ -111,6 +111,14 @@ final class BenchController extends AppController
 
         $table->save($entity);
 
+        \error_log(\sprintf(
+            '[phpthunder-debug] POST /items (cakephp) pid=%d existed=%s mem=%d table=%s',
+            \getmypid(),
+            $existed ? 'true' : 'false',
+            \memory_get_usage(true),
+            \spl_object_hash($table),
+        ));
+
         $this->set('title', 'Item ' . $sentinel);
         $this->set('item', $entity);
         $this->set('flash', 'Item #' . $sentinel . ($existed ? ' updated' : ' created') . ' ✓');

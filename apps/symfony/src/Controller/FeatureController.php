@@ -111,9 +111,19 @@ class FeatureController extends AbstractController
 
         // Second call — instant cache hit.
         $start2     = \microtime(true);
-        $item2      = $this->cache->getItem($key);
-        $count2     = $item2->isHit() ? (int) $item2->get() : null;
+        $item2      = $this-\u003ecache-\u003egetItem($key);
+        $count2     = $item2-\u003eisHit() ? (int) $item2-\u003eget() : null;
         $elapsedMs2 = \round((\microtime(true) - $start2) * 1000, 2);
+
+        \error_log(\sprintf(
+            '[phpthunder-debug] GET /features/cache pid=%d first_hit=%s first_ms=%.2f second_hit=%s second_ms=%.2f adapter=%s',
+            \getmypid(),
+            $item-\u003eisHit() ? 'true' : 'false',
+            $elapsedMs,
+            $item2-\u003eisHit() ? 'true' : 'false',
+            $elapsedMs2,
+            \get_class($this-\u003ecache),
+        ));
 
         return $this->json([
             'feature'        => 'Cache',

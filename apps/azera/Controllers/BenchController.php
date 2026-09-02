@@ -102,6 +102,13 @@ class BenchController extends Controller
             'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',
         ]);
 
+        \error_log(\sprintf(
+            '[phpthunder-debug] POST /items (azera) pid=%d existed=%s mem=%d',
+            \getmypid(),
+            $existed ? 'true' : 'false',
+            \memory_get_usage(true),
+        ));
+
         return Response::html($html);
     }
 
