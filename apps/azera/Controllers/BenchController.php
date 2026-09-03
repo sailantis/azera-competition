@@ -14,6 +14,7 @@ use Azera\AppContext;
 use Azera\Core\Controller;
 use Azera\Db\Query;
 use Azera\Http\Response;
+use Azera\Orm\FastHydrator;
 use Azera\Orm\Heap;
 use Azera\Orm\Metadata;
 use Azera\Orm\Node;
@@ -142,21 +143,14 @@ class BenchController extends Controller
             [$pageSize, $offset]
         );
 
-        // Hydrate raw rows -> entities in a Heap identity map.
-        $heap  = new Heap();
-        $items = [];
+        // Hydrate raw rows -> entities via the compiled FastHydrator plan:
+        // tight paired-list copy loops, heap dedup in attach — no metadata
+        // array walking per row, no per-row map lookups.
+        $hydrator = FastHydrator::for(Item::class);
+        $heap     = new Heap();
+        $items    = [];
         foreach ($rows as $row) {
-            $item = new Item();
-            foreach ($meta['columns'] as $field => $col) {
-                if (array_key_exists($col['name'], $row)) {
-                    $item->{$field} = $row[$col['name']];
-                }
-            }
-            $data = [];
-            foreach ($meta['columns'] as $field => $col) {
-                $data[$col['name']] = $row[$col['name']] ?? null;
-            }
-            $heap->attach($item, new Node(Item::class, ['id' => $row['id']], $data, Node::MANAGED));
+            [$item, , ] = $hydrator->hydrate($heap, $row);
             $items[] = $item;
         }
 
