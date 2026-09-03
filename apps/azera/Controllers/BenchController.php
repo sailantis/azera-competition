@@ -14,7 +14,6 @@ use Azera\AppContext;
 use Azera\Core\Controller;
 use Azera\Db\Query;
 use Azera\Http\Response;
-use Azera\Orm\FastHydrator;
 use Azera\Orm\Heap;
 use Azera\Orm\Metadata;
 use Azera\Orm\Node;
@@ -118,41 +117,28 @@ class BenchController extends Controller
      *
      * This is the hydration comparison endpoint: identical page of 20 rows
      * and identical template render as the legacy path, but hydration runs
-     * through PdoStore raw rows + Metadata + Heap identity map instead of
-     * ResultSet FETCH_CLASS.  Same COUNT + SELECT sequence as the legacy
-     * paginator keeps the SQL work comparable.
+     * through the UNIFIED query builder (Item::query()->entities()):
+     * raw rows + FastHydrator + request-scoped Heap identity map. Same
+     * COUNT + SELECT sequence as the legacy paginator keeps the SQL work
+     * comparable.
      */
     public function listOrmAction(): Response
     {
         $page     = (int) AppContext::instance()->request()->query('page', 1);
         $pageSize = 20;
 
-        $store = new PdoStore(AppContext::instance()->dbManager(), 'default', 'default');
         $meta  = Metadata::for(Item::class);
-
-        $total = $store->count(Item::class, []);
+        $total = Item::query()->count();
         $pages = (int) max(1, ceil($total / $pageSize));
         $page  = max(1, min($page, $pages));
 
-        // Limited page query via the store's raw select() — same SQL shape
-        // as the legacy paginator (COUNT + LIMIT/OFFSET), so the benchmark
-        // isolates pure hydration cost, not query volume.
-        $offset = ($page - 1) * $pageSize;
-        $rows   = $store->select(
-            'SELECT * FROM "items" ORDER BY "id" LIMIT ? OFFSET ?',
-            [$pageSize, $offset]
-        );
-
-        // Hydrate raw rows -> entities via the compiled FastHydrator plan:
-        // tight paired-list copy loops, heap dedup in attach — no metadata
-        // array walking per row, no per-row map lookups.
-        $hydrator = FastHydrator::for(Item::class);
-        $heap     = new Heap();
-        $items    = [];
-        foreach ($rows as $row) {
-            [$item, , ] = $hydrator->hydrate($heap, $row);
-            $items[] = $item;
-        }
+        // Unified builder: criteria (where/orderBy/limit) compile from the
+        // same Query the raw and QB paths use; entities() hydrates via the
+        // ORM (FastHydrator + Heap). No raw SQL, no separate criteria class.
+        $items = Item::query()
+            ->orderBy('id')
+            ->limit($pageSize, ($page - 1) * $pageSize)
+            ->entities();
 
         $html = $this->view()->render('items.list', [
             'baseUrl'    => '/items-orm',
@@ -174,22 +160,16 @@ class BenchController extends Controller
 
     /**
      * GET /items-orm/{id} — single item via the NEW ORM stack.
-     * PdoStore raw row -> Heap entity (metadata-driven hydration).
+     * Unified builder terminal (firstEntity) — heap-tracked entity from
+     * metadata-driven hydration on the request-scoped identity map.
      */
     public function showOrmAction(int $id): Response
     {
-        $store = new PdoStore(AppContext::instance()->dbManager(), 'default', 'default');
-        $row   = $store->findByPk(Item::class, ['id' => $id]);
-        if ($row === null) {
+        $item = Item::query()
+            ->where('id', '=', $id)
+            ->firstEntity();
+        if ($item === null) {
             return Response::text('Not Found', 404);
-        }
-
-        $meta = Metadata::for(Item::class);
-        $item = new Item();
-        foreach ($meta['columns'] as $field => $col) {
-            if (array_key_exists($col['name'], $row)) {
-                $item->{$field} = $row[$col['name']];
-            }
         }
 
         $html = $this->view()->render('items.show', [
