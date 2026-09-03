@@ -9,10 +9,16 @@
 namespace App\Controllers;
 
 use App\Models\Item;
+use App\Services\OrmDemoService;
 use Azera\AppContext;
 use Azera\Core\Controller;
 use Azera\Db\Query;
 use Azera\Http\Response;
+use Azera\Orm\Heap;
+use Azera\Orm\Metadata;
+use Azera\Orm\Node;
+use Azera\Orm\Storage\PdoStore;
+use Azera\Orm\UnitOfWork;
 
 class BenchController extends Controller
 {
@@ -96,6 +102,157 @@ class BenchController extends Controller
             'title'      => 'Created Item ' . date('Y-m-d H:i:s'),
             'created_at' => date('Y-m-d H:i:s'),
         ]);
+
+        $html = $this->view()->render('items.show', [
+            'item'  => $item,
+            'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',
+        ]);
+
+        return Response::html($html);
+    }
+
+    /**
+     * GET /items-orm — list items via the NEW ORM stack (raw rows -> Heap
+     * entities) with the same pagination + template as GET /items.
+     *
+     * This is the hydration comparison endpoint: identical page of 20 rows
+     * and identical template render as the legacy path, but hydration runs
+     * through PdoStore raw rows + Metadata + Heap identity map instead of
+     * ResultSet FETCH_CLASS.  Same COUNT + SELECT sequence as the legacy
+     * paginator keeps the SQL work comparable.
+     */
+    public function listOrmAction(): Response
+    {
+        $page     = (int) AppContext::instance()->request()->query('page', 1);
+        $pageSize = 20;
+
+        $store = new PdoStore(AppContext::instance()->dbManager(), 'default', 'default');
+        $meta  = Metadata::for(Item::class);
+
+        $total = $store->count(Item::class, []);
+        $pages = (int) max(1, ceil($total / $pageSize));
+        $page  = max(1, min($page, $pages));
+
+        // Limited page query via the store's raw select() — same SQL shape
+        // as the legacy paginator (COUNT + LIMIT/OFFSET), so the benchmark
+        // isolates pure hydration cost, not query volume.
+        $offset = ($page - 1) * $pageSize;
+        $rows   = $store->select(
+            'SELECT * FROM "items" ORDER BY "id" LIMIT ? OFFSET ?',
+            [$pageSize, $offset]
+        );
+
+        // Hydrate raw rows -> entities in a Heap identity map.
+        $heap  = new Heap();
+        $items = [];
+        foreach ($rows as $row) {
+            $item = new Item();
+            foreach ($meta['columns'] as $field => $col) {
+                if (array_key_exists($col['name'], $row)) {
+                    $item->{$field} = $row[$col['name']];
+                }
+            }
+            $data = [];
+            foreach ($meta['columns'] as $field => $col) {
+                $data[$col['name']] = $row[$col['name']] ?? null;
+            }
+            $heap->attach($item, new Node(Item::class, ['id' => $row['id']], $data, Node::MANAGED));
+            $items[] = $item;
+        }
+
+        $html = $this->view()->render('items.list', [
+            'baseUrl'    => '/items-orm',
+            'items'      => $items,
+            'pagination' => [
+                'currentPage'  => $page,
+                'lastPage'     => $pages,
+                'previousPage' => max(1, $page - 1),
+                'nextPage'     => min($pages, $page + 1),
+                'totalItems'   => $total,
+                'firstItem'    => ($page - 1) * $pageSize + 1,
+                'lastItem'     => ($page - 1) * $pageSize + count($items),
+                'hasPrevious'  => $page > 1,
+                'hasNext'      => $page < $pages,
+            ],
+        ]);
+        return Response::html($html);
+    }
+
+    /**
+     * GET /items-orm/{id} — single item via the NEW ORM stack.
+     * PdoStore raw row -> Heap entity (metadata-driven hydration).
+     */
+    public function showOrmAction(int $id): Response
+    {
+        $store = new PdoStore(AppContext::instance()->dbManager(), 'default', 'default');
+        $row   = $store->findByPk(Item::class, ['id' => $id]);
+        if ($row === null) {
+            return Response::text('Not Found', 404);
+        }
+
+        $meta = Metadata::for(Item::class);
+        $item = new Item();
+        foreach ($meta['columns'] as $field => $col) {
+            if (array_key_exists($col['name'], $row)) {
+                $item->{$field} = $row[$col['name']];
+            }
+        }
+
+        $html = $this->view()->render('items.show', [
+            'item' => $item,
+        ]);
+        return Response::html($html);
+    }
+
+    /**
+     * POST /items-orm — write via the NEW ORM stack: UnitOfWork
+     * load -> mutate -> persist -> flush (UPDATE of changed cols only).
+     *
+     * Same sentinel (999999) + exists() probe + flash render as POST /items,
+     * so POST /items (legacy Model::upsert) vs POST /items-orm (UoW diff)
+     * isolates the write-path difference.
+     */
+    public function createOrmAction(): Response
+    {
+        $db   = AppContext::instance()->dbManager()->getOrDefault('default');
+        $meta = Metadata::for(Item::class);
+
+        // 1) Load raw row + attach as MANAGED (mirrors RowSplitter hydration).
+        //    The load doubles as the exists probe (same statement count as
+        //    the legacy path: exists-probe + upsert).
+        $store   = new PdoStore(AppContext::instance()->dbManager(), 'default', 'default');
+        $row     = $store->findByPk(Item::class, ['id' => 999999]);
+        $existed = ($row !== null);
+        $heap    = new Heap();
+        $uow     = new UnitOfWork($heap, $db);
+
+        $item = new Item();
+        if ($existed) {
+            foreach ($meta['columns'] as $field => $col) {
+                if (array_key_exists($col['name'], $row)) {
+                    $item->{$field} = $row[$col['name']];
+                }
+            }
+            $data = [];
+            foreach ($meta['columns'] as $field => $col) {
+                $data[$col['name']] = $row[$col['name']] ?? null;
+            }
+            $heap->attach($item, new Node(Item::class, ['id' => 999999], $data, Node::MANAGED));
+        } else {
+            $item->id         = 999999;
+            $item->created_at = date('Y-m-d H:i:s');
+        }
+
+        // 2) Mutate with a MICROSECOND-unique title. date() only has second
+        //    resolution — inside a benchmark loop the value would repeat and
+        //    the UoW would (correctly) diff nothing and skip the write.
+        //    Unique values guarantee a real UPDATE every request.
+        $item->title = 'Created Item ' . date('Y-m-d H:i:s')
+            . ' #' . substr(str_replace('.', '', (string) microtime(true)), -6);
+        $uow->persist($item);
+
+        // 3) Flush: one transaction, UPDATE of exactly the changed columns.
+        $uow->flush();
 
         $html = $this->view()->render('items.show', [
             'item'  => $item,

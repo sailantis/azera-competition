@@ -84,6 +84,11 @@ class Bootstrap
             $r->get('/items/{id:int}', '::showAction');
             $r->post('/items', '::createAction');
 
+            // New ORM stack endpoints (store seam + Heap + UnitOfWork)
+            $r->get('/items-orm', '::listOrmAction');
+            $r->get('/items-orm/{id:int}', '::showOrmAction');
+            $r->post('/items-orm', '::createOrmAction');
+
             // Query Builder endpoints (no model hydration)
             $r->get('/items-qb', '::listQbAction');
             $r->get('/items-qb/{id:int}', '::showQbAction');
@@ -156,6 +161,8 @@ class Bootstrap
             $r->get('/features/log', '::logAction');
             $r->get('/features/retry', '::retryAction');
             $r->get('/features/db-events', '::dbEventsAction');
+            $r->get('/features/orm', '::ormAction');
+            $r->get('/features/orm-hydrate', '::ormHydrateAction');
             $r->get('/features/validation', '::validationAction');
             $r->get('/features/config', '::configAction');
             $r->get('/features/request-scoped', '::requestScopedAction');
@@ -241,6 +248,7 @@ class Bootstrap
 
         // --- Demo services (autowired) ---
         $ctx->set(\App\Services\DbEventLog::class);
+        $ctx->set(\App\Services\OrmDemoService::class);
 
         // --- AOP Interceptors ---
         // Enable proxy generation for #[Advised] classes.

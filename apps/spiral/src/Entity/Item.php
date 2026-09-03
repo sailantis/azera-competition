@@ -18,13 +18,13 @@ use Cycle\Annotated\Annotation\Entity;
 class Item
 {
     #[Column(type: 'primary')]
-    #[Column(type: 'primary')] public int $id;
+    public int $id;
 
     #[Column(type: 'string')]
-    #[Column(type: 'string')] public string $title;
+    public string $title;
 
     #[Column(type: 'string')]
-    #[Column(type: 'string')] public string $created_at;
+    public string $created_at;
 
     public function __construct(string $title, string $createdAt)
     {

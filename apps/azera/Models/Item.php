@@ -13,8 +13,10 @@ use Azera\Core\Model;
 class Item extends Model
 {
     /**
-     * Explicit table name (default convention would pluralise to "items",
-     * but we set it explicitly for clarity).
+     * Explicit table name. The naming convention maps "Item" to "item"
+     * (pluralization is off by default), so this override is REQUIRED to
+     * target the shared `items` table. Both the Query builder (via
+     * ModelResolver) and the ORM store seam (via Metadata) honor it.
      */
     public function source(): string
     {
@@ -26,40 +28,4 @@ class Item extends Model
     public string $title;
 
     public string $created_at;
-
-    public function getId(): int
-    {
-        return $this->id;
-    }
-
-    public function setId(int $id): static
-    {
-        $this->id = $id;
-
-        return $this;
-    }
-
-    public function getTitle(): string
-    {
-        return $this->title;
-    }
-
-    public function setTitle(string $title): static
-    {
-        $this->title = $title;
-
-        return $this;
-    }
-
-    public function getCreatedAt(): string
-    {
-        return $this->created_at;
-    }
-
-    public function setCreatedAt(string $created_at): static
-    {
-        $this->created_at = $created_at;
-
-        return $this;
-    }
 }

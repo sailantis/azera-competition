@@ -25,6 +25,7 @@ use App\Events\ItemCreated;
 use App\Services\DbEventLog;
 use App\Services\FeatureService;
 use App\Services\MemoryLogger;
+use App\Services\OrmDemoService;
 use App\Services\RequestCounter;
 use Azera\Aop\LogInterceptor;
 use Azera\Aop\RetryInterceptor;
@@ -50,6 +51,8 @@ class FeatureController extends Controller
                 ['url' => '/features/log', 'title' => 'AOP #[Log]', 'desc' => 'Log method entry/exit/duration via the #[Log] advice'],
                 ['url' => '/features/retry', 'title' => 'AOP #[Retry]', 'desc' => 'Retry a failing method up to N times via the #[Retry] advice'],
                 ['url' => '/features/db-events', 'title' => 'Db Events', 'desc' => 'Observe QueryExecuted / StatementPrepared / Transaction events'],
+                ['url' => '/features/orm', 'title' => 'ORM UnitOfWork', 'desc' => 'Heap identity map + UnitOfWork diff/flush — only changed columns written'],
+                ['url' => '/features/orm-hydrate', 'title' => 'ORM Hydration', 'desc' => 'PdoStore raw rows -> Heap entities via ORM metadata'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate and coerce input via the Validator'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Dot-notation access to a nested config array'],
                 ['url' => '/features/request-scoped', 'title' => 'RequestScoped', 'desc' => 'Reset per-request state via clearRequestScope()'],
@@ -260,6 +263,43 @@ class FeatureController extends Controller
             'feature'     => 'Db Events',
             'description' => 'Database dispatches QueryExecuted, StatementPrepared, TransactionStarted, TransactionCommitted via PSR-14.',
             'events'      => $log->all(),
+        ]);
+    }
+
+    /**
+     * GET /features/orm — Unit-of-Work write path demo (NEW ORM stack).
+     *
+     * Loads the sentinel item through the ORM store, attaches it to the
+     * heap as MANAGED, mutates one field, persists + flushes.  The report
+     * shows the exact SQL: one UPDATE touching ONLY the mutated column,
+     * and a no-op second flush proving clean entities are never written.
+     */
+    public function ormAction(OrmDemoService $demo): Response
+    {
+        $report = $demo->updateSentinelViaUow();
+
+        return Response::json([
+            'feature'     => 'ORM UnitOfWork',
+            'description' => 'Heap (identity map) + UnitOfWork diff/flush: one transaction, only changed columns written, clean entities never written.',
+            'report'      => $report,
+        ]);
+    }
+
+    /**
+     * GET /features/orm-hydrate — ORM store hydration demo (NEW ORM stack).
+     *
+     * Loads rows through PdoStore (raw rows, no ResultSet/FETCH_CLASS) and
+     * hydrates entities into a Heap identity map.  Demonstrates the
+     * metadata-driven hydration the RowSplitter uses for joined reads.
+     */
+    public function ormHydrateAction(OrmDemoService $demo): Response
+    {
+        $report = $demo->hydrateViaStore(3);
+
+        return Response::json([
+            'feature'     => 'ORM Hydration',
+            'description' => 'PdoStore raw rows -> Heap identity map entities via Orm Metadata.',
+            'report'      => $report,
         ]);
     }
 
