@@ -10,7 +10,9 @@
 
 namespace App\Services;
 
-class DbEventLog
+use Azera\Lifecycle\RequestScoped;
+
+class DbEventLog implements RequestScoped
 {
     /** @var array<int, array{type: string, sql?: string, duration_ms?: float, level?: int}> */
     private array $events = [];
@@ -27,6 +29,16 @@ class DbEventLog
     }
 
     public function clear(): void
+    {
+        $this->events = [];
+    }
+
+    /**
+     * Request-scoped hook: the Db event log records one entry per executed
+     * statement; in a persistent worker it must be wiped between requests
+     * or it grows without bound (memory + GC pressure).
+     */
+    public function resetState(): void
     {
         $this->events = [];
     }

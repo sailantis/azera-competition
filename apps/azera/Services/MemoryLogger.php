@@ -10,9 +10,10 @@
 
 namespace App\Services;
 
+use Azera\Lifecycle\RequestScoped;
 use Psr\Log\LoggerInterface;
 
-class MemoryLogger implements LoggerInterface
+class MemoryLogger implements LoggerInterface, RequestScoped
 {
     /** @var array<int, array{level: string, message: string, context: array}> */
     private array $entries = [];
@@ -78,6 +79,15 @@ class MemoryLogger implements LoggerInterface
     }
 
     public function clear(): void
+    {
+        $this->entries = [];
+    }
+
+    /**
+     * Request-scoped hook: wipe captured log messages between requests in
+     * persistent workers (same contract as DbEventLog).
+     */
+    public function resetState(): void
     {
         $this->entries = [];
     }
