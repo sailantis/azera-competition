@@ -199,7 +199,7 @@ final class BenchController extends AppController
                 'title'      => 'Created Item ' . $now,
                 'created_at' => $now,
             ])
-            ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title')
+            ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at')
             ->rowCountAndClose();
 
         $this->set('title', 'Item ' . Benchmark::SENTINEL_QB_ID);
