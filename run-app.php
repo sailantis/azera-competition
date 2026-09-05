@@ -13,12 +13,23 @@
  * Everything after the shared preamble mirrors run.php's per-app loop.
  */
 
-require_once __DIR__ . '/vendor/autoload.php';
-require_once __DIR__ . '/WebAppAdapter.php';
-
 $opts = getopt('', ['app::', 'mode::', 'iterations-per-run::', 'runs::', 'requests::', 'seed', 'rows::', 'out-json::']);
 
-$appKey      = $opts['app'] ?? 'azera';
+$appKey = $opts['app'] ?? 'azera';
+
+// CI4's global helpers (config(), view(), env(), ...) are function_exists-
+// guarded and collide with Laravel's, which composer's `files` autoload
+// includes eagerly on vendor/autoload.php. In this child process only ONE
+// framework runs — for codeigniter, pre-load CI4's Common.php BEFORE the
+// composer autoloader so its helpers win the race and Laravel's guarded
+// definitions simply skip the taken names. (Common.php is pure function
+// definitions — no top-level side effects — so the early include is safe.)
+if ($appKey === 'codeigniter') {
+    require_once __DIR__ . '/vendor/codeigniter4/framework/system/Common.php';
+}
+
+require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/WebAppAdapter.php';
 $itersPerRun = isset($opts['iterations-per-run']) ? (int) $opts['iterations-per-run'] : 1000;
 $runs        = isset($opts['runs']) ? (int) $opts['runs'] : 30;
 $modeName    = $opts['mode'] ?? 'warm';

@@ -11,6 +11,17 @@ declare(strict_types=1);
  * view(), env(), ...) — two frameworks cannot share one PHP process.
  */
 
+$key = $argv[1] ?? 'azera';
+
+// CI4's global helpers (config(), view(), env(), ...) are function_exists-
+// guarded and collide with Laravel's, which composer's `files` autoload
+// includes eagerly on vendor/autoload.php. For codeigniter, pre-load CI4's
+// Common.php BEFORE the composer autoloader so its helpers win the race and
+// Laravel's guarded definitions simply skip the taken names.
+if ($key === 'codeigniter') {
+    require_once __DIR__ . '/vendor/codeigniter4/framework/system/Common.php';
+}
+
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
 
@@ -22,8 +33,6 @@ $map = [
     'codeigniter' => 'CodeIgniterAdapter',
     'cakephp'     => 'CakePhpAdapter',
 ];
-
-$key = $argv[1] ?? 'azera';
 
 if (!isset($map[$key])) {
     fwrite(STDERR, "Unknown adapter: {$key}\n");
