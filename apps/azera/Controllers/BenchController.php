@@ -34,25 +34,25 @@ class BenchController extends Controller
      */
     public function listAction(): Response
     {
-        $page = (int) AppContext::instance()->request()->query('page', 1);
+        $page     = (int) AppContext::instance()->request()->query('page', 1);
         $pageSize = 20;
 
         $paginator = Item::query()->paginate($page, $pageSize);
-        $items = $paginator->models();
+        $items     = $paginator->entities();
 
         $html = $this->view()->render('items.list', [
-            'baseUrl' => '/items',
-            'items' => $items,
+            'baseUrl'    => '/items',
+            'items'      => $items,
             'pagination' => [
-                'currentPage' => $paginator->currentPage(),
-                'lastPage' => $paginator->lastPage(),
+                'currentPage'  => $paginator->currentPage(),
+                'lastPage'     => $paginator->lastPage(),
                 'previousPage' => $paginator->previousPage(),
-                'nextPage' => $paginator->nextPage(),
-                'totalItems' => $paginator->totalItems(),
-                'firstItem' => $paginator->firstItem(),
-                'lastItem' => $paginator->lastItem(),
-                'hasPrevious' => $paginator->hasPrevious(),
-                'hasNext' => $paginator->hasNext(),
+                'nextPage'     => $paginator->nextPage(),
+                'totalItems'   => $paginator->totalItems(),
+                'firstItem'    => $paginator->firstItem(),
+                'lastItem'     => $paginator->lastItem(),
+                'hasPrevious'  => $paginator->hasPrevious(),
+                'hasNext'      => $paginator->hasNext(),
             ],
         ]);
         return Response::html($html);
@@ -92,13 +92,13 @@ class BenchController extends Controller
         $existed = Item::exists(['id' => 999999]);
 
         $item = Item::upsert([
-            'id' => 999999,
-            'title' => 'Created Item ' . date('Y-m-d H:i:s'),
+            'id'         => 999999,
+            'title'      => 'Created Item ' . date('Y-m-d H:i:s'),
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 
         $html = $this->view()->render('items.show', [
-            'item' => $item,
+            'item'  => $item,
             'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',
         ]);
 
@@ -118,12 +118,12 @@ class BenchController extends Controller
      */
     public function listOrmAction(): Response
     {
-        $page = (int) AppContext::instance()->request()->query('page', 1);
+        $page     = (int) AppContext::instance()->request()->query('page', 1);
         $pageSize = 20;
 
         $total = Item::query()->count();
         $pages = (int) max(1, ceil($total / $pageSize));
-        $page = max(1, min($page, $pages));
+        $page  = max(1, min($page, $pages));
 
         // Unified builder: criteria (where/orderBy/limit) compile from the
         // same Query the raw and QB paths use; entities() hydrates via the
@@ -134,18 +134,18 @@ class BenchController extends Controller
             ->entities();
 
         $html = $this->view()->render('items.list', [
-            'baseUrl' => '/items-orm',
-            'items' => $items,
+            'baseUrl'    => '/items-orm',
+            'items'      => $items,
             'pagination' => [
-                'currentPage' => $page,
-                'lastPage' => $pages,
+                'currentPage'  => $page,
+                'lastPage'     => $pages,
                 'previousPage' => max(1, $page - 1),
-                'nextPage' => min($pages, $page + 1),
-                'totalItems' => $total,
-                'firstItem' => ($page - 1) * $pageSize + 1,
-                'lastItem' => ($page - 1) * $pageSize + count($items),
-                'hasPrevious' => $page > 1,
-                'hasNext' => $page < $pages,
+                'nextPage'     => min($pages, $page + 1),
+                'totalItems'   => $total,
+                'firstItem'    => ($page - 1) * $pageSize + 1,
+                'lastItem'     => ($page - 1) * $pageSize + count($items),
+                'hasPrevious'  => $page > 1,
+                'hasNext'      => $page < $pages,
             ],
         ]);
         return Response::html($html);
@@ -183,12 +183,12 @@ class BenchController extends Controller
      */
     public function createOrmAction(): Response
     {
-        $item = Item::find(999999);
+        $item    = Item::find(999999);
         $existed = ($item !== null);
 
         if ($item === null) {
             $item = new Item();
-            $item->id = 999999;
+            $item->id         = 999999;
             $item->created_at = date('Y-m-d H:i:s');
         }
 
@@ -201,7 +201,7 @@ class BenchController extends Controller
         $item->save();
 
         $html = $this->view()->render('items.show', [
-            'item' => $item,
+            'item'  => $item,
             'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',
         ]);
 
@@ -221,28 +221,28 @@ class BenchController extends Controller
      */
     public function listQbAction(): Response
     {
-        $page = (int) $this->request()->query('page', 1);
+        $page     = (int) $this->request()->query('page', 1);
         $pageSize = 20;
 
         // Table-level Query Builder (Query::raw() = literal table names, no
         // model mapping) — same approach as CI4 table('items') and Spiral's
         // db->select()->from('items'). Paginator returns plain arrays.
         $paginator = Query::raw()->table('items')->paginate($page, $pageSize);
-        $items = $paginator->objects();
+        $items     = $paginator->objects();
 
         $html = $this->view()->render('items.list', [
-            'baseUrl' => '/items-qb',
-            'items' => $items,
+            'baseUrl'    => '/items-qb',
+            'items'      => $items,
             'pagination' => [
-                'currentPage' => $paginator->currentPage(),
-                'lastPage' => $paginator->lastPage(),
+                'currentPage'  => $paginator->currentPage(),
+                'lastPage'     => $paginator->lastPage(),
                 'previousPage' => $paginator->previousPage(),
-                'nextPage' => $paginator->nextPage(),
-                'totalItems' => $paginator->totalItems(),
-                'firstItem' => $paginator->firstItem(),
-                'lastItem' => $paginator->lastItem(),
-                'hasPrevious' => $paginator->hasPrevious(),
-                'hasNext' => $paginator->hasNext(),
+                'nextPage'     => $paginator->nextPage(),
+                'totalItems'   => $paginator->totalItems(),
+                'firstItem'    => $paginator->firstItem(),
+                'lastItem'     => $paginator->lastItem(),
+                'hasPrevious'  => $paginator->hasPrevious(),
+                'hasNext'      => $paginator->hasNext(),
             ],
         ]);
         return Response::html($html);
@@ -279,7 +279,7 @@ class BenchController extends Controller
      */
     public function createQbAction(): Response
     {
-        $title = 'Created Item ' . date('Y-m-d H:i:s');
+        $title      = 'Created Item ' . date('Y-m-d H:i:s');
         $created_at = date('Y-m-d H:i:s');
 
         $existed = Query::raw()->table('items')->where('id', 999997)->exists();
@@ -288,15 +288,15 @@ class BenchController extends Controller
             ->table('items')
             ->conflict(['id'])
             ->upsert([
-                'id' => 999997,
-                'title' => $title,
+                'id'         => 999997,
+                'title'      => $title,
                 'created_at' => $created_at,
             ]);
 
         $html = $this->view()->render('items.show', [
             'item' => (object) [
-                'id' => 999997,
-                'title' => $title,
+                'id'         => 999997,
+                'title'      => $title,
                 'created_at' => $created_at,
             ],
             'flash' => 'Item #999997' . ($existed ? ' updated' : ' created') . ' ✓',
