@@ -54,9 +54,15 @@ final class AopService
 
     /**
      * Wrap a plain callable with RetryInterceptor via the pipeline.
+     *
+     * Like loggedCall(), the entry buffer is reset first: the service is
+     * bound for the process lifetime (warm-mode worker), and the retry
+     * interceptor appends per-attempt entries — without the reset the
+     * buffer (and the response payload) would grow every request.
      */
     public function retryCall(callable $fn): mixed
     {
+        $this->entries = [];
         return $this->pipeline(new RetryInterceptor($this->entries, 3, 0))->then($fn);
     }
 

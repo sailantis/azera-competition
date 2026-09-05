@@ -48,8 +48,17 @@ class AppServiceProvider extends ServiceProvider
         View::share('platform', 'desktop');
 
         // Laravel 12 scoped flush: reset per-request state after each request.
-        $events->listen(\Illuminate\Foundation\Http\Events\RequestHandled::class, function (): void {
+        // forgetScopedInstances() alone is NOT sufficient in a long-running
+        // worker: the Router caches each Route's resolved controller for the
+        // process lifetime, so a cached controller keeps its ORIGINAL
+        // constructor-injected scoped services even after the container
+        // flushes them (observed: request-scoped scope_trace grew +2 entries
+        // per request, count never reset). Flushing the matched route's
+        // controller forces re-resolution from the container on the next
+        // request — the worker-safe equivalent of php-fpm teardown.
+        $events->listen(\Illuminate\Foundation\Http\Events\RequestHandled::class, function (\Illuminate\Foundation\Http\Events\RequestHandled $event): void {
             $this->app->forgetScopedInstances();
+            $event->request->route()?->flushController();
         });
     }
 }
