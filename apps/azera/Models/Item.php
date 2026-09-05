@@ -8,7 +8,7 @@
 
 namespace App\Models;
 
-use Azera\Core\Model;
+use Azera\Orm\Model;
 
 class Item extends Model
 {

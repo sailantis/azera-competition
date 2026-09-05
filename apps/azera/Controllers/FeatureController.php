@@ -51,7 +51,7 @@ class FeatureController extends Controller
                 ['url' => '/features/log', 'title' => 'AOP #[Log]', 'desc' => 'Log method entry/exit/duration via the #[Log] advice'],
                 ['url' => '/features/retry', 'title' => 'AOP #[Retry]', 'desc' => 'Retry a failing method up to N times via the #[Retry] advice'],
                 ['url' => '/features/db-events', 'title' => 'Db Events', 'desc' => 'Observe QueryExecuted / StatementPrepared / Transaction events'],
-                ['url' => '/features/orm', 'title' => 'ORM UnitOfWork', 'desc' => 'Heap identity map + UnitOfWork diff/flush — only changed columns written'],
+                ['url' => '/features/orm', 'title' => 'ORM EntityManager', 'desc' => 'Heap identity map + EM diff/flush — only changed columns written'],
                 ['url' => '/features/orm-hydrate', 'title' => 'ORM Hydration', 'desc' => 'PdoStore raw rows -> Heap entities via ORM metadata'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate and coerce input via the Validator'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Dot-notation access to a nested config array'],
@@ -71,15 +71,15 @@ class FeatureController extends Controller
     public function aopAction(FeatureService $service): Response
     {
         $title = 'AOP Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999);
-        $id    = $service->createItemTransactional($title);
+        $id = $service->createItemTransactional($title);
 
         return Response::json([
-            'feature'     => 'AOP #[Transactional]',
+            'feature' => 'AOP #[Transactional]',
             'description' => 'Inserted a row inside a DB transaction managed by the #[Transactional] interceptor — no manual begin/commit/rollback.',
-            'new_id'      => $id,
-            'title'       => $title,
+            'new_id' => $id,
+            'title' => $title,
             'proxy_class' => $service::class,
-            'is_proxied'  => $service::class !== FeatureService::class,
+            'is_proxied' => $service::class !== FeatureService::class,
         ]);
     }
 
@@ -88,22 +88,22 @@ class FeatureController extends Controller
      */
     public function cacheAction(FeatureService $service): Response
     {
-        $start     = microtime(true);
-        $count     = $service->countItems();
+        $start = microtime(true);
+        $count = $service->countItems();
         $elapsedMs = round((microtime(true) - $start) * 1000, 2);
 
         // Call again — should be instant (cache hit)
-        $start2     = microtime(true);
-        $count2     = $service->countItems();
+        $start2 = microtime(true);
+        $count2 = $service->countItems();
         $elapsedMs2 = round((microtime(true) - $start2) * 1000, 2);
 
         return Response::json([
-            'feature'        => 'AOP #[Cache]',
-            'description'    => 'First call runs the query (~50ms); second call hits the cache (~0ms).',
-            'item_count'     => $count,
-            'first_call_ms'  => $elapsedMs,
+            'feature' => 'AOP #[Cache]',
+            'description' => 'First call runs the query (~50ms); second call hits the cache (~0ms).',
+            'item_count' => $count,
+            'first_call_ms' => $elapsedMs,
             'second_call_ms' => $elapsedMs2,
-            'same_result'    => $count === $count2,
+            'same_result' => $count === $count2,
         ]);
     }
 
@@ -113,7 +113,7 @@ class FeatureController extends Controller
     public function eventsAction(FeatureService $service): Response
     {
         $title = 'Event Item ' . date('Y-m-d H:i:s');
-        $id    = $service->createItemTransactional($title);
+        $id = $service->createItemTransactional($title);
 
         // The listener already ran during dispatch inside createItemTransactional.
         // To show the event/log, we dispatch a fresh event and capture it.
@@ -121,11 +121,11 @@ class FeatureController extends Controller
         $this->context()->events()->dispatch($event);
 
         return Response::json([
-            'feature'      => 'PSR-14 Events',
-            'description'  => 'Dispatched ItemCreated; the listener stamped the event with a log entry.',
-            'event_class'  => ItemCreated::class,
-            'item_id'      => $event->id,
-            'item_title'   => $event->title,
+            'feature' => 'PSR-14 Events',
+            'description' => 'Dispatched ItemCreated; the listener stamped the event with a log entry.',
+            'event_class' => ItemCreated::class,
+            'item_id' => $event->id,
+            'item_title' => $event->title,
             'listener_log' => $event->log(),
         ]);
     }
@@ -135,20 +135,20 @@ class FeatureController extends Controller
      */
     public function rateLimitAction(): Response
     {
-        $ctx     = $this->context();
+        $ctx = $this->context();
         $limiter = new RateLimiter($ctx->cache());
-        $ip      = $ctx->request()->server('REMOTE_ADDR', '127.0.0.1');
+        $ip = $ctx->request()->server('REMOTE_ADDR', '127.0.0.1');
 
         $allowed = $limiter->limit('demo:' . $ip, 5, 60);
-        $hits    = $limiter->hits('demo:' . $ip);
+        $hits = $limiter->hits('demo:' . $ip);
 
         return Response::json([
-            'feature'     => 'RateLimiter',
+            'feature' => 'RateLimiter',
             'description' => 'Max 5 requests per 60 seconds per IP. After 5, requests are denied.',
-            'ip'          => $ip,
-            'hits'        => $hits,
-            'allowed'     => $allowed,
-            'remaining'   => max(0, 5 - $hits),
+            'ip' => $ip,
+            'hits' => $hits,
+            'allowed' => $allowed,
+            'remaining' => max(0, 5 - $hits),
         ], $allowed ? 200 : 429);
     }
 
@@ -157,32 +157,32 @@ class FeatureController extends Controller
      */
     public function securityAction(): Response
     {
-        $ctx    = $this->context();
+        $ctx = $this->context();
         $hasher = new Hasher();
 
         // Demo: hash a sample password and verify it
         $plainPassword = 's3cur3-d3m0-p@ss';
-        $hash          = $hasher->make($plainPassword);
-        $verifyOk      = $hasher->verify($plainPassword, $hash);
-        $verifyWrong   = $hasher->verify('wrong-password', $hash);
+        $hash = $hasher->make($plainPassword);
+        $verifyOk = $hasher->verify($plainPassword, $hash);
+        $verifyWrong = $hasher->verify('wrong-password', $hash);
 
         // Generate a CSRF token (if session is available)
         $csrfMiddleware = new CsrfMiddleware();
-        $session        = $ctx->session();
-        $csrfToken      = null;
+        $session = $ctx->session();
+        $csrfToken = null;
         if ($session !== null) {
             $csrfToken = $csrfMiddleware->ensureToken($session);
         }
 
         return Response::json([
-            'feature'        => 'Security (Hasher + CSRF)',
-            'description'    => 'Password hashing via PHP password_hash() and CSRF token generation.',
-            'hash'           => $hash,
+            'feature' => 'Security (Hasher + CSRF)',
+            'description' => 'Password hashing via PHP password_hash() and CSRF token generation.',
+            'hash' => $hash,
             'verify_correct' => $verifyOk,
-            'verify_wrong'   => $verifyWrong,
-            'needs_rehash'   => $hasher->needsRehash($hash),
-            'csrf_token'     => $csrfToken,
-            'csrf_note'      => $csrfToken !== null
+            'verify_wrong' => $verifyWrong,
+            'needs_rehash' => $hasher->needsRehash($hash),
+            'csrf_token' => $csrfToken,
+            'csrf_note' => $csrfToken !== null
                 ? 'Submit this token as _csrf_token in a POST to /features/security'
                 : 'No session available — SessionMiddleware must run first',
         ]);
@@ -196,7 +196,7 @@ class FeatureController extends Controller
      */
     public function securityPostAction(): Response
     {
-        $ctx        = $this->context();
+        $ctx = $this->context();
         $middleware = new CsrfMiddleware();
 
         $called = false;
@@ -211,10 +211,10 @@ class FeatureController extends Controller
         }
 
         return Response::json([
-            'feature'     => 'CSRF Protection',
+            'feature' => 'CSRF Protection',
             'description' => 'POST request passed CSRF token validation.',
-            'csrf_valid'  => true,
-            'post_data'   => $ctx->request()->post(),
+            'csrf_valid' => true,
+            'post_data' => $ctx->request()->post(),
         ]);
     }
 
@@ -227,9 +227,9 @@ class FeatureController extends Controller
         $result = $service->logSomething('hello from the #[Log] demo');
 
         return Response::json([
-            'feature'     => 'AOP #[Log]',
+            'feature' => 'AOP #[Log]',
             'description' => 'LogInterceptor logs method entry, exit (with duration), and exceptions via PSR-3.',
-            'result'      => $result,
+            'result' => $result,
             'log_entries' => $logger->entries(),
         ]);
     }
@@ -242,9 +242,9 @@ class FeatureController extends Controller
         $result = $service->flakyOperation();
 
         return Response::json([
-            'feature'     => 'AOP #[Retry]',
+            'feature' => 'AOP #[Retry]',
             'description' => 'RetryInterceptor retries a failing method up to `times` attempts (including the first).',
-            'result'      => $result,
+            'result' => $result,
         ]);
     }
 
@@ -260,9 +260,9 @@ class FeatureController extends Controller
         $service->countItems();
 
         return Response::json([
-            'feature'     => 'Db Events',
+            'feature' => 'Db Events',
             'description' => 'Database dispatches QueryExecuted, StatementPrepared, TransactionStarted, TransactionCommitted via PSR-14.',
-            'events'      => $log->all(),
+            'events' => $log->all(),
         ]);
     }
 
@@ -276,12 +276,12 @@ class FeatureController extends Controller
      */
     public function ormAction(OrmDemoService $demo): Response
     {
-        $report = $demo->updateSentinelViaUow();
+        $report = $demo->updateSentinelViaEm();
 
         return Response::json([
-            'feature'     => 'ORM UnitOfWork',
-            'description' => 'Heap (identity map) + UnitOfWork diff/flush: one transaction, only changed columns written, clean entities never written.',
-            'report'      => $report,
+            'feature' => 'ORM EntityManager',
+            'description' => 'Heap (identity map) + EntityManager diff/flush: one transaction, only changed columns written, clean entities never written.',
+            'report' => $report,
         ]);
     }
 
@@ -297,9 +297,9 @@ class FeatureController extends Controller
         $report = $demo->hydrateViaStore(3);
 
         return Response::json([
-            'feature'     => 'ORM Hydration',
+            'feature' => 'ORM Hydration',
             'description' => 'PdoStore raw rows -> Heap identity map entities via Orm Metadata.',
-            'report'      => $report,
+            'report' => $report,
         ]);
     }
 
@@ -313,10 +313,10 @@ class FeatureController extends Controller
     {
         // A valid payload — all rules pass.
         $valid = new Validator([
-            'name'  => 'Ada Lovelace',
+            'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
-            'age'   => '36',
-            'tags'  => ['math', 'code'],
+            'age' => '36',
+            'tags' => ['math', 'code'],
         ]);
         $valid->field('name')->required()->string()->min(2)->max(100);
         $valid->field('email')->required()->email()->max(255);
@@ -325,25 +325,25 @@ class FeatureController extends Controller
 
         // An invalid payload — several rules fail.
         $invalid = new Validator([
-            'name'  => 'X',
+            'name' => 'X',
             'email' => 'not-an-email',
-            'age'   => '150',
+            'age' => '150',
         ]);
         $invalid->field('name')->required()->string()->min(2)->max(100);
         $invalid->field('email')->required()->email()->max(255);
         $invalid->field('age')->optional()->int()->min(18)->max(120);
 
         return Response::json([
-            'feature'       => 'Validation',
-            'description'   => 'Validator coerces and validates input; errors are keyed by dot-path field name.',
+            'feature' => 'Validation',
+            'description' => 'Validator coerces and validates input; errors are keyed by dot-path field name.',
             'valid_payload' => [
                 'passed' => !$valid->fails(),
-                'data'   => $valid->validated(),
+                'data' => $valid->validated(),
                 'errors' => $valid->errors(),
             ],
             'invalid_payload' => [
                 'passed' => !$invalid->fails(),
-                'data'   => $invalid->validated(),
+                'data' => $invalid->validated(),
                 'errors' => $invalid->errors(),
             ],
         ]);
@@ -357,13 +357,13 @@ class FeatureController extends Controller
         $config = $this->context()->config();
 
         return Response::json([
-            'feature'     => 'Config',
+            'feature' => 'Config',
             'description' => 'Dot-notation access to a nested configuration array.',
-            'app_name'    => $config->get('app.name'),
-            'db_dsn'      => $config->get('db.dsn'),
-            'missing'     => $config->get('does.not.exist', 'fallback'),
-            'has_app'     => $config->has('app'),
-            'all'         => $config->all(),
+            'app_name' => $config->get('app.name'),
+            'db_dsn' => $config->get('db.dsn'),
+            'missing' => $config->get('does.not.exist', 'fallback'),
+            'has_app' => $config->has('app'),
+            'all' => $config->all(),
         ]);
     }
 
@@ -377,7 +377,7 @@ class FeatureController extends Controller
     public function requestScopedAction(RequestCounter $counter): Response
     {
         $before = $counter->count();
-        $after  = $counter->increment();
+        $after = $counter->increment();
 
         // Simulate the end of a request: clear request-scoped state.
         $this->context()->clearRequestScope();
@@ -385,10 +385,10 @@ class FeatureController extends Controller
         $afterReset = $counter->count();
 
         return Response::json([
-            'feature'           => 'RequestScoped',
-            'description'       => 'Services implementing RequestScoped are reset by clearRequestScope() between requests.',
-            'count_before'      => $before,
-            'count_after'       => $after,
+            'feature' => 'RequestScoped',
+            'description' => 'Services implementing RequestScoped are reset by clearRequestScope() between requests.',
+            'count_before' => $before,
+            'count_after' => $after,
             'count_after_reset' => $afterReset,
         ]);
     }
@@ -416,9 +416,9 @@ class FeatureController extends Controller
             ->call(fn() => 'direct pipeline result');
 
         return Response::json([
-            'feature'     => 'AOP Pipeline (direct)',
+            'feature' => 'AOP Pipeline (direct)',
             'description' => 'Explicit interceptor pipeline around a plain callable — no proxy generation. The technique Spiral uses.',
-            'result'      => $result,
+            'result' => $result,
             'log_entries' => $logger->entries(),
         ]);
     }

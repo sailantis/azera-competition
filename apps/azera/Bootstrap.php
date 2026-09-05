@@ -50,6 +50,20 @@ class Bootstrap
             return $db;
         });
 
+        // --- Store seam (EntityManager write + read path) ---
+        // PdoStore borrows the SAME 'default' connection per operation, so
+        // transactions join the caller's nesting exactly as before.
+        $ctx->set(\Azera\Orm\Storage\StoreManager::class, function () use ($ctx) {
+            $stores = new \Azera\Orm\Storage\StoreManager();
+            $stores->set('default', fn() => new \Azera\Orm\Storage\PdoStore(
+                $ctx->dbManager(),
+                'default',
+                'default'
+            ));
+            $stores->setDefault('default');
+            return $stores;
+        });
+
         // Tell the Item model to use the default role
         //Item::setDefaultRole('default');
 
@@ -67,7 +81,7 @@ class Bootstrap
             ->setViewPath(__DIR__ . '/Views')
             ->setCachePath($cacheDir)
             ->setVars([
-                'locale'   => 'en_US',
+                'locale' => 'en_US',
                 'platform' => 'desktop',
             ]);
 
@@ -84,7 +98,7 @@ class Bootstrap
             $r->get('/items/{id:int}', '::showAction');
             $r->post('/items', '::createAction');
 
-            // New ORM stack endpoints (store seam + Heap + UnitOfWork)
+            // New ORM stack endpoints (Model facade over the EM pipeline)
             $r->get('/items-orm', '::listOrmAction');
             $r->get('/items-orm/{id:int}', '::showOrmAction');
             $r->post('/items-orm', '::createOrmAction');
@@ -135,7 +149,7 @@ class Bootstrap
         // /features/config demo can read dot-notation keys.
         $ctx->set(\Azera\Config\Config::class, new \Azera\Config\Config([
             'app' => ['name' => 'azera-competition', 'env' => 'bench'],
-            'db'  => ['dsn' => 'sqlite:data/bench.sqlite', 'driver' => 'sqlite'],
+            'db' => ['dsn' => 'sqlite:data/bench.sqlite', 'driver' => 'sqlite'],
         ]));
 
         // --- Session middleware (needed for CSRF demo) ---
@@ -288,19 +302,19 @@ class Bootstrap
     private static function registerFillerRoutes(\Azera\Core\Router $router, int $count): void
     {
         $controllers = ['User', 'Post', 'Comment', 'Category', 'Tag', 'Order', 'Product', 'Page', 'Setting', 'Search'];
-        $actions     = ['index', 'show', 'create', 'update', 'delete', 'edit', 'list', 'search'];
-        $sections    = ['admin', 'api', 'api/v1', 'api/v2', 'dashboard', 'panel', 'manage'];
-        $slugPool    = ['hello-world', 'getting-started', 'first-post', 'welcome', 'about-us', 'faq', 'docs', 'changelog'];
+        $actions = ['index', 'show', 'create', 'update', 'delete', 'edit', 'list', 'search'];
+        $sections = ['admin', 'api', 'api/v1', 'api/v2', 'dashboard', 'panel', 'manage'];
+        $slugPool = ['hello-world', 'getting-started', 'first-post', 'welcome', 'about-us', 'faq', 'docs', 'changelog'];
 
         $registered = 0;
-        $i          = 0;
+        $i = 0;
 
         while ($registered < $count) {
             $controller = $controllers[$i % count($controllers)];
-            $action     = $actions[$i % count($actions)];
-            $section    = $sections[$i % count($sections)];
-            $slug       = $slugPool[$i % count($slugPool)];
-            $id         = $i + 1;
+            $action = $actions[$i % count($actions)];
+            $section = $sections[$i % count($sections)];
+            $slug = $slugPool[$i % count($slugPool)];
+            $id = $i + 1;
 
             // Pattern 1: static route e.g. /admin/users/index
             $path1 = "/{$section}/{$controller}/{$action}";
