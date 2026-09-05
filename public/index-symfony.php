@@ -5,7 +5,7 @@
  * built-in development server).
  *
  * Run with:
- *   php start-web-symfony.php
+ *   php start-web.php symfony
  *   # or directly:
  *   php -S localhost:8883 -t public public/index-symfony.php
  *

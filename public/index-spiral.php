@@ -4,7 +4,7 @@
  * built-in development server).
  *
  * Run with:
- *   php start-web-spiral.php
+ *   php start-web.php spiral
  *   # or directly:
  *   php -S localhost:8887 -t public public/index-spiral.php
  *

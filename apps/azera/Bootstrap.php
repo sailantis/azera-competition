@@ -99,9 +99,13 @@ class Bootstrap
             $r->post('/items', '::createAction');
 
             // New ORM stack endpoints (Model facade over the EM pipeline)
-            $r->get('/items-orm', '::listOrmAction');
-            $r->get('/items-orm/{id:int}', '::showOrmAction');
-            $r->post('/items-orm', '::createOrmAction');
+            // Deactivated (2026-09-05) — the listOrmAction/showOrmAction/
+            // createOrmAction actions stay in BenchController for the next
+            // comparison run; re-enable these three routes to bring the
+            // /items-orm paths back.
+            // $r->get('/items-orm', '::listOrmAction');
+            // $r->get('/items-orm/{id:int}', '::showOrmAction');
+            // $r->post('/items-orm', '::createOrmAction');
 
             // Query Builder endpoints (no model hydration)
             $r->get('/items-qb', '::listQbAction');

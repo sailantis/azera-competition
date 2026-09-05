@@ -86,9 +86,11 @@ $requests    = isset($opts['requests'])
         'GET /items',
         'GET /items/1',
         'POST /items',
-        'GET /items-orm',
-        'GET /items-orm/1',
-        'POST /items-orm',
+        // -orm paths deactivated (2026-09-05) — re-enable together with the
+        // routes in apps/azera/Bootstrap.php and verify.php's $expect:
+        // 'GET /items-orm',
+        // 'GET /items-orm/1',
+        // 'POST /items-orm',
         'GET /items-qb',
         'GET /items-qb/1',
         'POST /items-qb',
@@ -122,13 +124,14 @@ $requests = array_map(function (string $r): array {
 // table groups endpoints by feature and only compares frameworks that
 // actually support that feature.
 $featureMap = [
-    'GET /'                        => 'routing',
-    'GET /items'                   => 'orm',
-    'GET /items/1'                 => 'orm',
-    'POST /items'                  => 'orm',
-    'GET /items-orm'               => 'orm-uow',
-    'GET /items-orm/1'             => 'orm-uow',
-    'POST /items-orm'              => 'orm-uow',
+    'GET /'        => 'routing',
+    'GET /items'   => 'orm',
+    'GET /items/1' => 'orm',
+    'POST /items'  => 'orm',
+    // orm-uow deactivated together with the -orm request entries above.
+    // 'GET /items-orm'             => 'orm-uow',
+    // 'GET /items-orm/1'           => 'orm-uow',
+    // 'POST /items-orm'            => 'orm-uow',
     'GET /items-qb'                => 'query-builder',
     'GET /items-qb/1'              => 'query-builder',
     'POST /items-qb'               => 'query-builder',
@@ -152,7 +155,20 @@ $featureMap = [
 // excluded from that feature's winners comparison (e.g. a framework without
 // AOP simply doesn't take part in the AOP race).
 $adapterFeatures = [
-    'azera'       => ['routing', 'orm', 'orm-uow', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+    'azera' => [
+        'routing',
+        'orm', /* 'orm-uow' deactivated with the -orm paths */
+        'query-builder',
+        'rest-api',
+        'aop',
+        'cache',
+        'db-events',
+        'events',
+        'validation',
+        'config',
+        'request-scoped',
+        'rate-limiter'
+    ],
     'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
     'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
     'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],

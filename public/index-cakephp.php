@@ -5,7 +5,7 @@
  * built-in development server).
  *
  * Run with:
- *   php start-web-cakephp.php
+ *   php start-web.php cakephp
  *   # or directly:
  *   php -S localhost:8885 -t public public/index-cakephp.php
  *
@@ -74,7 +74,7 @@ if (!defined('CAKE_CORE_INCLUDE_PATH')) {
 
 // --- PSR-4 autoloader for the benchmark app namespace ------------------------
 spl_autoload_register(function (string $class): void {
-    $prefix   = 'App\\Cake\\';
+    $prefix = 'App\\Cake\\';
     if (!str_starts_with($class, $prefix)) {
         return;
     }

@@ -4,6 +4,8 @@
  *
  * Run with PHP's built-in server:
  *
+ *   php start-web.php azera
+ *   # or directly:
  *   php -S localhost:8888 -t public public/index-azera.php
  *
  * Then open http://localhost:8888/ in your browser.

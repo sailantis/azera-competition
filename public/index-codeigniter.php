@@ -5,7 +5,7 @@
  * PHP's built-in development server).
  *
  * Run with:
- *   php start-web-codeigniter.php
+ *   php start-web.php codeigniter
  *   # or directly:
  *   php -S localhost:8886 -t public public/index-codeigniter.php
  *
@@ -80,8 +80,8 @@ if (getcwd() . DIRECTORY_SEPARATOR !== FCPATH) {
 // constant expressions) are autoloaded.
 require __DIR__ . '/../vendor/autoload.php';
 
-$root = dirname(__DIR__) . DIRECTORY_SEPARATOR;
-$appDir = $root . 'apps' . DIRECTORY_SEPARATOR . 'codeigniter' . DIRECTORY_SEPARATOR;
+$root     = dirname(__DIR__) . DIRECTORY_SEPARATOR;
+$appDir   = $root . 'apps' . DIRECTORY_SEPARATOR . 'codeigniter' . DIRECTORY_SEPARATOR;
 $writeDir = $root . 'writable' . DIRECTORY_SEPARATOR . 'ci4' . DIRECTORY_SEPARATOR;
 
 foreach ([$writeDir, $writeDir . 'cache', $writeDir . 'logs', $writeDir . 'session'] as $dir) {

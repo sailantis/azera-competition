@@ -5,7 +5,7 @@
  * built-in development server).
  *
  * Run with:
- *   php start-web-laravel.php
+ *   php start-web.php laravel
  *   # or directly:
  *   php -S localhost:8884 -t public public/index-laravel.php
  *

@@ -37,16 +37,17 @@ $adapterClasses = [
 // Expected substring per endpoint (loose — we check that key content appears).
 // Keep in sync with verify.php.
 $expect = [
-    'GET /'                        => 'Welcome',
-    'GET /items'                   => '<table>',
-    'GET /items/1'                 => 'Item 1',
-    'POST /items'                  => 'flash',
-    'GET /items-qb'                => '<table>',
-    'GET /items-qb/1'              => 'Item 1',
-    'POST /items-qb'               => 'flash',
-    'GET /items-orm'               => '<table>',
-    'GET /items-orm/1'             => 'Item 1',
-    'POST /items-orm'              => 'flash',
+    'GET /'           => 'Welcome',
+    'GET /items'      => '<table>',
+    'GET /items/1'    => 'Item 1',
+    'POST /items'     => 'flash',
+    'GET /items-qb'   => '<table>',
+    'GET /items-qb/1' => 'Item 1',
+    'POST /items-qb'  => 'flash',
+    // -orm paths deactivated (2026-09-05) — see run.php.
+    // 'GET /items-orm'             => '<table>',
+    // 'GET /items-orm/1'           => 'Item 1',
+    // 'POST /items-orm'            => 'flash',
     'GET /features/aop'            => '"new_id"',
     'GET /features/cache'          => '"item_count"',
     'GET /features/log'            => '"log_entries"',
