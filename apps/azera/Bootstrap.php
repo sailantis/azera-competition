@@ -50,20 +50,6 @@ class Bootstrap
             return $db;
         });
 
-        // --- Store seam (EntityManager write + read path) ---
-        // PdoStore borrows the SAME 'default' connection per operation, so
-        // transactions join the caller's nesting exactly as before.
-        $ctx->set(\Azera\Orm\Storage\StoreManager::class, function () use ($ctx) {
-            $stores = new \Azera\Orm\Storage\StoreManager();
-            $stores->set('sql', 'default', fn() => new \Azera\Orm\Storage\PdoStore(
-                $ctx->dbManager(),
-                'default',
-                'default'
-            ));
-            $stores->setDefault('sql', 'default');
-            return $stores;
-        });
-
         // Tell the Item model to use the default role
         //Item::setDefaultRole('default');
 
