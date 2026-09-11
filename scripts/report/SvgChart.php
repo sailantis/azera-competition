@@ -572,7 +572,7 @@ final class SvgChart
             self::AXIS
         );
 
-        $capH = 7.0;   // half-height of the vertical end bars
+        $capH = 7.0; // half-height of the vertical end bars
         $dotR = 5.6;
 
         // Ranges + dots, one band per group.
