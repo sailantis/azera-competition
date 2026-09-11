@@ -19,6 +19,7 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
+require_once __DIR__ . '/scripts/report/BenchmarkConfig.php';
 
 // --- CLI options -----------------------------------------------------------
 
@@ -36,6 +37,7 @@ $opts = getopt(
         'requests::',
         'seed::',
         'rows::',
+        'report',
     ]
 );
 
@@ -60,6 +62,10 @@ Options:
   --seed                  Reset & reseed the SQLite DB before running (prevents
                           POST /items from accumulating rows across runs)
   --rows=N                Row count when --seed is used (default: 1000)
+  --report                Also regenerate the report (docs/benchmarks/):
+                          HTML dashboard + SVG charts + Markdown fragment.
+                          The dataset is passed through, so the report always
+                          matches the run you just made.
 
 Examples:
   php -d opcache.enable_cli=1 run.php --apps=azera --warm --iterations-per-run=1000 --runs=10
@@ -120,61 +126,10 @@ $requests = array_map(function (string $r): array {
 }, $requests);
 
 // --- Feature categories ----------------------------------------------------
-// Maps a request label ("GET /items") to a competition feature.  The winners
-// table groups endpoints by feature and only compares frameworks that
-// actually support that feature.
-$featureMap = [
-    'GET /'        => 'routing',
-    'GET /items'   => 'orm',
-    'GET /items/1' => 'orm',
-    'POST /items'  => 'orm',
-    // orm-uow deactivated together with the -orm request entries above.
-    // 'GET /items-orm'             => 'orm-uow',
-    // 'GET /items-orm/1'           => 'orm-uow',
-    // 'POST /items-orm'            => 'orm-uow',
-    'GET /items-qb'                => 'query-builder',
-    'GET /items-qb/1'              => 'query-builder',
-    'POST /items-qb'               => 'query-builder',
-    'GET /api/items'               => 'rest-api',
-    'GET /api/items/1'             => 'rest-api',
-    'POST /api/items'              => 'rest-api',
-    'GET /features/aop'            => 'aop',
-    'GET /features/cache'          => 'cache',
-    'GET /features/log'            => 'aop',
-    'GET /features/retry'          => 'aop',
-    'GET /features/pipeline'       => 'aop',
-    'GET /features/db-events'      => 'db-events',
-    'GET /features/events'         => 'events',
-    'GET /features/validation'     => 'validation',
-    'GET /features/config'         => 'config',
-    'GET /features/request-scoped' => 'request-scoped',
-    'GET /features/rate-limit'     => 'rate-limiter',
-];
-
-// Which features each adapter supports.  An adapter that lacks a feature is
-// excluded from that feature's winners comparison (e.g. a framework without
-// AOP simply doesn't take part in the AOP race).
-$adapterFeatures = [
-    'azera' => [
-        'routing',
-        'orm', /* 'orm-uow' deactivated with the -orm paths */
-        'query-builder',
-        'rest-api',
-        'aop',
-        'cache',
-        'db-events',
-        'events',
-        'validation',
-        'config',
-        'request-scoped',
-        'rate-limiter'
-    ],
-    'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-    'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-    'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-    'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-    'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-];
+// The maps live in scripts/report/BenchmarkConfig.php so the harness and the
+// report generator share a single source of truth and cannot drift apart.
+$featureMap      = \AzeraCompetition\Report\BenchmarkConfig::featureMap();
+$adapterFeatures = \AzeraCompetition\Report\BenchmarkConfig::adapterFeatures();
 
 // --- Adapter registry ------------------------------------------------------
 
@@ -199,6 +154,7 @@ function stats(array $values): array
     $p95Idx = max(0, min($count - 1, (int) floor($count * 0.95) - 1));
     return [
         'count'  => $count,
+        'min'    => $values[0],
         'mean'   => $mean,
         'median' => $median,
         'p95'    => $values[$p95Idx],
@@ -219,12 +175,46 @@ function trimmedMean(array $values): float
 function envInfo(): array
 {
     return [
-        'php_version' => PHP_VERSION,
-        'os'          => PHP_OS . ' ' . php_uname('r'),
-        'opcache'     => (bool) ini_get('opcache.enable_cli'),
-        'sapi'        => PHP_SAPI,
-        'timestamp'   => date('c'),
+        'php_version'         => PHP_VERSION,
+        'os'                  => PHP_OS . ' ' . php_uname('r'),
+        'opcache'             => (bool) ini_get('opcache.enable_cli'),
+        'sapi'                => PHP_SAPI,
+        'timestamp'           => date('c'),
+        'azera_framework_ref' => azeraFrameworkRef(),
     ];
+}
+
+/**
+ * Git ref of the local azera-framework path repository. Azera is not published
+ * on Packagist yet, so pinning the ref makes results reproducible.
+ */
+function azeraFrameworkRef(): ?string
+{
+    static $ref = false;
+    if ($ref !== false) {
+        return $ref;
+    }
+
+    $ref  = null;
+    $null = DIRECTORY_SEPARATOR === '\\' ? '2>NUL' : '2>/dev/null';
+    $dirs = [
+        __DIR__ . '/vendor/sailantis/azera-framework',
+        dirname(__DIR__) . '/azera-framework',
+    ];
+    foreach ($dirs as $dir) {
+        if (!is_dir($dir . '/.git') && !is_file($dir . '/.git')) {
+            continue;
+        }
+        $out = [];
+        $rc  = 0;
+        @exec(sprintf('git -C %s rev-parse --short HEAD %s', escapeshellarg($dir), $null), $out, $rc);
+        if ($rc === 0 && isset($out[0]) && $out[0] !== '') {
+            $ref = trim((string) $out[0]);
+            break;
+        }
+    }
+
+    return $ref;
 }
 
 function writeResults(string $prefix, array $results): void
@@ -244,6 +234,7 @@ function writeResults(string $prefix, array $results): void
         'iterations_per_run',
         'runs',
         'trimmed_mean_ms',
+        'min_ms',
         'mean_ms',
         'median_ms',
         'p95_ms',
@@ -259,6 +250,7 @@ function writeResults(string $prefix, array $results): void
                     $req['iterations_per_run'],
                     $req['runs'],
                     $req['trimmed_mean_ms'],
+                    $req['min_ms'],
                     $req['mean_ms'],
                     $req['median_ms'],
                     $req['p95_ms'],
@@ -289,17 +281,18 @@ function writeReport(string $prefix, array $results, array $featureMap, array $a
     foreach ($results['apps'] as $app) {
         $lines[] = "### {$app['app']}";
         $lines[] = '';
-        $lines[] = '| Mode | Request | Iter/Run | Runs | Trimmed Mean (ms) | Mean (ms) | Median (ms) | p95 (ms) | Peak mem |';
-        $lines[] = '|---|---|---:|---:|---:|---:|---:|---:|---:|';
+        $lines[] = '| Mode | Request | Iter/Run | Runs | Trimmed Mean (ms) | Min (ms) | Mean (ms) | Median (ms) | p95 (ms) | Peak mem |';
+        $lines[] = '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|';
         foreach ($app['modes'] as $modeName => $mode) {
             foreach ($mode['requests'] as $req) {
                 $lines[] = sprintf(
-                    '| %s | %s | %d | %d | %.4f | %.4f | %.4f | %.4f | %s |',
+                    '| %s | %s | %d | %d | %.4f | %.4f | %.4f | %.4f | %.4f | %s |',
                     $modeName,
                     $req['request'],
                     $req['iterations_per_run'],
                     $req['runs'],
                     $req['trimmed_mean_ms'],
+                    $req['min_ms'],
                     $req['mean_ms'],
                     $req['median_ms'],
                     $req['p95_ms'],
@@ -510,6 +503,7 @@ function benchRequest(
         'iterations_per_run' => $itersPerRun,
         'runs'               => $runs,
         'trimmed_mean_ms'    => $tMean,
+        'min_ms'             => $sAll['min'],
         'mean_ms'            => $sAll['mean'],
         'median_ms'          => $sAll['median'],
         'p95_ms'             => $sAll['p95'],
@@ -608,6 +602,21 @@ if ($outPrefix !== null) {
     writeResults($outPrefix, $results);
     writeReport($outPrefix, $results, $featureMap, $adapterFeatures);
     echo "\nWrote: {$outPrefix}.json, {$outPrefix}.csv, {$outPrefix}.md\n";
+}
+
+// Regenerate the report from the dataset we just produced. The report is a
+// pure function of the results JSON, so this never depends on a separate run.
+if (isset($opts['report']) && $outPrefix !== null) {
+    echo "\n=== Regenerating report\n";
+    passthru(sprintf(
+        '%s %s --dataset=%s',
+        escapeshellarg(PHP_BINARY),
+        escapeshellarg(__DIR__ . '/scripts/report.php'),
+        escapeshellarg($outPrefix . '.json')
+    ), $reportExit);
+    if ($reportExit !== 0) {
+        echo "Report generation failed (exit {$reportExit}).\n";
+    }
 }
 
 echo "\nDone.\n";

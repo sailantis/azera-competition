@@ -86,6 +86,7 @@ function stats(array $values): array
     $p95Idx = max(0, min($count - 1, (int) floor($count * 0.95) - 1));
     return [
         'count'  => $count,
+        'min'    => $values[0],
         'mean'   => $mean,
         'median' => $median,
         'p95'    => $values[$p95Idx],
@@ -195,6 +196,7 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
         'iterations_per_run' => $itersPerRun,
         'runs'               => $runs,
         'trimmed_mean_ms'    => $tMean,
+        'min_ms'             => $sAll['min'],
         'mean_ms'            => $sAll['mean'],
         'median_ms'          => $sAll['median'],
         'p95_ms'             => $sAll['p95'],

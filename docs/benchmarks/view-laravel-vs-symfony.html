@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laravel vs Symfony</title>
+<style>
+:root{color-scheme:light dark;--bg:            #f8fafc;--card:#fff;--ink:#0f172a;--muted:#64748b;--edge:#e2e8f0;--accent:#3459e6}
+@media (prefers-color-scheme:dark){:root{--bg: #0b1120;--card:#111a2e;--ink:#e2e8f0;--muted:#94a3b8;--edge:#1e293b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+header,main,nav,footer{max-width:1040px;margin:0 auto;padding:0 20px}
+header{padding-top:44px;padding-bottom:8px}
+nav{padding-top:24px}
+nav a{color:var(--accent);text-decoration:none;font-weight:600;font-size:14px}
+h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em}
+h2{font-size:20px;margin:36px 0 12px}
+h3{font-size:17px;margin:0 0 6px}
+.lead{margin:0 0 8px;font-size:16px;max-width:72ch}
+.env{margin:0;color:var(--muted);font-size:13px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin:24px 0 48px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:18px 18px 16px;text-decoration:none;color:inherit;transition:transform .12s ease,border-color .12s ease}
+.card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.card p{color:var(--muted);font-size:13px;margin:0 0 12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid var(--c);color:var(--c)}
+.figures{display:flex;flex-direction:column;gap:20px;margin:20px 0 8px}
+figure{margin:0;background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:16px}
+figcaption{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px}
+figure img{display:block;width:100%;height:auto}
+main img{background:#fff;border-radius:8px}
+table{border-collapse:collapse;width:100%;margin:14px 0 30px;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--edge)}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td:first-child{font-weight:600}
+table.matrix td{text-align:right;font-variant-numeric:tabular-nums}
+table.matrix th{text-align:right}
+table.matrix td:first-child,table.matrix th:first-child{text-align:left;font-weight:500}
+td.win{font-weight:700;color:var(--accent);background:rgba(52,89,230,.10)}
+td.muted{color:var(--muted)}
+.unit{font-weight:400;color:var(--muted);font-size:13px;text-transform:none;letter-spacing:0}
+footer{padding:32px 20px 56px;color:var(--muted);font-size:13px}
+code{background:rgba(148,163,184,.16);padding:1px 5px;border-radius:4px;font-size:.92em}
+main{padding-bottom:10px}
+</style>
+</head>
+<body>
+<nav><a href="index.html">&larr; All benchmarks</a></nav>
+<header>
+  <h1>Laravel vs Symfony</h1>
+  <p class="lead">The same dataset, narrowed to two frameworks. Any subset works — no code change.</p>
+  <p class="env">PHP 8.3.6 &middot; Linux 6.8.0-124-generic &middot; warm mode &middot; charts show the median with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+</header>
+<main>
+  <section class="figures">
+<figure>
+  <figcaption>Framework startup (GET /)</figcaption>
+  <img src="svg/laravel-vs-symfony/startup.svg" alt="Framework startup (GET /)" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Total time vs Laravel</figcaption>
+  <img src="svg/laravel-vs-symfony/speedup.svg" alt="Total time vs Laravel" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Peak memory footprint</figcaption>
+  <img src="svg/laravel-vs-symfony/memory.svg" alt="Peak memory footprint" loading="lazy">
+</figure>
+  </section>
+  <h2>Feature benchmarks</h2>
+<section class="figures">
+<figure>
+  <figcaption>Routing</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-routing.svg" alt="Routing" loading="lazy">
+</figure>
+<figure>
+  <figcaption>ORM / Active Record</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Query Builder</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-query-builder.svg" alt="Query Builder" loading="lazy">
+</figure>
+<figure>
+  <figcaption>REST API (JSON)</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
+</figure>
+<figure>
+  <figcaption>AOP (Aspect-Oriented)</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Cache</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-cache.svg" alt="Cache" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Database Events</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-db-events.svg" alt="Database Events" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Event Dispatcher</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-events.svg" alt="Event Dispatcher" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Validation</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-validation.svg" alt="Validation" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Config</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-config.svg" alt="Config" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Request-Scoped Services</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Rate Limiter</figcaption>
+  <img src="svg/laravel-vs-symfony/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
+</figure>
+</section>
+  
+  <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span></h2>
+<table class="matrix">
+<thead><tr><th>Request</th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th></tr></thead>
+<tbody>
+<tr><td><code>GET /</code></td><td>0.224</td><td class="win">0.089</td></tr>
+<tr><td><code>GET /items</code></td><td>0.758</td><td class="win">0.549</td></tr>
+<tr><td><code>GET /items/1</code></td><td>0.402</td><td class="win">0.173</td></tr>
+<tr><td><code>POST /items</code></td><td>0.429</td><td class="win">0.338</td></tr>
+<tr><td><code>GET /items-qb</code></td><td>0.450</td><td class="win">0.239</td></tr>
+<tr><td><code>GET /items-qb/1</code></td><td>0.320</td><td class="win">0.141</td></tr>
+<tr><td><code>POST /items-qb</code></td><td>0.421</td><td class="win">0.355</td></tr>
+<tr><td><code>GET /api/items</code></td><td>0.649</td><td class="win">0.237</td></tr>
+<tr><td><code>GET /api/items/1</code></td><td>0.413</td><td class="win">0.151</td></tr>
+<tr><td><code>POST /api/items</code></td><td>0.358</td><td class="win">0.311</td></tr>
+<tr><td><code>GET /features/aop</code></td><td>0.325</td><td class="win">0.290</td></tr>
+<tr><td><code>GET /features/cache</code></td><td>0.256</td><td class="win">0.089</td></tr>
+<tr><td><code>GET /features/log</code></td><td>0.228</td><td class="win">0.083</td></tr>
+<tr><td><code>GET /features/retry</code></td><td class="win">0.240</td><td>0.830</td></tr>
+<tr><td><code>GET /features/pipeline</code></td><td>0.232</td><td class="win">0.083</td></tr>
+<tr><td><code>GET /features/db-events</code></td><td class="win">0.423</td><td>0.993</td></tr>
+<tr><td><code>GET /features/events</code></td><td>0.396</td><td class="win">0.310</td></tr>
+<tr><td><code>GET /features/validation</code></td><td>0.904</td><td class="win">0.203</td></tr>
+<tr><td><code>GET /features/config</code></td><td>0.235</td><td class="win">0.085</td></tr>
+<tr><td><code>GET /features/request-scoped</code></td><td class="win">0.228</td><td>0.475</td></tr>
+<tr><td><code>GET /features/rate-limit</code></td><td>0.260</td><td class="win">0.092</td></tr>
+</tbody>
+</table>
+</main>
+<footer>
+  Generated from <code>results/</code> by <code>scripts/report.php</code>.
+</footer>
+</body>
+</html>

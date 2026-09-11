@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azera Benchmark Results</title>
+<style>
+:root{color-scheme:light dark;--bg:            #f8fafc;--card:#fff;--ink:#0f172a;--muted:#64748b;--edge:#e2e8f0;--accent:#3459e6}
+@media (prefers-color-scheme:dark){:root{--bg: #0b1120;--card:#111a2e;--ink:#e2e8f0;--muted:#94a3b8;--edge:#1e293b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+header,main,nav,footer{max-width:1040px;margin:0 auto;padding:0 20px}
+header{padding-top:44px;padding-bottom:8px}
+nav{padding-top:24px}
+nav a{color:var(--accent);text-decoration:none;font-weight:600;font-size:14px}
+h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em}
+h2{font-size:20px;margin:36px 0 12px}
+h3{font-size:17px;margin:0 0 6px}
+.lead{margin:0 0 8px;font-size:16px;max-width:72ch}
+.env{margin:0;color:var(--muted);font-size:13px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin:24px 0 48px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:18px 18px 16px;text-decoration:none;color:inherit;transition:transform .12s ease,border-color .12s ease}
+.card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.card p{color:var(--muted);font-size:13px;margin:0 0 12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid var(--c);color:var(--c)}
+.figures{display:flex;flex-direction:column;gap:20px;margin:20px 0 8px}
+figure{margin:0;background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:16px}
+figcaption{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px}
+figure img{display:block;width:100%;height:auto}
+main img{background:#fff;border-radius:8px}
+table{border-collapse:collapse;width:100%;margin:14px 0 30px;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--edge)}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td:first-child{font-weight:600}
+table.matrix td{text-align:right;font-variant-numeric:tabular-nums}
+table.matrix th{text-align:right}
+table.matrix td:first-child,table.matrix th:first-child{text-align:left;font-weight:500}
+td.win{font-weight:700;color:var(--accent);background:rgba(52,89,230,.10)}
+td.muted{color:var(--muted)}
+.unit{font-weight:400;color:var(--muted);font-size:13px;text-transform:none;letter-spacing:0}
+footer{padding:32px 20px 56px;color:var(--muted);font-size:13px}
+code{background:rgba(148,163,184,.16);padding:1px 5px;border-radius:4px;font-size:.92em}
+main{padding-bottom:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Azera Benchmark Results</h1>
+  <p class="lead">PHP framework comparison across a full-stack request lifecycle: routing &rarr; controller &rarr; ORM query (SQLite) &rarr; template render &rarr; response.</p>
+  <p class="env">PHP 8.3.6 &middot; Linux 6.8.0-124-generic &middot; OPcache (CLI): yes &middot; measured 2026-09-11T18:03:04+00:00</p>
+</header>
+<main>
+  <div class="grid">
+<a class="card" href="view-azera-vs-all.html">
+  <h3>Azera vs All Frameworks</h3>
+  <p>A full-stack request lifecycle benchmark: routing → controller → ORM query (SQLite) → template render → response.</p>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
+</a>
+<a class="card" href="view-laravel-vs-symfony.html">
+  <h3>Laravel vs Symfony</h3>
+  <p>The same dataset, narrowed to two frameworks. Any subset works — no code change.</p>
+  <div class="chips"><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span></div>
+</a>
+<a class="card" href="view-memory.html">
+  <h3>Peak Memory Footprint</h3>
+  <p>Highest peak memory per framework. Low memory is what makes Azera cheap to run at scale.</p>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
+</a>
+<a class="card" href="view-relative.html">
+  <h3>Relative to Azera</h3>
+  <p>The same dataset with Azera pinned at 1.0×, so each framework reads as a multiple of the baseline instead of an absolute time.</p>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
+</a>
+  </div>
+</main>
+<footer>
+  Generated from <code>results/</code> by <code>scripts/report.php</code>.
+</footer>
+</body>
+</html>
