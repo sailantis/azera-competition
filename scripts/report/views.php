@@ -21,43 +21,49 @@ $root = dirname(__DIR__, 2);
 return [
     // --- Datasets ---------------------------------------------------------
     'datasets' => [
-        // Canonical: one combined run of all frameworks (single env block,
-        // single measurement per framework — no duplicate-Azera ambiguity).
+        // The canonical dataset: one combined run of every framework (single
+        // env block, one measurement per framework — no duplicate-Azera
+        // ambiguity). The legacy per-pair azera-vs-* files were superseded by
+        // this and removed; there is no longer a merge fallback.
         'free-for-all' => [
             'label' => 'Free-for-all — all six frameworks in one run',
             'file'  => $root . '/results/free-for-all-opcache.json',
         ],
-        // Fallback: merge the per-pair files. Newest per-app timestamp wins.
-        'merged-pairs' => [
-            'label' => 'Merged azera-vs-* pair runs',
-            'glob'  => $root . '/results/azera-vs-*-opcache.json',
-        ],
     ],
 
     // --- Views ------------------------------------------------------------
+    // Latency charts are drawn on a LINEAR axis. That is a correctness choice,
+    // not a cosmetic one: on a logarithmic axis the drawn width of a range is
+    // its *ratio*, so Azera's 0.005→0.027 ms (5x) renders four times longer
+    // than Symfony's 0.166→0.241 ms (1.4x) — even though Symfony's spread is
+    // 3.4x larger in absolute milliseconds. Log made the fastest framework
+    // look like the most volatile one. Linear keeps drawn width proportional
+    // to real spread. (Peak memory was always linear.)
     'views' => [
         // The headline comparison. Published into the framework docs + README.
         'azera-vs-all' => [
-            'title'    => 'Azera vs All Frameworks',
-            'subtitle' => 'A full-stack request lifecycle benchmark: routing → controller → ORM query (SQLite) → template render → response.',
-            'dataset'  => 'free-for-all',
-            'baseline' => 'azera',
-            'mode'     => 'warm',
-            'apps'     => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            'charts'   => ['hero', 'speedup', 'features', 'memory', 'wins'],
-            'publish'  => ['framework'],
+            'title'     => 'Azera vs All Frameworks',
+            'subtitle'  => 'A full-stack request lifecycle benchmark: routing → controller → ORM query (SQLite) → template render → response.',
+            'dataset'   => 'free-for-all',
+            'baseline'  => 'azera',
+            'mode'      => 'warm',
+            'log_scale' => false,
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'charts'    => ['hero', 'speedup', 'features', 'memory', 'wins'],
+            'publish'   => ['framework'],
         ],
 
         // Proof that a view can be anything: two frameworks, no Azera.
         'laravel-vs-symfony' => [
-            'title'    => 'Laravel vs Symfony',
-            'subtitle' => 'The same dataset, narrowed to two frameworks. Any subset works — no code change.',
-            'dataset'  => 'free-for-all',
-            'baseline' => 'laravel',
-            'mode'     => 'warm',
-            'apps'     => ['laravel', 'symfony'],
-            'charts'   => ['hero', 'speedup', 'features', 'memory'],
-            'publish'  => [], // not published anywhere
+            'title'     => 'Laravel vs Symfony',
+            'subtitle'  => 'The same dataset, narrowed to two frameworks. Any subset works — no code change.',
+            'dataset'   => 'free-for-all',
+            'baseline'  => 'laravel',
+            'mode'      => 'warm',
+            'log_scale' => false,
+            'apps'      => ['laravel', 'symfony'],
+            'charts'    => ['hero', 'speedup', 'features', 'memory'],
+            'publish'   => [], // not published anywhere
         ],
 
         // A memory-focused cut of the same dataset.
@@ -74,14 +80,15 @@ return [
 
         // The scale-free "second axis": everything divided by the baseline.
         'relative' => [
-            'title'    => 'Relative to Azera',
-            'subtitle' => 'The same dataset with Azera pinned at 1.0×, so each framework reads as a multiple of the baseline instead of an absolute time.',
-            'dataset'  => 'free-for-all',
-            'baseline' => 'azera',
-            'mode'     => 'warm',
-            'apps'     => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            'charts'   => ['speedup'],
-            'publish'  => [],
+            'title'     => 'Relative to Azera',
+            'subtitle'  => 'The same dataset with Azera pinned at 1.0, so each framework reads as a multiple of the baseline instead of an absolute time.',
+            'dataset'   => 'free-for-all',
+            'baseline'  => 'azera',
+            'mode'      => 'warm',
+            'log_scale' => false,
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'charts'    => ['speedup'],
+            'publish'   => [],
         ],
     ],
 ];

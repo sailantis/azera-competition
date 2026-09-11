@@ -4,34 +4,34 @@ A full-stack request lifecycle benchmark: routing → controller → ORM query (
 
 **Environment** — PHP 8.3.6 · Linux 6.8.0-124-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
 
-_Measured 2026-09-11T18:03:04+00:00_
+_Measured 2026-09-11T20:28:50+00:00 · azera-framework `b1c4900`_
 
 ## Framework startup
 
-Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: **Azera** responds in 0.015 ms (median; 0.017 ms trimmed mean) against 0.464 ms (median) for CodeIgniter — 30.6× slower.
+Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: **Azera** responds in 0.015 ms (median; 0.016 ms trimmed mean) against 0.451 ms (median) for CodeIgniter — x 30.1 slower.
 
 ![Framework startup — GET /](svg/azera-vs-all/startup.svg)
 
 ## Total time vs Azera
 
-Total time to serve one of each of the 21 endpoints, relative to Azera (1.0× = the baseline's own total, higher = slower). The closest rival is CakePHP, needing 3.91× the same total.
+Total time to serve one of each of the 21 endpoints, relative to Azera (1.0 = the baseline's own total, higher = slower). The closest rival is CakePHP, needing x 4.0 the same total.
 
 ![Total time vs Azera](svg/azera-vs-all/speedup.svg)
 
 ## Feature benchmarks
 
-- **Routing** (`GET /`): Azera at 0.015ms median, 5.52× faster than Symfony.
-- **ORM / Active Record** (`GET /items`): Azera at 0.136ms median, 3.56× faster than Spiral.
-- **Query Builder** (`GET /items-qb`): Azera at 0.090ms median, 2.50× faster than Symfony.
-- **REST API (JSON)** (`GET /api/items`): Azera at 0.038ms median, 5.95× faster than Symfony.
-- **AOP (Aspect-Oriented)** (`GET /features/aop`): Azera at 0.175ms median, 1.50× faster than Symfony.
-- **Cache** (`GET /features/cache`): Azera at 0.013ms median, 6.28× faster than Symfony.
-- **Database Events** (`GET /features/db-events`): Azera at 0.176ms median, 2.24× faster than Laravel.
-- **Event Dispatcher** (`GET /features/events`): Azera at 0.176ms median, 1.66× faster than Symfony.
-- **Validation** (`GET /features/validation`): Azera at 0.018ms median, 10.1× faster than CakePHP.
-- **Config** (`GET /features/config`): Azera at 0.009ms median, 9.03× faster than Symfony.
-- **Request-Scoped Services** (`GET /features/request-scoped`): Azera at 0.008ms median, 10.4× faster than CakePHP.
-- **Rate Limiter** (`GET /features/rate-limit`): Azera at 0.009ms median, 9.09× faster than Symfony.
+- **Routing** (`GET /`): Azera at 0.015ms median, x 5.5 faster than Symfony.
+- **ORM / Active Record** (`GET /items`): Azera at 0.133ms median, x 3.5 faster than Spiral.
+- **Query Builder** (`GET /items-qb`): Azera at 0.090ms median, x 2.5 faster than Symfony.
+- **REST API (JSON)** (`GET /api/items`): Azera at 0.038ms median, x 5.8 faster than Symfony.
+- **AOP (Aspect-Oriented)** (`GET /features/aop`): Azera at 0.172ms median, x 1.5 faster than Symfony.
+- **Cache** (`GET /features/cache`): Azera at 0.013ms median, x 6.2 faster than Symfony.
+- **Database Events** (`GET /features/db-events`): Azera at 0.180ms median, x 2.1 faster than Laravel.
+- **Event Dispatcher** (`GET /features/events`): Azera at 0.179ms median, x 1.7 faster than Symfony.
+- **Validation** (`GET /features/validation`): Azera at 0.018ms median, x 10.2 faster than CakePHP.
+- **Config** (`GET /features/config`): Azera at 0.009ms median, x 9.0 faster than Symfony.
+- **Request-Scoped Services** (`GET /features/request-scoped`): Azera at 0.008ms median, x 10.4 faster than CakePHP.
+- **Rate Limiter** (`GET /features/rate-limit`): Azera at 0.009ms median, x 9.1 faster than Symfony.
 
 ### Routing
 
@@ -83,7 +83,7 @@ Total time to serve one of each of the 21 endpoints, relative to Azera (1.0× = 
 
 ## Peak memory
 
-Peak memory reached on any endpoint. **CodeIgniter** stays under 4.00 MB, against 126 MB for the heaviest framework (31.5× more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
+Peak memory reached on any endpoint. **CodeIgniter** stays under 4.00 MB, against 126 MB for the heaviest framework (x 31.5 more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
 
 ![Peak memory footprint](svg/azera-vs-all/memory.svg)
 
@@ -106,27 +106,27 @@ Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpo
 
 | Request | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---:|---:|---:|---:|---:|---:|
-| `GET /` | **0.017** | 0.224 | 0.089 | 0.273 | 0.479 | 0.143 |
-| `GET /items` | **0.144** | 0.758 | 0.549 | 0.502 | 0.779 | 0.532 |
-| `GET /items/1` | **0.054** | 0.402 | 0.173 | 0.364 | 0.674 | 0.342 |
-| `POST /items` | **0.113** | 0.429 | 0.338 | 0.423 | 0.763 | 0.451 |
-| `GET /items-qb` | **0.097** | 0.450 | 0.239 | 0.380 | 0.760 | 0.313 |
-| `GET /items-qb/1` | **0.053** | 0.320 | 0.141 | 0.331 | 0.677 | 0.251 |
-| `POST /items-qb` | **0.087** | 0.421 | 0.355 | 0.366 | 0.876 | 0.325 |
-| `GET /api/items` | **0.042** | 0.649 | 0.237 | 0.375 | 0.635 | 0.284 |
-| `GET /api/items/1` | **0.038** | 0.413 | 0.151 | 0.325 | 0.597 | 0.249 |
-| `POST /api/items` | **0.053** | 0.358 | 0.311 | 0.370 | 0.678 | 0.351 |
-| `GET /features/aop` | **0.194** | 0.325 | 0.290 | 0.583 | — | — |
-| `GET /features/cache` | **0.014** | 0.256 | 0.089 | 0.296 | 0.454 | 0.109 |
-| `GET /features/log` | **0.014** | 0.228 | 0.083 | 0.289 | — | — |
-| `GET /features/retry` | **0.010** | 0.240 | 0.830 | 0.301 | — | — |
-| `GET /features/pipeline` | **0.015** | 0.232 | 0.083 | 0.293 | — | — |
-| `GET /features/db-events` | **0.201** | 0.423 | 0.993 | 1.30 | 0.849 | 0.517 |
-| `GET /features/events` | **0.190** | 0.396 | 0.310 | 0.699 | 0.774 | 0.377 |
-| `GET /features/validation` | **0.020** | 0.904 | 0.203 | 0.320 | 0.699 | 0.197 |
-| `GET /features/config` | **0.009** | 0.235 | 0.085 | 0.290 | 0.434 | 0.098 |
-| `GET /features/request-scoped` | **0.009** | 0.228 | 0.475 | 0.309 | 0.416 | 0.098 |
-| `GET /features/rate-limit` | **0.010** | 0.260 | 0.092 | 0.316 | 0.459 | 0.108 |
+| `GET /` | **0.016** | 0.220 | 0.088 | 0.273 | 0.466 | 0.138 |
+| `GET /items` | **0.142** | 0.765 | 0.533 | 0.487 | 0.767 | 0.506 |
+| `GET /items/1` | **0.053** | 0.396 | 0.168 | 0.356 | 0.665 | 0.331 |
+| `POST /items` | **0.108** | 0.413 | 0.336 | 0.413 | 0.737 | 0.448 |
+| `GET /items-qb` | **0.096** | 0.448 | 0.232 | 0.363 | 0.741 | 0.311 |
+| `GET /items-qb/1` | **0.052** | 0.315 | 0.140 | 0.314 | 0.649 | 0.246 |
+| `POST /items-qb` | **0.086** | 1.07 | 0.341 | 0.352 | 0.839 | 0.318 |
+| `GET /api/items` | **0.041** | 0.617 | 0.230 | 0.356 | 0.609 | 0.272 |
+| `GET /api/items/1` | **0.037** | 0.410 | 0.149 | 0.313 | 0.590 | 0.244 |
+| `POST /api/items` | **0.053** | 0.354 | 0.302 | 0.363 | 0.648 | 0.343 |
+| `GET /features/aop` | **0.179** | 0.351 | 0.268 | 0.568 | — | — |
+| `GET /features/cache` | **0.014** | 0.249 | 0.084 | 0.294 | 0.440 | 0.107 |
+| `GET /features/log` | **0.013** | 0.224 | 0.082 | 0.281 | — | — |
+| `GET /features/retry` | **0.010** | 0.232 | 0.822 | 0.294 | — | — |
+| `GET /features/pipeline` | **0.015** | 0.228 | 0.081 | 0.285 | — | — |
+| `GET /features/db-events` | **0.193** | 0.401 | 0.957 | 1.27 | 0.838 | 0.504 |
+| `GET /features/events` | **0.192** | 0.693 | 0.318 | 0.664 | 0.749 | 0.390 |
+| `GET /features/validation` | **0.019** | 0.871 | 0.196 | 0.315 | 0.681 | 0.197 |
+| `GET /features/config` | **0.009** | 0.229 | 0.083 | 0.281 | 0.419 | 0.097 |
+| `GET /features/request-scoped` | **0.009** | 0.221 | 0.467 | 0.302 | 0.406 | 0.099 |
+| `GET /features/rate-limit` | **0.010** | 0.251 | 0.089 | 0.305 | 0.442 | 0.111 |
 
 ---
 

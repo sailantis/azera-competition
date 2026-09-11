@@ -37,6 +37,7 @@ final class MarkdownReport
         $apps     = array_values(array_intersect($this->view['apps'] ?? $this->store->apps(), $this->store->apps()));
         $baseline = (string) ($this->view['baseline'] ?? $apps[0] ?? '');
         $mode     = (string) ($this->view['mode'] ?? 'warm');
+        $logScale = (bool) ($this->view['log_scale'] ?? false);
         $charts   = $this->view['charts'] ?? ['hero', 'speedup', 'features', 'memory', 'wins'];
 
         $l = [];
@@ -48,7 +49,7 @@ final class MarkdownReport
         $l[] = '';
 
         foreach ($charts as $chart) {
-            $lines = $this->chart($chart, $svgDir, $svgRelPrefix, $apps, $baseline, $mode);
+            $lines = $this->chart($chart, $svgDir, $svgRelPrefix, $apps, $baseline, $mode, $logScale);
             if ($lines !== null) {
                 $l[] = $lines;
                 $l[] = '';
@@ -92,12 +93,19 @@ final class MarkdownReport
     /**
      * @param list<string> $apps
      */
-    private function chart(string $chart, string $svgDir, string $rel, array $apps, string $baseline, string $mode): ?string
-    {
+    private function chart(
+        string $chart,
+        string $svgDir,
+        string $rel,
+        array $apps,
+        string $baseline,
+        string $mode,
+        bool $logScale
+    ): ?string {
         return match ($chart) {
-            'hero'     => $this->hero($svgDir, $rel, $apps, $mode),
+            'hero'     => $this->hero($svgDir, $rel, $apps, $mode, $logScale),
             'speedup'  => $this->speedup($svgDir, $rel, $apps, $baseline, $mode),
-            'features' => $this->features($svgDir, $rel, $apps, $mode),
+            'features' => $this->features($svgDir, $rel, $apps, $mode, $logScale),
             'memory'   => $this->memory($svgDir, $rel, $apps, $mode),
             'wins'     => $this->wins($apps, $baseline, $mode),
             default    => null
@@ -120,7 +128,7 @@ final class MarkdownReport
     /**
      * @param list<string> $apps
      */
-    private function hero(string $dir, string $rel, array $apps, string $mode): string
+    private function hero(string $dir, string $rel, array $apps, string $mode, bool $logScale): string
     {
         $startup = 'GET /';
         $metrics = [];
@@ -141,16 +149,27 @@ final class MarkdownReport
         if (count($metrics) < 2) {
             return '';
         }
+        // Anchor the factor labels at the fastest framework on this endpoint,
+        // so the winner reads 1.0× and every other row states how many times
+        // longer it took. Built from the medians, not the trimmed means, so the
+        // number agrees with the dot it stands behind.
+        $fastest = min($medians);
+        $factors = [];
+        foreach ($medians as $label => $median) {
+            $factors[$label] = $median / max($fastest, 1e-9);
+        }
         $svg = SvgChart::dotRange(
             [''],
             ['' => $metrics],
             $colors,
             'ms',
-            true,
+            $logScale,
             960,
             0,
             'Framework startup — GET /',
-            $this->spreadCaption()
+            $this->spreadCaption(),
+            $factors,
+            'x = median ÷ fastest (Azera = 1.0)'
         );
         $file = 'startup.svg';
         file_put_contents($dir . '/' . $file, $svg);
@@ -168,7 +187,7 @@ final class MarkdownReport
             . "Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: "
             . "**{$best}** responds in " . SvgChart::fmt($bestMs) . " ms (median; " . SvgChart::fmt($bestTm) . " ms trimmed mean) "
             . "against " . SvgChart::fmt($worstMs) . " ms (median) for {$worst} "
-            . "— " . SvgChart::fmt($worstMs / max($bestMs, 1e-9)) . "× slower.\n\n"
+            . '— x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . " slower.\n\n"
             . '![Framework startup — GET /](' . $rel . '/' . $file . ')';
     }
 
@@ -199,8 +218,7 @@ final class MarkdownReport
             $values,
             $colors,
             'Total time vs ' . $base,
-            '1.0× = ' . $base . "'s own total · higher = slower",
-            '×',
+            '1.0 = ' . $base . "'s own total · higher = slower",
             960,
             32
         );
@@ -213,19 +231,19 @@ final class MarkdownReport
         $extra = '';
         if ($others !== []) {
             $closest = array_key_first($others);
-            $extra   = " The closest rival is {$closest}, needing " . SvgChart::fmt($others[$closest]) . '× the same total.';
+            $extra   = " The closest rival is {$closest}, needing x " . SvgChart::fmtFactor($others[$closest]) . ' the same total.';
         }
 
         return "## Total time vs {$base}\n\n"
             . 'Total time to serve one of each of the ' . count($requests) . " endpoints, relative to {$base} "
-            . "(1.0× = the baseline's own total, higher = slower).{$extra}\n\n"
+            . "(1.0 = the baseline's own total, higher = slower).{$extra}\n\n"
             . '![Total time vs ' . $base . '](' . $rel . '/' . $file . ')';
     }
 
     /**
      * @param list<string> $apps
      */
-    private function features(string $dir, string $rel, array $apps, string $mode): string
+    private function features(string $dir, string $rel, array $apps, string $mode, bool $logScale): string
     {
         $sections = [];
         $charts   = [];
@@ -249,6 +267,7 @@ final class MarkdownReport
             $metrics = [];
             $colors  = [];
             $labels  = [];
+            $factors = [];
             foreach ($reqs as $req) {
                 $measured = [];
                 foreach ($participants as $app) {
@@ -261,6 +280,16 @@ final class MarkdownReport
                     continue;
                 }
                 $cats[] = $req;
+                // Each request band gets its own anchor: the fastest framework
+                // on *that* endpoint reads 1.0×. A chart spanning several
+                // endpoints therefore shows who wins each race, which a single
+                // chart-wide anchor would hide.
+                $fastest = null;
+                foreach ($measured as $spread) {
+                    if ($fastest === null || $spread['median'] < $fastest) {
+                        $fastest = $spread['median'];
+                    }
+                }
                 foreach ($measured as $app => $spread) {
                     $label = BenchmarkConfig::appLabel($app);
                     // Grouped by display label so the shared series list works
@@ -268,6 +297,7 @@ final class MarkdownReport
                     $metrics[$req][$label] = $spread;
                     $colors[$label] = BenchmarkConfig::appColor($app);
                     $labels[$label] = $label;
+                    $factors[$req][$label] = $spread['median'] / max((float) $fastest, 1e-9);
                 }
             }
             if ($cats === []) {
@@ -280,11 +310,13 @@ final class MarkdownReport
                 $metrics,
                 $colors,
                 'ms',
-                true,
+                $logScale,
                 960,
                 0,
                 $title,
-                $this->spreadCaption()
+                $this->spreadCaption(),
+                $factors,
+                'x = median ÷ the fastest on that endpoint'
             );
             $file = 'feature-' . $feature . '.svg';
             file_put_contents($dir . '/' . $file, $svg);
@@ -312,7 +344,7 @@ final class MarkdownReport
                     BenchmarkConfig::appLabel($winner),
                     SvgChart::fmt((float) ($medians[$winner] ?? $race['winner_ms'])),
                     $runner !== null && ($medians[$winner] ?? 0) > 0
-                        ? ', ' . SvgChart::fmt($medians[$runner] / $medians[$winner]) . '× faster than ' . BenchmarkConfig::appLabel($runner)
+                        ? ', x ' . SvgChart::fmtFactor($medians[$runner] / $medians[$winner]) . ' faster than ' . BenchmarkConfig::appLabel($runner)
                         : ''
                 );
             }
@@ -350,6 +382,13 @@ final class MarkdownReport
         if (count($metrics) < 2) {
             return '';
         }
+        // The lightest footprint on a typical endpoint is the baseline: it
+        // reads 1.0× and the rest state how many times more memory they need.
+        $lightest = min(array_column($metrics, 'median'));
+        $factors  = [];
+        foreach ($metrics as $label => $m) {
+            $factors[$label] = $m['median'] / max($lightest, 1e-9);
+        }
         $svg = SvgChart::dotRange(
             [''],
             ['' => $metrics],
@@ -359,7 +398,9 @@ final class MarkdownReport
             960,
             0,
             'Peak memory footprint',
-            'dot = median endpoint · whisker = lightest → heaviest endpoint (MB)'
+            'dot = median endpoint · whisker = lightest → heaviest endpoint (MB)',
+            $factors,
+            'x = median ÷ the lightest framework'
         );
         $file = 'memory.svg';
         file_put_contents($dir . '/' . $file, $svg);
@@ -377,7 +418,7 @@ final class MarkdownReport
         return "## Peak memory\n\n"
             . "Peak memory reached on any endpoint. **{$bestLabel}** stays under "
             . SvgChart::fmt($bestMb) . " MB, against " . SvgChart::fmt($worstMb) . " MB for the heaviest framework "
-            . "(" . SvgChart::fmt($worstMb / max($bestMb, 1e-9)) . "× more). Each dot is the median endpoint and the "
+            . '(x ' . SvgChart::fmtFactor($worstMb / max($bestMb, 1e-9)) . " more). Each dot is the median endpoint and the "
             . "whisker spans the lightest to the heaviest endpoint.\n\n"
             . '![Peak memory footprint](' . $rel . '/' . $file . ')';
     }

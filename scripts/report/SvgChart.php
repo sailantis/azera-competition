@@ -25,6 +25,7 @@ final class SvgChart
     private const CARD_EDGE = '#e2e8f0';
     private const INK = '#1e293b';
     private const INK_SOFT = '#64748b';
+    private const FACTOR_INK = '#94a3b8';
     private const AXIS = '#cbd5e1';
     private const GRID = '#f1f5f9';
     private const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
@@ -369,6 +370,11 @@ final class SvgChart
     /**
      * Horizontal bar chart — ranks categories by a single value.
      *
+     * Value labels use the same "x 8.5" notation as the factor labels on the
+     * dot-and-range charts, so the two chart families share one language.
+     * Row order is the caller's business: the speedup chart passes its values
+     * pre-sorted by speed (fastest first).
+     *
      * @param array<string,float>  $values  label => value
      * @param array<string,string> $colors  label => colour
      * @param string $caption  small italic line under the title
@@ -378,7 +384,6 @@ final class SvgChart
         array $colors,
         string $title = '',
         string $caption = '',
-        string $valueSuffix = '×',
         int $width = 960,
         int $rowH = 30
     ): string {
@@ -425,7 +430,7 @@ final class SvgChart
             $out[] = self::text(
                 $padL + max(1.0, $w) + 8,
                 $cy + 4,
-                self::fmt($v) . rtrim($valueSuffix),
+                'x ' . self::fmtFactor($v),
                 11,
                 self::INK,
                 600
@@ -452,6 +457,13 @@ final class SvgChart
      *        group label => series label => ['median' => p50, 'low' => min, 'high' => p95]
      * @param array<string,string> $colors    series label => colour
      * @param string $caption small italic line under the title (explains the mark)
+     * @param array<string,array<string,float>|array<string,float>>|null $factors
+     *        optional multiplier for the median dot, drawn inline after the
+     *        range ("x 2.3"): for a single-group chart series label => factor,
+     *        for a multi-group chart group label => series label => factor.
+     *        Anchored by the caller (normally best-on-that-endpoint = 1.0).
+     * @param string $factorNote one-line explanation of what the x factor is
+     *        measured against; ignored when no factors are supplied.
      */
     public static function dotRange(
         array $categories,
@@ -462,11 +474,21 @@ final class SvgChart
         int $width = 960,
         int $height = 360,
         string $title = '',
-        string $caption = ''
+        string $caption = '',
+        ?array $factors = null,
+        string $factorNote = 'x = median ÷ the best in this chart'
     ): string {
         unset($height);
 
-        // Series present across all groups, in first-seen order.
+        // Series present across all groups. Row order is decided PER BAND:
+        // each request group sorts its own rows by its own medians, fastest at
+        // the top. With per-band anchors there is no stable global ranking to
+        // preserve — a first-band-fixed order actively contradicted the data
+        // in later bands (POST /items-qb: CakePHP 0.299/x 3.7 drew BELOW
+        // Symfony 0.323/x 4.0 because the first band's race had gone the other
+        // way). Per-band sorting keeps every band honest: the winner tops its
+        // band and the x factors increase monotonically down the rows, so a
+        // framework changing position between bands IS the ranking speaking.
         $series = [];
         foreach ($categories as $cat) {
             foreach (array_keys($metrics[$cat] ?? []) as $s) {
@@ -484,12 +506,19 @@ final class SvgChart
         // Two left-hand columns — framework name, then its median — so a number
         // is never drawn on top of a range: a label beside the dot collides
         // with the end cap whenever the median sits close to p95.
-        $padL      = 218;
-        $padR      = 46;
-        $nameRight = $padL - 106;
-        $valRight  = $padL - 12;
-        $padT      = $title !== '' ? ($caption !== '' ? 88 : 66) : 34;
-        $plotW     = $width - $padL - $padR;
+        //
+        // The factor label sits at the other end, *behind* the whole range,
+        // which is where the eye already is after reading the marks. Only the
+        // right gutter grows for it — the name/median columns and the plot's
+        // left edge stay put, so charts gain no empty gap down the middle and
+        // a chart without factors keeps its exact previous geometry.
+        $hasFactors = $factors !== null && $factors !== [];
+        $padL       = 218;
+        $padR       = $hasFactors ? 96 : 46;
+        $nameRight  = $padL - 106;
+        $valRight   = $padL - 12;
+        $padT       = $title !== '' ? ($caption !== '' ? 88 : 66) : 34;
+        $plotW      = $width - $padL - $padR;
 
         // Global bounds over every low/high so all groups share one axis.
         $max = 0.0;
@@ -534,7 +563,12 @@ final class SvgChart
             $scale = $logScale
                 ? 'logarithmic scale — equal distances are equal ratios, not equal differences'
                 : 'linear scale';
-            $out[] = self::text($padL, 54, "{$scale} · lower is better", 12, self::INK_SOFT, 400, true);
+            // Name the factor's anchor inline: a bare "2.3×" beside a dot
+            // could be read against any other row in the chart. The wording
+            // comes from the caller because the anchor genuinely differs —
+            // per request for feature charts, across frameworks for memory.
+            $note = $hasFactors ? ' · ' . $factorNote : '';
+            $out[] = self::text($padL, 54, "{$scale} · lower is better{$note}", 12, self::INK_SOFT, 400, true);
             if ($caption !== '') {
                 $out[] = self::text($padL, 74, $caption, 12, self::INK_SOFT, 400, true);
             }
@@ -588,8 +622,19 @@ final class SvgChart
                 $out[] = self::text($padL, $bandTop + 14, $cat, 12.5, self::INK, 700);
             }
 
+            // This band's rows, fastest median first (ties → alphabetical).
+            $rows = $series;
+            usort($rows, static function (string $a, string $b) use ($bySeries): int {
+                $ma = $bySeries[$a]['median'] ?? INF;
+                $mb = $bySeries[$b]['median'] ?? INF;
+                if ($ma === $mb) {
+                    return strcasecmp($a, $b);
+                }
+                return $ma <=> $mb;
+            });
+
             $sj = 0;
-            foreach ($series as $s) {
+            foreach ($rows as $s) {
                 $m = $bySeries[$s] ?? null;
                 if ($m === null) {
                     $sj++;
@@ -612,12 +657,20 @@ final class SvgChart
                     self::n($cy),
                     $color
                 );
-                // End caps bound the range. The trailing (slowest) cap is
-                // always drawn; the leading one is skipped when it would land
-                // on the median dot itself. That happens when the dataset has
-                // no true minimum, so the range starts at the median — drawing
-                // it anyway would just ring the dot a second time.
-                $capXs = abs($xMed - $xLo) >= 3.0 ? [$xLo, $xHi] : [$xHi];
+                // End caps bound the range: a vertical bar at the fastest
+                // observation and one at p95, so both extremes read as hard
+                // boundaries rather than fading line tips.
+                //
+                // The leading cap is omitted only when there is genuinely no
+                // measurement below the median (a dataset recorded before the
+                // harness emitted min_ms, where the range starts *at* the
+                // median). The test must compare VALUES, not pixels: a real
+                // minimum can sit a couple of pixels from the dot on a wide
+                // axis — Azera's GET /features/pipeline is 0.00541 vs a 0.01381
+                // median on a 0-2 ms axis, 2.9px apart — and dropping its cap
+                // silently hid the fact that Azera has the fastest
+                // observation of any framework on that endpoint.
+                $capXs = $m['low'] < $m['median'] ? [$xLo, $xHi] : [$xHi];
                 foreach ($capXs as $xc) {
                     $out[] = sprintf(
                         '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round"/>',
@@ -637,6 +690,34 @@ final class SvgChart
                     $color,
                     self::CARD_BG
                 );
+
+                // Median factor, immediately behind the range so it travels
+                // with the mark it describes rather than lining up in a column
+                // far from the data. It is measured from the right-hand end
+                // cap — the range's own right edge, not the dot — so a dot with
+                // a long tail never has the label drawn through the whisker.
+                // Faded slate, deliberately lighter than every scale element:
+                // the numbers whisper — an annotation, never a datum. The
+                // baseline itself gets no label: on the anchor row "x 1.0" is
+                // pure noise, since the subtitle already names the reference
+                // the other rows are measured against.
+                $factor = $factors[$cat][$s] ?? $factors[$s] ?? null;
+                if ($hasFactors && $factor !== null) {
+                    $factorText = self::fmtFactor($factor);
+                    if ($factorText !== '1.0') {
+                        $out[] = self::text(
+                            max($xLo, $xHi) + 9,
+                            $cy + 4.5,
+                            'x ' . $factorText,
+                            12.5,
+                            self::FACTOR_INK,
+                            400,
+                            false,
+                            'start',
+                            true
+                        );
+                    }
+                }
 
                 // Framework name, then its median, in two left-hand columns.
                 $out[] = self::text($nameRight, $cy + 4.5, $s, 12.5, self::INK, 500, false, 'end');
@@ -710,15 +791,54 @@ final class SvgChart
                 }
             }
         } else {
-            $axisTop = self::niceCeil($max);
+            // Pick a "round" step (1/2/2.5/5×10ⁿ) that yields close to the
+            // requested number of intervals, so a linear axis reads
+            // 0/0.2/0.4/0.6 instead of 0/0.15/0.3/0.45.
+            $step    = self::niceStep($max / max(1, $tickCount), $max, $tickCount);
+            $axisTop = ceil($max / $step) * $step;
             $ratio   = static function (float $v) use ($axisTop): float {
                 $r = $v / $axisTop;
                 return $r < 0 ? 0.0 : ($r > 1 ? 1.0 : $r);
             };
-            $ticks = self::linearTicks($axisTop, $tickCount);
+            for ($t = 0.0; $t <= $axisTop + $step * 1e-6; $t += $step) {
+                $ticks[] = round($t, 10);
+            }
         }
 
         return [$ratio, $ticks];
+    }
+
+    /**
+     * Best "round" axis step for a linear scale: tries 1/2/2.5/5×10ⁿ around
+     * the ideal step and keeps whichever gets closest to the target number of
+     * intervals (without producing an absurdly long or short axis).
+     */
+    private static function niceStep(float $ideal, float $max, int $tickCount): float
+    {
+        if ($ideal <= 0) {
+            return 1.0;
+        }
+        $baseExp   = (int) floor(log10($ideal));
+        $best      = null;
+        $bestScore = PHP_FLOAT_MAX;
+        for ($exp = $baseExp - 1; $exp <= $baseExp + 1; $exp++) {
+            foreach ([1, 2, 2.5, 5] as $m) {
+                $step = $m * 10 ** $exp;
+                if ($step <= 0) {
+                    continue;
+                }
+                $count = (int) round(ceil($max / $step));
+                if ($count < 2 || $count > 12) {
+                    continue; // too coarse or too dense to read
+                }
+                $score = abs($count - $tickCount);
+                if ($score < $bestScore) {
+                    $bestScore = $score;
+                    $best      = $step;
+                }
+            }
+        }
+        return $best ?? self::niceCeil($max);
     }
 
     /**
@@ -771,10 +891,13 @@ final class SvgChart
         string $fill,
         int $weight = 400,
         bool $italic = false,
-        string $anchor = 'start'
+        string $anchor = 'start',
+        bool $halo = false
     ): string {
+        // A white halo (paint-order keeps the fill on top) lets a label sit on
+        // a gridline or a whisker without becoming unreadable.
         return sprintf(
-            '<text x="%s" y="%s" font-family="%s" font-size="%s" font-weight="%d" fill="%s" text-anchor="%s"%s>%s</text>',
+            '<text x="%s" y="%s" font-family="%s" font-size="%s" font-weight="%d" fill="%s" text-anchor="%s"%s%s>%s</text>',
             self::n($x),
             self::n($y),
             self::FONT,
@@ -783,6 +906,9 @@ final class SvgChart
             $fill,
             $anchor,
             $italic ? ' font-style="italic"' : '',
+            $halo
+                ? ' stroke="' . self::CARD_BG . '" stroke-width="3" paint-order="stroke" stroke-linejoin="round"'
+                : '',
             self::esc($s)
         );
     }
@@ -859,6 +985,18 @@ final class SvgChart
             return number_format($v, 2);
         }
         return number_format($v, 3);
+    }
+
+    /**
+     * Multiplier for a median dot, always one decimal: the baseline reads
+     * "x 1.0" and every row keeps the same precision, so a column of factors
+     * scans as "x 1.0 / x 5.5 / x 14.0" instead of mixed "1.00 / 5.53 / 14.0".
+     * Clipped at 1000 so a runaway outlier cannot print a label long enough to
+     * run off the canvas. (The "x " prefix is added by the caller.)
+     */
+    public static function fmtFactor(float $v): string
+    {
+        return $v >= 1000 ? '1000+' : number_format($v, 1);
     }
 
     /**

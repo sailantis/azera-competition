@@ -4,34 +4,34 @@ The same dataset, narrowed to two frameworks. Any subset works — no code chang
 
 **Environment** — PHP 8.3.6 · Linux 6.8.0-124-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
 
-_Measured 2026-09-11T18:03:04+00:00_
+_Measured 2026-09-11T20:28:50+00:00 · azera-framework `b1c4900`_
 
 ## Framework startup
 
-Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: **Symfony** responds in 0.084 ms (median; 0.089 ms trimmed mean) against 0.212 ms (median) for Laravel — 2.54× slower.
+Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: **Symfony** responds in 0.083 ms (median; 0.088 ms trimmed mean) against 0.210 ms (median) for Laravel — x 2.5 slower.
 
 ![Framework startup — GET /](svg/laravel-vs-symfony/startup.svg)
 
 ## Total time vs Laravel
 
-Total time to serve one of each of the 21 endpoints, relative to Laravel (1.0× = the baseline's own total, higher = slower). The closest rival is Symfony, needing 0.750× the same total.
+Total time to serve one of each of the 21 endpoints, relative to Laravel (1.0 = the baseline's own total, higher = slower). The closest rival is Symfony, needing x 0.7 the same total.
 
 ![Total time vs Laravel](svg/laravel-vs-symfony/speedup.svg)
 
 ## Feature benchmarks
 
-- **Routing** (`GET /`): Symfony at 0.084ms median, 2.54× faster than Laravel.
-- **ORM / Active Record** (`GET /items`): Symfony at 0.531ms median, 1.38× faster than Laravel.
-- **Query Builder** (`GET /items-qb`): Symfony at 0.225ms median, 1.92× faster than Laravel.
-- **REST API (JSON)** (`GET /api/items`): Symfony at 0.226ms median, 2.76× faster than Laravel.
-- **AOP (Aspect-Oriented)** (`GET /features/aop`): Symfony at 0.262ms median, 1.14× faster than Laravel.
-- **Cache** (`GET /features/cache`): Symfony at 0.081ms median, 3.01× faster than Laravel.
-- **Database Events** (`GET /features/db-events`): Laravel at 0.394ms median, 2.48× faster than Symfony.
-- **Event Dispatcher** (`GET /features/events`): Symfony at 0.291ms median, 1.27× faster than Laravel.
-- **Validation** (`GET /features/validation`): Symfony at 0.191ms median, 4.58× faster than Laravel.
-- **Config** (`GET /features/config`): Symfony at 0.079ms median, 2.86× faster than Laravel.
-- **Request-Scoped Services** (`GET /features/request-scoped`): Laravel at 0.219ms median, 2.10× faster than Symfony.
-- **Rate Limiter** (`GET /features/rate-limit`): Symfony at 0.085ms median, 2.94× faster than Laravel.
+- **Routing** (`GET /`): Symfony at 0.083ms median, x 2.5 faster than Laravel.
+- **ORM / Active Record** (`GET /items`): Symfony at 0.516ms median, x 1.4 faster than Laravel.
+- **Query Builder** (`GET /items-qb`): Symfony at 0.222ms median, x 1.9 faster than Laravel.
+- **REST API (JSON)** (`GET /api/items`): Symfony at 0.220ms median, x 2.7 faster than Laravel.
+- **AOP (Aspect-Oriented)** (`GET /features/aop`): Symfony at 0.251ms median, x 1.2 faster than Laravel.
+- **Cache** (`GET /features/cache`): Symfony at 0.080ms median, x 3.0 faster than Laravel.
+- **Database Events** (`GET /features/db-events`): Laravel at 0.377ms median, x 2.5 faster than Symfony.
+- **Event Dispatcher** (`GET /features/events`): Symfony at 0.303ms median, x 1.2 faster than Laravel.
+- **Validation** (`GET /features/validation`): Symfony at 0.187ms median, x 4.5 faster than Laravel.
+- **Config** (`GET /features/config`): Symfony at 0.078ms median, x 2.8 faster than Laravel.
+- **Request-Scoped Services** (`GET /features/request-scoped`): Laravel at 0.214ms median, x 2.1 faster than Symfony.
+- **Rate Limiter** (`GET /features/rate-limit`): Symfony at 0.084ms median, x 2.9 faster than Laravel.
 
 ### Routing
 
@@ -83,7 +83,7 @@ Total time to serve one of each of the 21 endpoints, relative to Laravel (1.0× 
 
 ## Peak memory
 
-Peak memory reached on any endpoint. **Laravel** stays under 16.0 MB, against 126 MB for the heaviest framework (7.88× more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
+Peak memory reached on any endpoint. **Laravel** stays under 16.0 MB, against 126 MB for the heaviest framework (x 7.9 more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
 
 ![Peak memory footprint](svg/laravel-vs-symfony/memory.svg)
 
@@ -93,27 +93,27 @@ Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpo
 
 | Request | Laravel | Symfony |
 |---|---:|---:|
-| `GET /` | 0.224 | **0.089** |
-| `GET /items` | 0.758 | **0.549** |
-| `GET /items/1` | 0.402 | **0.173** |
-| `POST /items` | 0.429 | **0.338** |
-| `GET /items-qb` | 0.450 | **0.239** |
-| `GET /items-qb/1` | 0.320 | **0.141** |
-| `POST /items-qb` | 0.421 | **0.355** |
-| `GET /api/items` | 0.649 | **0.237** |
-| `GET /api/items/1` | 0.413 | **0.151** |
-| `POST /api/items` | 0.358 | **0.311** |
-| `GET /features/aop` | 0.325 | **0.290** |
-| `GET /features/cache` | 0.256 | **0.089** |
-| `GET /features/log` | 0.228 | **0.083** |
-| `GET /features/retry` | **0.240** | 0.830 |
-| `GET /features/pipeline` | 0.232 | **0.083** |
-| `GET /features/db-events` | **0.423** | 0.993 |
-| `GET /features/events` | 0.396 | **0.310** |
-| `GET /features/validation` | 0.904 | **0.203** |
-| `GET /features/config` | 0.235 | **0.085** |
-| `GET /features/request-scoped` | **0.228** | 0.475 |
-| `GET /features/rate-limit` | 0.260 | **0.092** |
+| `GET /` | 0.220 | **0.088** |
+| `GET /items` | 0.765 | **0.533** |
+| `GET /items/1` | 0.396 | **0.168** |
+| `POST /items` | 0.413 | **0.336** |
+| `GET /items-qb` | 0.448 | **0.232** |
+| `GET /items-qb/1` | 0.315 | **0.140** |
+| `POST /items-qb` | 1.07 | **0.341** |
+| `GET /api/items` | 0.617 | **0.230** |
+| `GET /api/items/1` | 0.410 | **0.149** |
+| `POST /api/items` | 0.354 | **0.302** |
+| `GET /features/aop` | 0.351 | **0.268** |
+| `GET /features/cache` | 0.249 | **0.084** |
+| `GET /features/log` | 0.224 | **0.082** |
+| `GET /features/retry` | **0.232** | 0.822 |
+| `GET /features/pipeline` | 0.228 | **0.081** |
+| `GET /features/db-events` | **0.401** | 0.957 |
+| `GET /features/events` | 0.693 | **0.318** |
+| `GET /features/validation` | 0.871 | **0.196** |
+| `GET /features/config` | 0.229 | **0.083** |
+| `GET /features/request-scoped` | **0.221** | 0.467 |
+| `GET /features/rate-limit` | 0.251 | **0.089** |
 
 ---
 
