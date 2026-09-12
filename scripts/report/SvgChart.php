@@ -418,9 +418,15 @@ final class SvgChart
             $cy   = $y + $rowH / 2;
             $w    = $plotW * ($v / $axisTop);
             $fill = $colors[$label] ?? '#64748b';
-            $out[] = self::text($padL - 10, $cy + 4, $label, 12, self::INK, 600, false, 'end');
+            // Row label in the bar's own colour, bold — the same name style
+            // the dot-and-range charts use, so the two chart families share
+            // one identity language.
+            $out[] = self::text($padL - 10, $cy + 4, $label, 12, $fill, 700, false, 'end');
+            // Translucent fill so the bars don't outweigh the data they
+            // carry — full-saturation blocks read heavier than the marks on
+            // the dot-and-range charts. The label keeps full opacity.
             $out[] = sprintf(
-                '<rect x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s"/>',
+                '<rect x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="0.75"/>',
                 self::n($padL),
                 self::n($y + 5),
                 self::n(max(1.0, $w)),

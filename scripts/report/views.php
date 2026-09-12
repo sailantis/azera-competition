@@ -26,8 +26,17 @@ return [
         // ambiguity). The legacy per-pair azera-vs-* files were superseded by
         // this and removed; there is no longer a merge fallback.
         'free-for-all' => [
-            'label' => 'Free-for-all ??? all six frameworks in one run',
-            'file'  => $root . '/results/free-for-all-opcache-with-lifecycle.json',
+            'label' => 'Free-for-all — all six frameworks in one run (warm + cold)',
+            'file'  => $root . '/results/free-for-all-opcache.json',
+        ],
+
+        // The same run, relabelled by DEPLOYMENT MODEL instead of harness
+        // mode: warm -> roadrunner (resident worker), cold -> php-fpm (fresh
+        // boot per request). Produced by scripts/derive-fpm.php from the
+        // canonical file — regenerate it after every new run.
+        'deployments' => [
+            'label' => 'Deployment models — the free-for-all run, warm/cold relabelled as roadrunner/php-fpm',
+            'file'  => $root . '/results/free-for-all-opcache-deployments.json',
         ],
     ],
 
@@ -40,10 +49,11 @@ return [
     // look like the most volatile one. Linear keeps drawn width proportional
     // to real spread. (Peak memory was always linear.)
     'views' => [
-        // The headline comparison. Published into the framework docs + README.
+        // The headline comparison, ROADRUNNER story: resident worker, boot
+        // paid once. Published into the framework docs + README.
         'azera-vs-all' => [
-            'title'     => 'Azera vs All Frameworks',
-            'subtitle'  => 'A full-stack request lifecycle benchmark: routing ??? controller ??? ORM query (SQLite) ??? template render ??? response.',
+            'title'     => 'Azera vs All Frameworks — RoadRunner-style resident worker',
+            'subtitle'  => 'A full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response) with the framework booted once, as a RoadRunner/Octane-style worker serves it.',
             'dataset'   => 'free-for-all',
             'baseline'  => 'azera',
             'mode'      => 'warm',
@@ -53,10 +63,28 @@ return [
             'publish'   => ['framework'],
         ],
 
+        // The same benchmark as most PHP apps actually run it: PHP-FPM, a
+        // fresh application boot per request (the harness' cold mode with
+        // opcache retained — the bytecode-sharing real FPM workers enjoy).
+        // Published alongside the warm story so readers pick their
+        // deployment; the two views never blend modes.
+        'azera-vs-all-fpm' => [
+            'title'      => 'Azera vs All Frameworks — PHP-FPM (fresh boot per request)',
+            'subtitle'   => 'The same benchmark under the classic PHP-FPM deployment model: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.',
+            'dataset'    => 'deployments',
+            'baseline'   => 'azera',
+            'mode'       => 'php-fpm',
+            'log_scale'  => false,
+            'apps'       => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'charts'     => ['hero', 'speedup', 'features', 'memory', 'wins'],
+            'publish'    => ['framework'],
+            'publish_md' => '19-BENCHMARKS-FPM.md',
+        ],
+
         // Proof that a view can be anything: two frameworks, no Azera.
         'laravel-vs-symfony' => [
-            'title'     => 'Laravel vs Symfony',
-            'subtitle'  => 'The same dataset, narrowed to two frameworks. Any subset works ??? no code change.',
+            'title'     => 'Laravel vs Symfony — RoadRunner-style resident worker',
+            'subtitle'  => 'The same dataset, narrowed to two frameworks. Any subset works — no code change.',
             'dataset'   => 'free-for-all',
             'baseline'  => 'laravel',
             'mode'      => 'warm',
@@ -66,7 +94,8 @@ return [
             'publish'   => [], // not published anywhere
         ],
 
-        // A memory-focused cut of the same dataset.
+        // A memory-focused cut of the same dataset (peak memory is
+        // mode-independent up to measurement noise).
         'memory' => [
             'title'    => 'Peak Memory Footprint',
             'subtitle' => 'Highest peak memory per framework. Low memory is what makes Azera cheap to run at scale.',

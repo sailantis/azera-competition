@@ -5,13 +5,18 @@
         "opcache": true,
         "sapi": "cli",
         "timestamp": "2026-09-12T11:45:03+00:00",
-        "azera_framework_ref": "b1c4900"
+        "azera_framework_ref": "b1c4900",
+        "derived_from": "free-for-all-opcache.json",
+        "deployment_models": {
+            "php-fpm": "harness cold mode: the framework boots per request (opcache retained, as with real FPM workers sharing bytecode). Models the application cost FPM pays per request; FPM worker management itself is not simulated.",
+            "roadrunner": "harness warm mode: the framework boots once and serves many requests from a resident worker (RoadRunner\/Octane\/Swoole style)."
+        }
     },
     "apps": [
         {
             "app": "azera",
             "modes": {
-                "warm": {
+                "roadrunner": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -288,7 +293,7 @@
                         }
                     ]
                 },
-                "cold": {
+                "php-fpm": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -574,7 +579,7 @@
         {
             "app": "laravel",
             "modes": {
-                "warm": {
+                "roadrunner": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -851,7 +856,7 @@
                         }
                     ]
                 },
-                "cold": {
+                "php-fpm": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -1137,7 +1142,7 @@
         {
             "app": "symfony",
             "modes": {
-                "warm": {
+                "roadrunner": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -1414,7 +1419,7 @@
                         }
                     ]
                 },
-                "cold": {
+                "php-fpm": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -1700,7 +1705,7 @@
         {
             "app": "spiral",
             "modes": {
-                "warm": {
+                "roadrunner": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -1977,7 +1982,7 @@
                         }
                     ]
                 },
-                "cold": {
+                "php-fpm": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -2263,7 +2268,7 @@
         {
             "app": "codeigniter",
             "modes": {
-                "warm": {
+                "roadrunner": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -2540,7 +2545,7 @@
                         }
                     ]
                 },
-                "cold": {
+                "php-fpm": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -2826,7 +2831,7 @@
         {
             "app": "cakephp",
             "modes": {
-                "warm": {
+                "roadrunner": {
                     "requests": [
                         {
                             "request": "GET \/",
@@ -3103,7 +3108,7 @@
                         }
                     ]
                 },
-                "cold": {
+                "php-fpm": {
                     "requests": [
                         {
                             "request": "GET \/",

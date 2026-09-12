@@ -144,6 +144,10 @@ final class MarkdownReport
      * classes/opcache already loaded — what a RoadRunner-style worker pays
      * per recycle.
      *
+     * Each band shows boot + the mode's median per-request teardown: both
+     * block the worker while no request is being served, so they are the
+     * same kind of time and belong together.
+     *
      * Datasets recorded before boot was timed have no per-boot numbers; the
      * chart then degrades to the legacy proxy (warm GET / dispatch) so old
      * result files keep rendering.
@@ -154,24 +158,25 @@ final class MarkdownReport
     {
         $hasBoot = $this->store->hasBoot();
         if ($hasBoot) {
-            return $this->bootChart($dir, $rel, $apps, $logScale);
+            return $this->bootChart($dir, $rel, $apps, $logScale, $mode);
         }
         return $this->legacyStartup($dir, $rel, $apps, $mode, $logScale);
     }
 
     /**
      * Cold + warm bootstrap cost, one band each, per-band anchored at the
-     * fastest framework on that band.
+     * fastest framework on that band. Bands carry boot + median teardown —
+     * both block the worker between requests.
      *
      * @param list<string> $apps
      */
-    private function bootChart(string $dir, string $rel, array $apps, bool $logScale): string
+    private function bootChart(string $dir, string $rel, array $apps, bool $logScale, string $mode): string
     {
         $metrics = [];
         $colors  = [];
         $bands   = [
-            'cold' => ['label' => 'Cold boot — fresh PHP process', 'key' => 'cold_ms'],
-            'warm' => ['label' => 'Warm boot — worker recycle', 'key' => 'warm_ms'],
+            'cold' => ['label' => 'Cold boot + teardown — fresh process', 'key' => 'cold_ms'],
+            'warm' => ['label' => 'Warm recycle + teardown — resident worker', 'key' => 'warm_ms'],
         ];
         foreach (array_keys($bands) as $band) {
             foreach ($apps as $app) {
@@ -179,11 +184,17 @@ final class MarkdownReport
                 if ($boot === null) {
                     continue;
                 }
-                $label = BenchmarkConfig::appLabel($app);
+                // Boot and teardown are the same kind of time — the worker
+                // cannot serve another request during either — so each band
+                // shows their sum: boot cost + this mode's median per-request
+                // cleanup.
+                $cleanup = $this->store->cleanupMedian($app, $mode) ?? 0.0;
+                $total   = $boot[$bands[$band]['key']] + $cleanup;
+                $label   = BenchmarkConfig::appLabel($app);
                 $metrics[$band][$label] = [
-                    'median' => $boot[$bands[$band]['key']],
-                    'low'    => $boot[$bands[$band]['key']],
-                    'high'   => $boot[$bands[$band]['key']],
+                    'median' => $total,
+                    'low'    => $total,
+                    'high'   => $total,
                 ];
                 $colors[$label] = BenchmarkConfig::appColor($app);
             }
@@ -231,8 +242,8 @@ final class MarkdownReport
             $logScale,
             960,
             360,
-            'Framework startup — bootstrap cost',
-            'cold = first boot in a fresh process · warm = worker recycle (opcache warm)',
+            'Framework startup — boot + teardown',
+            'boot + median per-request teardown — both block the worker between requests',
             $factors,
             'x = median ÷ the fastest boot of that kind'
         );
@@ -261,7 +272,7 @@ final class MarkdownReport
         if ($this->store->hasCleanupSplit()) {
             $shares = [];
             foreach ($apps as $app) {
-                $share = $this->store->cleanupShare($app, 'warm');
+                $share = $this->store->cleanupShare($app, $mode);
                 if ($share !== null) {
                     $shares[$app] = $share;
                 }
@@ -271,26 +282,26 @@ final class MarkdownReport
                 $cKeys           = array_keys($shares);
                 $cBest           = BenchmarkConfig::appLabel($cKeys[0]);
                 $cWorst          = BenchmarkConfig::appLabel($cKeys[count($cKeys) - 1]);
-                $cleanupSentence = ' Beyond the boot itself, the split of every request shows how much of each '
-                    . 'request is post-response teardown: from ' . number_format($shares[$cKeys[0]] * 100, 0) . '% ('
-                    . $cBest . ') up to ' . number_format($shares[$cKeys[count($cKeys) - 1]] * 100, 0) . '% ('
-                    . $cWorst . ') — the worker-loop cleanup a RoadRunner-style server pays per request.';
+                $cleanupSentence = ' The teardown share of a full request ranges from '
+                    . number_format($shares[$cKeys[0]] * 100, 0) . '% (' . $cBest . ') up to '
+                    . number_format($shares[$cKeys[count($cKeys) - 1]] * 100, 0) . '% (' . $cWorst . ').';
             }
         }
 
         return "## Framework startup\n\n"
             . "The framework's own load cost, timed directly: autoloader + kernel/container build + routes + DB connect, "
-            . "with no request processed. **{$best}** boots cold in " . SvgChart::fmt($bestMs) . " ms "
-            . "against " . SvgChart::fmt($worstMs) . " ms for {$worst}"
+            . "with no request processed — plus the median post-response teardown, because boot and cleanup are the same "
+            . "kind of time: during both, the worker cannot serve another request. **{$best}** pays "
+            . SvgChart::fmt($bestMs) . " ms cold against " . SvgChart::fmt($worstMs) . " ms for {$worst}"
             . ' — x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . " slower. "
             . ($warmBest !== null && isset($warm[$warmBest])
                 ? 'A warm recycle (worker restart with opcache warm) is cheaper for everyone: '
                     . SvgChart::fmt($warm[$warmBest]['median']) . ' ms for ' . $warmBest
-                    . " at the low end — CodeIgniter and CakePHP re-bootstrap is a guarded no-op there."
+                    . " at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild."
                 : '')
             . $cleanupSentence
             . "\n\n"
-            . '![Framework startup — bootstrap cost](' . $rel . '/' . $file . ')';
+            . '![Framework startup — boot + teardown](' . $rel . '/' . $file . ')';
     }
 
     /**
@@ -388,7 +399,7 @@ final class MarkdownReport
         $svg  = SvgChart::horizontalBars(
             $values,
             $colors,
-            'Total time vs ' . $base,
+            'Total response times',
             '1.0 = ' . $base . "'s own total · higher = slower",
             960,
             32
@@ -405,10 +416,10 @@ final class MarkdownReport
             $extra   = " The closest rival is {$closest}, needing x " . SvgChart::fmtFactor($others[$closest]) . ' the same total.';
         }
 
-        return "## Total time vs {$base}\n\n"
+        return "## Total response times\n\n"
             . 'Total time to serve one of each of the ' . count($requests) . " endpoints, relative to {$base} "
             . "(1.0 = the baseline's own total, higher = slower).{$extra}\n\n"
-            . '![Total time vs ' . $base . '](' . $rel . '/' . $file . ')';
+            . '![Total response times](' . $rel . '/' . $file . ')';
     }
 
     /**

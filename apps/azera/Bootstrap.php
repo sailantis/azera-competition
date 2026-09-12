@@ -31,8 +31,44 @@ use Azera\Queue\QueueInterface;
 
 class Bootstrap
 {
+    /**
+     * Wiring memo — static so it survives the fresh AppContext a
+     * worker-mode re-bootstrap would otherwise create. The route table is
+     * static data (like CI4's RouteCollection service): re-registering
+     * ~120 routes on every warm recycle cost ~0.38 ms of pure rebuild.
+     * Keyed by dbPath so separate contexts (different databases) never
+     * share a table.
+     *
+     * @var array<string, AppContext>
+     */
+    private static array $wired = [];
+
+    /**
+     * Forget the wiring memo — the next boot() rebuilds everything (fresh
+     * AppContext, route table, services). verify.php/tests call this to get
+     * true cold isolation; the benchmark's cold mode runs each app in its
+     * own child process, where the memo is empty anyway.
+     */
+    public static function forget(): void
+    {
+        self::$wired = [];
+        AppContext::reset();
+    }
+
     public static function boot(string $dbPath): AppContext
     {
+        $ctx = self::$wired[$dbPath] ?? null;
+
+        if ($ctx !== null) {
+            // Worker-mode re-bootstrap: the singleton AppContext already
+            // carries the fully wired route table, dispatcher and services.
+            // Request-scoped state was reset by clearRequestScope() after
+            // the previous request (the RequestScoped contract) — nothing
+            // to rebuild here beyond handing back the same context.
+            AppContext::setInstance($ctx);
+            return $ctx;
+        }
+
         // Fresh singleton for cold-mode reproducibility
         AppContext::setInstance(new AppContext());
         $ctx = AppContext::instance();
@@ -191,6 +227,12 @@ class Bootstrap
             $r->get('/api/items/{id:int}', '::showAction');
             $r->post('/api/items', '::createAction');
         });
+
+        // Memoize the wired context per dbPath so a worker-mode re-bootstrap
+        // (same process, same database) can skip straight to the request
+        // loop. CI4 parity: its RouteCollection service also loads once per
+        // process; request-scoped state resets via clearRequestScope().
+        self::$wired[$dbPath] = $ctx;
 
         return $ctx;
     }

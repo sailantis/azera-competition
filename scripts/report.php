@@ -135,11 +135,26 @@ $mdFiles   = []; // viewKey => md filename
 $svgByView = []; // viewKey => [chartKey => rel path]
 
 foreach ($views as $key => $view) {
+    // A view may pin its own dataset (e.g. the php-fpm view reads the
+    // deployments relabelling of the canonical run). Resolve it lazily so
+    // one generator invocation can mix datasets across views; views without
+    // a dataset entry use the CLI/default store selected above.
+    $viewDsKey = $view['dataset'] ?? null;
+    if ($viewDsKey !== null && $viewDsKey !== $dsLabel) {
+        if (!isset($manifest['datasets'][$viewDsKey])) {
+            fwrite(STDERR, "View {$key} declares unknown dataset: {$viewDsKey}\n");
+            exit(1);
+        }
+        $viewStore = resolveDataset($manifest['datasets'][$viewDsKey]);
+    } else {
+        $viewStore = $store;
+    }
+
     $svgDir = $outDir . '/svg/' . $key;
     $relDir = 'svg/' . $key;
 
     // Markdown first — it writes the SVGs.
-    $md     = new MarkdownReport($store, $key, $view);
+    $md     = new MarkdownReport($viewStore, $key, $view);
     $mdBody = $md->render($svgDir, $relDir);
     $mdFile = $key . '.md';
     file_put_contents($outDir . '/' . $mdFile, $mdBody);
@@ -154,12 +169,13 @@ foreach ($views as $key => $view) {
     }
     $svgByView[$key] = $chartFiles;
 
-    $html     = (new HtmlReport($store, $manifest))->view($key, $view, $chartFiles);
+    $html     = (new HtmlReport($viewStore, $manifest))->view($key, $view, $chartFiles);
     $htmlFile = 'view-' . $key . '.html';
     file_put_contents($outDir . '/' . $htmlFile, $html);
     $viewFiles[$key] = $htmlFile;
 
-    echo "  ✓ {$key}: {$htmlFile}, {$mdFile}, " . count($chartFiles) . " charts\n";
+    echo "  ✓ {$key}: {$htmlFile}, {$mdFile}, " . count($chartFiles) . " charts [dataset: "
+        . ($viewStore === $store ? $dsLabel : ($view['dataset'] ?? '?')) . "]\n";
 }
 
 // --- Index -----------------------------------------------------------------
@@ -236,18 +252,29 @@ function publish(
         if (!in_array($target, $view['publish'] ?? [], true)) {
             continue;
         }
+        // Each published view gets its own markdown file + image subfolder:
+        // the views share chart filenames (startup.svg, feature-orm.svg, …)
+        // but describe different deployment models, so a flat copy would
+        // silently overwrite the first story with the second.
+        $publishMd = ($view['publish_md'] ?? null) ?? ($key === 'azera-vs-all' ? '19-BENCHMARKS.md' : "19-BENCHMARKS-{$key}.md");
+        $imagesDir = $framework . '/docs/images/benchmarks/' . $key;
+        if (!is_dir($imagesDir) && !mkdir($imagesDir, 0777, true) && !is_dir($imagesDir)) {
+            $log[] = "cannot create {$imagesDir}";
+            continue;
+        }
         // Copy this view's SVGs + markdown fragment into the framework docs.
         foreach ($svgByView[$key] ?? [] as $chart => $rel) {
             copy($outDir . '/' . $rel, $imagesDir . '/' . basename($rel));
-            $log[] = "copied svg " . basename($rel);
+            $log[] = "copied svg {$key}/" . basename($rel);
         }
         $mdSrc = $outDir . '/' . $mdFiles[$key];
-        $mdDst = $framework . '/docs/19-BENCHMARKS.md';
-        // Rewrite svg/ paths to docs/images/benchmarks/ for the framework tree.
+        $mdDst = $framework . '/docs/' . $publishMd;
+        // Rewrite svg/ paths to docs/images/benchmarks/<view>/ for the
+        // framework tree.
         $body = (string) file_get_contents($mdSrc);
-        $body = str_replace('](svg/' . $key . '/', '](images/benchmarks/', $body);
+        $body = str_replace('](svg/' . $key . '/', '](images/benchmarks/' . $key . '/', $body);
         file_put_contents($mdDst, $body);
-        $log[] = "wrote docs/19-BENCHMARKS.md";
+        $log[] = "wrote docs/{$publishMd}";
     }
 
     return $log;

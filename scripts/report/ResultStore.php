@@ -239,6 +239,28 @@ final class ResultStore
         return $ratios[(int) floor((count($ratios) - 1) / 2)];
     }
 
+    /**
+     * Median post-response teardown in ms for one app in one mode — median
+     * of cleanup_ms across all measured requests. Null when the dataset
+     * predates the split.
+     */
+    public function cleanupMedian(string $app, string $mode): ?float
+    {
+        $values = [];
+        foreach (BenchmarkConfig::requestOrder() as $req) {
+            $row = $this->data[$app][$mode][$req] ?? null;
+            if ($row === null || !isset($row['cleanup_ms'])) {
+                continue;
+            }
+            $values[] = (float) $row['cleanup_ms'];
+        }
+        if ($values === []) {
+            return null;
+        }
+        sort($values);
+        return $values[(int) floor((count($values) - 1) / 2)];
+    }
+
     public function has(string $app, string $mode, string $request): bool
     {
         return isset($this->data[$app][$mode][$request]);

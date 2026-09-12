@@ -83,9 +83,9 @@ HTML;
         $figures = '';
         $order   = [
             'startup' => $this->store->hasBoot()
-                ? 'Framework startup — bootstrap cost (cold + warm; teardown share in prose)'
+                ? 'Framework startup — boot + teardown (cold + warm)'
                 : 'Framework startup (GET /)',
-            'speedup' => 'Total time vs ' . BenchmarkConfig::appLabel($baseline),
+            'speedup' => 'Total response times',
             'memory'  => 'Peak memory footprint',
         ];
         foreach ($order as $key => $caption) {

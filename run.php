@@ -611,7 +611,11 @@ foreach ($apps as $key) {
             echo "Child benchmark for {$key} ({$modeName}) returned no results, aborting.\n";
             exit(1);
         }
-        $appResult['modes'][$modeName] = $modeData['modes'][$modeName];
+        $appResult['modes'][$modeName] = $modeData['modes'][$modeName]; // The child's measureBoot() result (cold_ms/warm_ms) is identical
+
+        if (isset($modeData['boot']) && !isset($appResult['boot'])) {
+            $appResult['boot'] = $modeData['boot'];
+        }
     }
 
     $results['apps'][] = $appResult;

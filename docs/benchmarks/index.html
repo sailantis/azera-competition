@@ -48,18 +48,23 @@ main{padding-bottom:10px}
 <header>
   <h1>Azera Benchmark Results</h1>
   <p class="lead">PHP framework comparison across a full-stack request lifecycle: routing &rarr; controller &rarr; ORM query (SQLite) &rarr; template render &rarr; response.</p>
-  <p class="env">PHP 8.3.6 &middot; Linux 6.8.0-124-generic &middot; OPcache (CLI): yes &middot; measured 2026-09-11T20:28:50+00:00</p>
+  <p class="env">PHP 8.3.6 &middot; Linux 6.8.0-124-generic &middot; OPcache (CLI): yes &middot; measured 2026-09-12T11:45:03+00:00</p>
 </header>
 <main>
   <div class="grid">
 <a class="card" href="view-azera-vs-all.html">
-  <h3>Azera vs All Frameworks</h3>
-  <p>A full-stack request lifecycle benchmark: routing ??? controller ??? ORM query (SQLite) ??? template render ??? response.</p>
+  <h3>Azera vs All Frameworks — RoadRunner-style resident worker</h3>
+  <p>A full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response) with the framework booted once, as a RoadRunner/Octane-style worker serves it.</p>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
+</a>
+<a class="card" href="view-azera-vs-all-fpm.html">
+  <h3>Azera vs All Frameworks — PHP-FPM (fresh boot per request)</h3>
+  <p>The same benchmark under the classic PHP-FPM deployment model: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.</p>
   <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
 </a>
 <a class="card" href="view-laravel-vs-symfony.html">
-  <h3>Laravel vs Symfony</h3>
-  <p>The same dataset, narrowed to two frameworks. Any subset works ??? no code change.</p>
+  <h3>Laravel vs Symfony — RoadRunner-style resident worker</h3>
+  <p>The same dataset, narrowed to two frameworks. Any subset works — no code change.</p>
   <div class="chips"><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span></div>
 </a>
 <a class="card" href="view-memory.html">
