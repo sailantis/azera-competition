@@ -219,18 +219,28 @@ final class MarkdownReport
         }
 
         // Per-band anchor at the fastest framework on that band (same
-        // convention as the feature charts). Skipped for bands whose fastest
-        // boot is ~0 ms: CodeIgniter/CakePHP re-bootstrap is a guarded no-op
-        // (state reset only, classes already loaded), so dividing by it
-        // yields absurd "x 1000+" annotations that mean nothing.
+        // convention as the feature charts). One wrinkle: some re-boots are
+        // guarded no-ops (CodeIgniter/CakePHP reset state only — classes are
+        // already loaded; azera/symfony/laravel re-bootstrap in ~0.001 ms
+        // once opcache holds the bytecode). Anchoring such a band at a
+        // no-op would print absurd "x 3000+" factors for everyone else, so
+        // the anchor becomes the fastest BOOT THAT ACTUALLY WORKS (>= 0.1 ms)
+        // and the no-op rows simply get no factor label — their ~0 ms median
+        // already tells the whole story.
         $factors = [];
         foreach ($cats as $band) {
-            $fastest = min(array_column($metrics[$band], 'median'));
-            if ($fastest < 0.1) {
-                continue;
-            }
+            $byLabel = [];
             foreach ($metrics[$band] as $label => $m) {
-                $factors[$bands[$band]['label']][$label] = $m['median'] / max($fastest, 1e-9);
+                if ($m['median'] >= 0.1) {
+                    $byLabel[$label] = $m['median'];
+                }
+            }
+            if ($byLabel === []) {
+                continue; // every row in this band is a no-op — nothing to anchor
+            }
+            $fastest = min($byLabel);
+            foreach ($byLabel as $label => $median) {
+                $factors[$bands[$band]['label']][$label] = $median / max($fastest, 1e-9);
             }
         }
 
