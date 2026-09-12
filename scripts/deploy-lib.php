@@ -295,7 +295,10 @@ function measureFloors(
         }
         NGINX;
         file_put_contents("{$deployDir}/bench-floor-http.nginx", $vhost);
-        shellRun(sprintf('sudo -n cp %s /etc/nginx/conf.d/%s', escapeshellarg("{$deployDir}/bench-floor-http.nginx"), escapeshellarg('bench-floor-http.nginx')), 'cp floor vhost');
+        // Include glob is conf.d/*.conf — .nginx names are ignored (and any
+        // stale misnamed copies from earlier runs must go first).
+        shellRun('sudo -n sh -c "rm -f /etc/nginx/conf.d/bench-floor-*"', 'rm stale floor vhosts');
+        shellRun(sprintf('sudo -n cp %s /etc/nginx/conf.d/%s', escapeshellarg("{$deployDir}/bench-floor-http.nginx"), escapeshellarg('bench-floor-http.conf')), 'cp floor vhost');
         shellRun('sudo -n systemctl reload nginx || sudo -n systemctl restart nginx', 'nginx reload');
 
         $floors[] = measureFloorApp($root, 'floor-http', 'php-fpm', 'http://127.0.0.1:9900', $itersPerRun, $runs);
@@ -323,7 +326,7 @@ function measureFloors(
         // floor-php serves a plain PHP file (no framework).
         file_put_contents("{$staticDir}/hello.php", "<?php echo 'floor-php';\n");
 
-        shellRun(sprintf('sudo -n cp %s /etc/nginx/conf.d/%s', escapeshellarg("{$deployDir}/bench-floor-php.nginx"), escapeshellarg('bench-floor-php.nginx')), 'cp floor vhost');
+        shellRun(sprintf('sudo -n cp %s /etc/nginx/conf.d/%s', escapeshellarg("{$deployDir}/bench-floor-php.nginx"), escapeshellarg('bench-floor-php.conf')), 'cp floor vhost');
         shellRun(sprintf('sudo -n cp %s /etc/php/8.3/fpm/pool.d/%s', escapeshellarg("{$deployDir}/bench-floor-php.conf"), escapeshellarg('bench-floor-php.conf')), 'cp floor pool');
         shellRun('sudo -n systemctl reload php8.3-fpm || sudo -n systemctl restart php8.3-fpm', 'fpm reload');
         shellRun('sudo -n systemctl reload nginx || sudo -n systemctl restart nginx', 'nginx reload');
