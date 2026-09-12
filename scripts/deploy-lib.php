@@ -180,7 +180,9 @@ function ensureFpmRunning(string $root, string $phpFpmBin, string $deployDir): a
     // via sudo even though the benchmark user owns everything else.
     shellRun("sudo -n {$phpFpmBin} --test", 'fpm config test');
     shellRun('sudo -n systemctl reload php8.3-fpm || sudo -n systemctl restart php8.3-fpm', 'fpm reload');
-    shellRun('nginx -t', 'nginx config test');
+    // nginx -t opens /run/nginx.pid (and the global error log) during
+    // validation — root-only, so sudo here too.
+    shellRun('sudo -n nginx -t', 'nginx config test');
     shellRun('sudo -n systemctl reload nginx || sudo -n systemctl restart nginx', 'nginx reload');
 
     $installed = true;
