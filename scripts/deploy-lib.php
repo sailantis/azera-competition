@@ -175,7 +175,10 @@ function ensureFpmRunning(string $root, string $phpFpmBin, string $deployDir): a
     shellRun('sudo -n mkdir -p /run/php-fpm-bench', 'mkdir sockdir');
     shellRun('sudo -n chown www-data:www-data /run/php-fpm-bench', 'chown sockdir');
 
-    shellRun("{$phpFpmBin} --test", 'fpm config test');
+    // php-fpm --test opens the GLOBAL error_log (/var/log/php8.3-fpm.log)
+    // during validation — root-writable only, so the test itself must run
+    // via sudo even though the benchmark user owns everything else.
+    shellRun("sudo -n {$phpFpmBin} --test", 'fpm config test');
     shellRun('sudo -n systemctl reload php8.3-fpm || sudo -n systemctl restart php8.3-fpm', 'fpm reload');
     shellRun('nginx -t', 'nginx config test');
     shellRun('sudo -n systemctl reload nginx || sudo -n systemctl restart nginx', 'nginx reload');
