@@ -97,7 +97,10 @@ foreach ($requests as [$method, $uri]) {
 
         $s = stats($times);
         $runMeans[] = $s['mean'];
-        $allTimes   = array_merge($allTimes, array_column($times, 'total_ms'));
+        // $times entries were replaced with their total_ms floats above, so
+        // merge them directly (array_column() here would yield [] → stats()
+        // divide-by-zero on $allTimes).
+        $allTimes   = array_merge($allTimes, $times);
         $connectAvg = max($connectAvg, stats($connects)['mean']);
         $peakMem    = max($peakMem, memory_get_peak_usage(true));
 
