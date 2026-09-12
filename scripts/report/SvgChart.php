@@ -477,12 +477,14 @@ final class SvgChart
      *        Anchored by the caller (normally best-on-that-endpoint = 1.0).
      * @param string $factorNote one-line explanation of what the x factor is
      *        measured against; ignored when no factors are supplied.
-     * @param bool $labelAllFactors when true, EVERY row with a factor gets its
-     *        label — including the anchor row ("x 1.0") and sub-1.0 rows
-     *        ("x 0.0") — so the chart states the calculation on each line
-     *        instead of leaving unlabelled rows the reader has to guess at.
-     *        Default false keeps the old behaviour: the anchor row's "x 1.0"
-     *        is omitted because the subtitle already names the reference.
+     * @param bool $labelAllFactors when true, every row that HAS a factor
+     *        gets its label — including the anchor row ("x 1.0") — so the
+     *        chart states the calculation on each line. Rows without a
+     *        factor (callers may exclude sub-threshold rows such as no-op
+     *        boots) stay unlabelled. The anchor's "x 1.0" is still omitted
+     *        when the anchor leads its band: the top row IS the obvious
+     *        reference there. Default false keeps the old behaviour: only
+     *        non-1.0 rows are labelled.
      */
     public static function dotRange(
         array $categories,
@@ -740,7 +742,15 @@ final class SvgChart
                 $factor = $factors[$cat][$s] ?? $factors[$s] ?? null;
                 if ($hasFactors && $factor !== null) {
                     $factorText = self::fmtFactor($factor);
-                    if ($labelAllFactors || $factorText !== '1.0') {
+                    // With $labelAllFactors every factor-bearing row states
+                    // its multiplier — except the anchor ("x 1.0") when it
+                    // also LEADS the band: the top row is the obvious
+                    // reference, so its "x 1.0" is noise. When the top row
+                    // carries no factor at all (a no-op row the caller
+                    // excluded), the anchor is no longer self-evident and
+                    // gets its "x 1.0" after all.
+                    $anchorLeadsBand = $factorText === '1.0' && $sj === 0;
+                    if ($labelAllFactors ? !$anchorLeadsBand : $factorText !== '1.0') {
                         $out[] = self::text(
                             max($xLo, $xHi) + 9,
                             $cy + 4.5,

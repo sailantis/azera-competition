@@ -224,10 +224,11 @@ final class MarkdownReport
         // already loaded; azera re-boots in ~0.001 ms once opcache holds the
         // bytecode). Anchoring such a band at a no-op would print absurd
         // "x 3000+" factors, so the anchor is the fastest BOOT THAT ACTUALLY
-        // WORKS (>= 0.1 ms). Every row still gets a factor — the no-op rows
-        // read "x 0.0" and the anchor row reads "x 1.0" — so the chart states
-        // the calculation on each line and the reader can see exactly which
-        // boot the numbers are measured against.
+        // WORKS (>= 0.1 ms) and the no-op rows get NO factor at all — with
+        // $labelAllFactors they stay unlabelled (their ~0 ms median says
+        // everything), while the anchor row reads "x 1.0" because it does
+        // not lead the band there and the reader could not otherwise tell
+        // which boot the other rows are measured against.
         $factors = [];
         foreach ($cats as $band) {
             $working = [];
@@ -240,8 +241,8 @@ final class MarkdownReport
                 continue; // every row in this band is a no-op — nothing to anchor
             }
             $fastest = min($working);
-            foreach ($metrics[$band] as $label => $m) {
-                $factors[$bands[$band]['label']][$label] = $m['median'] / max($fastest, 1e-9);
+            foreach ($working as $label => $median) {
+                $factors[$bands[$band]['label']][$label] = $median / max($fastest, 1e-9);
             }
         }
 

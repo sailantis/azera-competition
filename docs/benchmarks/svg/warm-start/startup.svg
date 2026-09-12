@@ -22,7 +22,6 @@
 <line x1="244.97" y1="141" x2="244.97" y2="141" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
 <line x1="244.97" y1="134" x2="244.97" y2="148" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
 <circle cx="244.97" cy="141" r="5.6" fill="#d6409f" stroke="#ffffff" stroke-width="2"/>
-<text x="253.97" y="145.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.0</text>
 <text x="112" y="145.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#d6409f" text-anchor="end">CakePHP</text>
 <text x="206" y="145.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">10.4 ms</text>
 <rect x="218" y="160" width="33.16" height="14" fill="#3459e6" fill-opacity="0.12"/>
@@ -65,21 +64,18 @@
 <line x1="218.01" y1="317" x2="218.01" y2="317" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
 <line x1="218.01" y1="310" x2="218.01" y2="324" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
 <circle cx="218.01" cy="317" r="5.6" fill="#3459e6" stroke="#ffffff" stroke-width="2"/>
-<text x="227.01" y="321.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 0.0</text>
 <text x="112" y="321.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#3459e6" text-anchor="end">Azera</text>
 <text x="206" y="321.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.002 ms</text>
 <rect x="218" y="336" width="0.02" height="14" fill="#d6409f" fill-opacity="0.12"/>
 <line x1="218.02" y1="343" x2="218.02" y2="343" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
 <line x1="218.02" y1="336" x2="218.02" y2="350" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
 <circle cx="218.02" cy="343" r="5.6" fill="#d6409f" stroke="#ffffff" stroke-width="2"/>
-<text x="227.02" y="347.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 0.0</text>
 <text x="112" y="347.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#d6409f" text-anchor="end">CakePHP</text>
 <text x="206" y="347.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.007 ms</text>
 <rect x="218" y="362" width="0.03" height="14" fill="#e8590c" fill-opacity="0.12"/>
 <line x1="218.03" y1="369" x2="218.03" y2="369" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
 <line x1="218.03" y1="362" x2="218.03" y2="376" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
 <circle cx="218.03" cy="369" r="5.6" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
-<text x="227.03" y="373.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 0.0</text>
 <text x="112" y="373.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#e8590c" text-anchor="end">CodeIgniter</text>
 <text x="206" y="373.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.012 ms</text>
 <rect x="218" y="388" width="1.4" height="14" fill="#7048e8" fill-opacity="0.12"/>
