@@ -2,36 +2,36 @@
 
 RoadRunner/Octane-style resident worker: the framework boots once, then serves every request. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).
 
-**Environment** — PHP 8.3.6 · Linux 6.8.0-124-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
+**Environment** — PHP 8.3.33 · Linux 6.8.0-85-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
 
-_Measured 2026-09-12T14:43:29+00:00 · azera-framework `b1c4900`_
+_Measured 2026-09-12T21:03:41+00:00 · azera-framework `e07f6bd`_
 
 ## Framework startup
 
-The framework's own load cost, timed directly: autoloader + kernel/container build + routes + DB connect, with no request processed — plus the median post-response teardown, because boot and cleanup are the same kind of time: during both, the worker cannot serve another request. **CakePHP** pays 10.4 ms cold against 224 ms for Laravel — x 21.5 slower. A warm recycle (worker restart with opcache warm) is cheaper for everyone: 0.002 ms for Azera at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild. The teardown share of a full request ranges from 0% (Laravel) up to 4% (Azera).
+The framework's own load cost, timed directly: autoloader + kernel/container build + routes + DB connect, with no request processed — plus the median post-response teardown, because boot and cleanup are the same kind of time: during both, the worker cannot serve another request. **CakePHP** pays 10.7 ms cold against 152 ms for Laravel — x 14.2 slower. A warm recycle (worker restart with opcache warm) is cheaper for everyone: 0.002 ms for Azera at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild. The teardown share of a full request ranges from 0% (Laravel) up to 3% (Azera).
 
 ![Framework startup — boot + teardown](svg/warm-start/startup.svg)
 
 ## Total response times
 
-Total time to serve one of each of the 21 endpoints — the sum of the endpoints' medians, not a single response time — relative to Azera (1.0 = the baseline's own total, higher = slower). The closest rival is Symfony, needing x 3.7 the same total.
+Total time to serve one of each of the 21 endpoints — the sum of the endpoints' medians, not a single response time — relative to Azera (1.0 = the baseline's own total, higher = slower). The closest rival is Symfony, needing x 3.6 the same total.
 
 ![Total response times](svg/warm-start/speedup.svg)
 
 ## Feature benchmarks
 
-- **Routing** (`GET /`): Azera at 0.015ms median, x 5.5 faster than Symfony.
-- **ORM / Active Record** (`GET /items`): Azera at 0.134ms median, x 3.5 faster than CakePHP.
-- **Query Builder** (`GET /items-qb`): Azera at 0.091ms median, x 2.5 faster than Symfony.
-- **REST API (JSON)** (`GET /api/items`): Azera at 0.039ms median, x 5.6 faster than Symfony.
-- **AOP (Aspect-Oriented)** (`GET /features/aop`): Azera at 0.172ms median, x 1.6 faster than Symfony.
-- **Cache** (`GET /features/cache`): Azera at 0.014ms median, x 5.9 faster than Symfony.
-- **Database Events** (`GET /features/db-events`): Azera at 0.041ms median, x 4.7 faster than Symfony.
-- **Event Dispatcher** (`GET /features/events`): Azera at 0.040ms median, x 2.7 faster than Symfony.
-- **Validation** (`GET /features/validation`): Azera at 0.019ms median, x 9.6 faster than CakePHP.
-- **Config** (`GET /features/config`): Azera at 0.010ms median, x 8.3 faster than Symfony.
-- **Request-Scoped Services** (`GET /features/request-scoped`): Azera at 0.009ms median, x 8.2 faster than Symfony.
-- **Rate Limiter** (`GET /features/rate-limit`): Azera at 0.010ms median, x 8.4 faster than Symfony.
+- **Routing** (`GET /`): Azera at 0.015ms median, x 5.4 faster than Symfony.
+- **ORM / Active Record** (`GET /items`): Azera at 0.131ms median, x 3.3 faster than Symfony.
+- **Query Builder** (`GET /items-qb`): Azera at 0.088ms median, x 2.6 faster than Symfony.
+- **REST API (JSON)** (`GET /api/items`): Azera at 0.038ms median, x 5.8 faster than Symfony.
+- **AOP (Aspect-Oriented)** (`GET /features/aop`): Azera at 0.124ms median, x 1.5 faster than Symfony.
+- **Cache** (`GET /features/cache`): Azera at 0.013ms median, x 6.2 faster than Symfony.
+- **Database Events** (`GET /features/db-events`): Azera at 0.039ms median, x 4.2 faster than Symfony.
+- **Event Dispatcher** (`GET /features/events`): Azera at 0.037ms median, x 2.9 faster than Symfony.
+- **Validation** (`GET /features/validation`): Azera at 0.017ms median, x 10.5 faster than CakePHP.
+- **Config** (`GET /features/config`): Azera at 0.009ms median, x 8.7 faster than Symfony.
+- **Request-Scoped Services** (`GET /features/request-scoped`): Azera at 0.009ms median, x 8.7 faster than Symfony.
+- **Rate Limiter** (`GET /features/rate-limit`): Azera at 0.009ms median, x 9.2 faster than Symfony.
 
 ### Routing
 
@@ -83,7 +83,7 @@ Total time to serve one of each of the 21 endpoints — the sum of the endpoints
 
 ## Peak memory
 
-Peak memory reached on any endpoint. **Azera** stays under 8.50 MB, against 303 MB for the heaviest framework (x 35.6 more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
+Peak memory reached on any endpoint. **Azera** stays under 4.00 MB, against 42.0 MB for the heaviest framework (x 10.5 more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
 
 ![Peak memory footprint](svg/warm-start/memory.svg)
 
@@ -108,27 +108,27 @@ Each cell also shows the request's lifecycle split as `total <sub>handle + clean
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `GET /` | no DB — routing + template only | **0.016 <sub>0.016+0.001</sub>** | 0.218 <sub>0.218+0.000</sub> | 0.090 <sub>0.088+0.002</sub> | 0.284 <sub>0.274+0.010</sub> | 0.466 <sub>0.457+0.009</sub> | 0.140 <sub>0.139+0.000</sub> |
-| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.143 <sub>0.139+0.003</sub>** | 0.753 <sub>0.753+0.000</sub> | 0.540 <sub>0.537+0.003</sub> | 0.573 <sub>0.556+0.017</sub> | 0.767 <sub>0.754+0.012</sub> | 0.508 <sub>0.508+0.000</sub> |
-| `GET /items/1` | 1 item by id | **0.054 <sub>0.052+0.002</sub>** | 0.399 <sub>0.398+0.000</sub> | 0.172 <sub>0.170+0.002</sub> | 0.390 <sub>0.377+0.013</sub> | 0.668 <sub>0.656+0.012</sub> | 0.333 <sub>0.333+0.000</sub> |
-| `POST /items` | 1 row upserted (sentinel #999999) | **0.109 <sub>0.107+0.002</sub>** | 0.431 <sub>0.430+0.000</sub> | 0.337 <sub>0.334+0.003</sub> | 0.441 <sub>0.428+0.013</sub> | 0.747 <sub>0.734+0.013</sub> | 0.445 <sub>0.445+0.000</sub> |
-| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.098 <sub>0.096+0.002</sub>** | 0.447 <sub>0.447+0.000</sub> | 0.236 <sub>0.234+0.002</sub> | 0.384 <sub>0.372+0.012</sub> | 0.749 <sub>0.736+0.012</sub> | 0.310 <sub>0.310+0.000</sub> |
-| `GET /items-qb/1` | 1 item by id | **0.052 <sub>0.051+0.002</sub>** | 0.320 <sub>0.320+0.000</sub> | 0.141 <sub>0.139+0.002</sub> | 0.342 <sub>0.330+0.011</sub> | 0.661 <sub>0.649+0.012</sub> | 0.239 <sub>0.238+0.000</sub> |
-| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.088 <sub>0.086+0.002</sub>** | 0.420 <sub>0.419+0.000</sub> | 0.344 <sub>0.341+0.003</sub> | 0.379 <sub>0.367+0.012</sub> | 0.850 <sub>0.836+0.014</sub> | 0.315 <sub>0.315+0.000</sub> |
-| `GET /api/items` | 20 of 1000 items as JSON | **0.043 <sub>0.041+0.001</sub>** | 0.635 <sub>0.635+0.000</sub> | 0.233 <sub>0.231+0.002</sub> | 0.446 <sub>0.430+0.016</sub> | 0.613 <sub>0.602+0.011</sub> | 0.278 <sub>0.278+0.000</sub> |
-| `GET /api/items/1` | 1 item by id as JSON | **0.039 <sub>0.037+0.002</sub>** | 0.421 <sub>0.420+0.000</sub> | 0.151 <sub>0.149+0.002</sub> | 0.350 <sub>0.337+0.013</sub> | 0.581 <sub>0.570+0.011</sub> | 0.248 <sub>0.247+0.000</sub> |
-| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.054 <sub>0.053+0.002</sub>** | 0.356 <sub>0.355+0.000</sub> | 0.298 <sub>0.295+0.003</sub> | 0.392 <sub>0.379+0.013</sub> | 0.650 <sub>0.639+0.011</sub> | 0.344 <sub>0.343+0.000</sub> |
-| `GET /features/aop` | no DB — interceptor pipeline | **0.180 <sub>0.178+0.002</sub>** | 0.341 <sub>0.341+0.000</sub> | 0.296 <sub>0.293+0.003</sub> | 0.626 <sub>0.609+0.016</sub> | — | — |
-| `GET /features/cache` | no DB — cache round-trips | **0.015 <sub>0.013+0.001</sub>** | 0.249 <sub>0.249+0.000</sub> | 0.086 <sub>0.084+0.002</sub> | 0.329 <sub>0.319+0.010</sub> | 0.445 <sub>0.436+0.009</sub> | 0.108 <sub>0.108+0.000</sub> |
-| `GET /features/log` | no DB — buffered log handlers | **0.014 <sub>0.013+0.001</sub>** | 0.227 <sub>0.227+0.000</sub> | 0.083 <sub>0.081+0.002</sub> | 0.322 <sub>0.311+0.011</sub> | — | — |
-| `GET /features/retry` | no DB — retry policy | **0.011 <sub>0.010+0.001</sub>** | 0.239 <sub>0.239+0.000</sub> | 0.088 <sub>0.086+0.002</sub> | 0.332 <sub>0.322+0.010</sub> | — | — |
-| `GET /features/pipeline` | no DB — middleware pipeline | **0.015 <sub>0.014+0.001</sub>** | 0.229 <sub>0.228+0.000</sub> | 0.083 <sub>0.081+0.002</sub> | 0.323 <sub>0.313+0.010</sub> | — | — |
-| `GET /features/db-events` | 1 event row INSERTed per request | **0.045 <sub>0.043+0.002</sub>** | 0.413 <sub>0.413+0.000</sub> | 0.202 <sub>0.200+0.002</sub> | 0.504 <sub>0.492+0.013</sub> | 0.749 <sub>0.737+0.012</sub> | 0.277 <sub>0.277+0.000</sub> |
-| `GET /features/events` | no DB — in-process listeners | **0.043 <sub>0.041+0.002</sub>** | 0.317 <sub>0.316+0.000</sub> | 0.116 <sub>0.114+0.002</sub> | 0.382 <sub>0.371+0.011</sub> | 0.705 <sub>0.693+0.012</sub> | 0.187 <sub>0.186+0.000</sub> |
-| `GET /features/validation` | no DB — validator run | **0.020 <sub>0.019+0.001</sub>** | 0.884 <sub>0.883+0.000</sub> | 0.197 <sub>0.195+0.002</sub> | 0.352 <sub>0.341+0.010</sub> | 0.682 <sub>0.668+0.013</sub> | 0.195 <sub>0.195+0.000</sub> |
-| `GET /features/config` | no DB — config lookup | **0.010 <sub>0.009+0.001</sub>** | 0.234 <sub>0.233+0.000</sub> | 0.083 <sub>0.081+0.002</sub> | 0.318 <sub>0.308+0.010</sub> | 0.424 <sub>0.415+0.009</sub> | 0.099 <sub>0.098+0.000</sub> |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **0.010 <sub>0.009+0.001</sub>** | 0.227 <sub>0.226+0.000</sub> | 0.082 <sub>0.080+0.002</sub> | 0.341 <sub>0.330+0.010</sub> | 0.411 <sub>0.402+0.008</sub> | 0.097 <sub>0.096+0.000</sub> |
-| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.011 <sub>0.010+0.001</sub>** | 0.257 <sub>0.256+0.000</sub> | 0.091 <sub>0.089+0.002</sub> | 0.345 <sub>0.335+0.010</sub> | 0.446 <sub>0.437+0.009</sub> | 0.110 <sub>0.109+0.000</sub> |
+| `GET /` | no DB — routing + template only | **0.016 <sub>0.016+0.001</sub>** | 0.211 <sub>0.211+0.000</sub> | 0.086 <sub>0.084+0.002</sub> | 0.280 <sub>0.270+0.010</sub> | 0.467 <sub>0.458+0.009</sub> | 0.138 <sub>0.137+0.000</sub> |
+| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.140 <sub>0.136+0.003</sub>** | 0.746 <sub>0.746+0.000</sub> | 0.443 <sub>0.440+0.003</sub> | 0.524 <sub>0.508+0.016</sub> | 0.754 <sub>0.742+0.012</sub> | 0.507 <sub>0.507+0.000</sub> |
+| `GET /items/1` | 1 item by id | **0.052 <sub>0.050+0.002</sub>** | 0.384 <sub>0.384+0.000</sub> | 0.170 <sub>0.168+0.002</sub> | 0.379 <sub>0.367+0.012</sub> | 0.653 <sub>0.642+0.012</sub> | 0.331 <sub>0.331+0.000</sub> |
+| `POST /items` | 1 row upserted (sentinel #999999) | **0.106 <sub>0.104+0.002</sub>** | 0.419 <sub>0.418+0.000</sub> | 0.258 <sub>0.255+0.003</sub> | 0.417 <sub>0.404+0.012</sub> | 0.734 <sub>0.722+0.012</sub> | 0.440 <sub>0.439+0.000</sub> |
+| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.093 <sub>0.092+0.001</sub>** | 0.429 <sub>0.429+0.000</sub> | 0.236 <sub>0.233+0.002</sub> | 0.372 <sub>0.360+0.011</sub> | 0.735 <sub>0.723+0.012</sub> | 0.295 <sub>0.295+0.000</sub> |
+| `GET /items-qb/1` | 1 item by id | **0.050 <sub>0.049+0.001</sub>** | 0.307 <sub>0.306+0.000</sub> | 0.136 <sub>0.134+0.002</sub> | 0.332 <sub>0.321+0.011</sub> | 0.653 <sub>0.641+0.012</sub> | 0.234 <sub>0.234+0.000</sub> |
+| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.085 <sub>0.084+0.001</sub>** | 0.403 <sub>0.403+0.000</sub> | 0.275 <sub>0.272+0.003</sub> | 0.369 <sub>0.358+0.012</sub> | 0.848 <sub>0.834+0.013</sub> | 0.314 <sub>0.313+0.000</sub> |
+| `GET /api/items` | 20 of 1000 items as JSON | **0.040 <sub>0.039+0.001</sub>** | 0.617 <sub>0.616+0.000</sub> | 0.230 <sub>0.228+0.002</sub> | 0.429 <sub>0.414+0.015</sub> | 0.615 <sub>0.605+0.010</sub> | 0.274 <sub>0.274+0.000</sub> |
+| `GET /api/items/1` | 1 item by id as JSON | **0.036 <sub>0.035+0.001</sub>** | 0.405 <sub>0.405+0.000</sub> | 0.145 <sub>0.143+0.002</sub> | 0.337 <sub>0.325+0.012</sub> | 0.585 <sub>0.574+0.011</sub> | 0.237 <sub>0.237+0.000</sub> |
+| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.052 <sub>0.051+0.002</sub>** | 0.346 <sub>0.346+0.000</sub> | 0.236 <sub>0.233+0.002</sub> | 0.383 <sub>0.371+0.012</sub> | 0.657 <sub>0.645+0.011</sub> | 0.338 <sub>0.338+0.000</sub> |
+| `GET /features/aop` | no DB — interceptor pipeline | **0.130 <sub>0.129+0.001</sub>** | 0.333 <sub>0.333+0.000</sub> | 0.203 <sub>0.201+0.002</sub> | 0.530 <sub>0.516+0.014</sub> | — | — |
+| `GET /features/cache` | no DB — cache round-trips | **0.014 <sub>0.013+0.001</sub>** | 0.245 <sub>0.244+0.000</sub> | 0.085 <sub>0.083+0.002</sub> | 0.322 <sub>0.312+0.010</sub> | 0.441 <sub>0.432+0.009</sub> | 0.109 <sub>0.109+0.000</sub> |
+| `GET /features/log` | no DB — buffered log handlers | **0.013 <sub>0.012+0.001</sub>** | 0.219 <sub>0.219+0.000</sub> | 0.081 <sub>0.079+0.002</sub> | 0.313 <sub>0.303+0.010</sub> | — | — |
+| `GET /features/retry` | no DB — retry policy | **0.010 <sub>0.009+0.001</sub>** | 0.229 <sub>0.229+0.000</sub> | 0.086 <sub>0.084+0.002</sub> | 0.328 <sub>0.318+0.010</sub> | — | — |
+| `GET /features/pipeline` | no DB — middleware pipeline | **0.014 <sub>0.014+0.001</sub>** | 0.224 <sub>0.224+0.000</sub> | 0.084 <sub>0.082+0.002</sub> | 0.318 <sub>0.308+0.010</sub> | — | — |
+| `GET /features/db-events` | 1 event row INSERTed per request | **0.042 <sub>0.041+0.001</sub>** | 0.394 <sub>0.394+0.000</sub> | 0.175 <sub>0.173+0.002</sub> | 0.466 <sub>0.454+0.012</sub> | 0.738 <sub>0.726+0.012</sub> | 0.271 <sub>0.270+0.000</sub> |
+| `GET /features/events` | no DB — in-process listeners | **0.039 <sub>0.038+0.001</sub>** | 0.306 <sub>0.306+0.000</sub> | 0.114 <sub>0.112+0.002</sub> | 0.370 <sub>0.359+0.011</sub> | 0.703 <sub>0.691+0.012</sub> | 0.157 <sub>0.157+0.000</sub> |
+| `GET /features/validation` | no DB — validator run | **0.018 <sub>0.018+0.001</sub>** | 0.851 <sub>0.851+0.000</sub> | 0.194 <sub>0.192+0.002</sub> | 0.345 <sub>0.335+0.010</sub> | 0.677 <sub>0.664+0.013</sub> | 0.197 <sub>0.196+0.000</sub> |
+| `GET /features/config` | no DB — config lookup | **0.009 <sub>0.009+0.001</sub>** | 0.226 <sub>0.226+0.000</sub> | 0.083 <sub>0.080+0.002</sub> | 0.308 <sub>0.298+0.010</sub> | 0.420 <sub>0.411+0.008</sub> | 0.099 <sub>0.098+0.000</sub> |
+| `GET /features/request-scoped` | no DB — scoped service resolve | **0.009 <sub>0.009+0.001</sub>** | 0.219 <sub>0.218+0.000</sub> | 0.080 <sub>0.078+0.002</sub> | 0.331 <sub>0.321+0.010</sub> | 0.403 <sub>0.395+0.008</sub> | 0.098 <sub>0.097+0.000</sub> |
+| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.010 <sub>0.009+0.001</sub>** | 0.248 <sub>0.248+0.000</sub> | 0.089 <sub>0.087+0.002</sub> | 0.334 <sub>0.324+0.010</sub> | 0.465 <sub>0.455+0.009</sub> | 0.107 <sub>0.107+0.000</sub> |
 
 ---
 

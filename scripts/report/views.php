@@ -26,8 +26,8 @@ return [
         // ambiguity). The legacy per-pair azera-vs-* files were superseded by
         // this and removed; there is no longer a merge fallback.
         'free-for-all' => [
-            'label' => 'Free-for-all — all six frameworks in one run (warm + cold)',
-            'file'  => $root . '/results/free-for-all-opcache.json',
+            'label' => 'Free-for-all — all six frameworks in one run (warm + cold, per-endpoint-block fresh process)',
+            'file'  => $root . '/results/free-for-all-opcache-iso.json',
         ],
 
         // The same run, relabelled by DEPLOYMENT MODEL instead of harness
@@ -36,7 +36,7 @@ return [
         // canonical file — regenerate it after every new run.
         'deployments' => [
             'label' => 'Deployment models — the free-for-all run, warm/cold relabelled as roadrunner/php-fpm',
-            'file'  => $root . '/results/free-for-all-opcache-deployments.json',
+            'file'  => $root . '/results/free-for-all-opcache-iso-deployments.json',
         ],
 
         // REAL deployment measurements (scripts/run-http.php on the benchmark
