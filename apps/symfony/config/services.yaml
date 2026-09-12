@@ -21,7 +21,9 @@ services:
     App\Symfony\Service\RequestCounter:
         tags:
             - { name: kernel.reset, method: resetState }
-    App\Symfony\Service\ScopeState: ~
+    App\Symfony\Service\ScopeState:
+        tags:
+            - { name: kernel.reset, method: resetState }
 
     # DB event log lives for the process (query log accumulates there).
     App\Symfony\Service\DbEventLog: ~

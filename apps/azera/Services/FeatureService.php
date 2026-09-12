@@ -21,11 +21,12 @@ use Azera\Db\Query;
 #[Advised]
 class FeatureService
 {
+    /** Fixed row used by every feature-demo write — the row count stays stable across benchmark runs. */
+    public const FEATURE_SENTINEL_ID = 888800;
+
     public function __construct(
         private AppContext $ctx,
-    )
-    {
-    }
+    ) {}
 
     /**
      * Create an item inside a transaction.
@@ -33,16 +34,23 @@ class FeatureService
      * The #[Transactional] interceptor wraps this method in a DB
      * transaction: begin before, commit on success, rollback on
      * exception.  No manual begin/commit/rollback needed.
+     *
+     * Writes the FIXED feature sentinel row (INSERT ... ON CONFLICT DO
+     * UPDATE, upsert semantics) instead of a fresh INSERT per request —
+     * the demo runs once per benchmark request, and an unbounded INSERT
+     * would grow the shared table every request (the row count must stay
+     * stable so COUNT-style reads measure constant work).
      */
     #[Transactional]
     public function createItemTransactional(string $title): int
     {
         $db = $this->ctx->dbManager()->getOrDefault('default');
         $db->query(
-            'INSERT INTO items (title, created_at) VALUES (?, ?)',
-            [$title, date('Y-m-d H:i:s')],
+            'INSERT INTO items (id, title, created_at) VALUES (?, ?, ?)'
+                . ' ON CONFLICT(id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at',
+            [self::FEATURE_SENTINEL_ID, $title, date('Y-m-d H:i:s')],
         );
-        $id = (int) $db->lastInsertId();
+        $id = self::FEATURE_SENTINEL_ID;
 
         // Dispatch an event — the listener will run synchronously
         // because we use EventDispatcher (PSR-14).

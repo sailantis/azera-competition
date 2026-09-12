@@ -53,14 +53,6 @@ class AzeraAdapter implements WebAppAdapter
 
     public function dispatch(string $method, string $uri): string
     {
-        // Persistent-worker contract: reset per-request state (request,
-        // route, ORM heap + EntityManager, RequestScoped services) between
-        // synthetic requests, exactly like a real worker loop would. Without
-        // this the request-scoped heap and EM retain every request's
-        // entities — visible as steadily growing memory and (via the
-        // entityFor scan) steadily growing latency across a benchmark run.
-        $this->ctx->clearRequestScope();
-
         // Build a synthetic request via Azera's Request using a fake $_SERVER.
         $server = [
             'REQUEST_URI'     => $uri,
@@ -85,6 +77,19 @@ class AzeraAdapter implements WebAppAdapter
         $response = $this->ctx->dispatcher()->dispatch($route);
 
         return self::readBody($response);
+    }
+
+    /**
+     * Persistent-worker contract: reset per-request state (request, route,
+     * ORM heap + EntityManager, RequestScoped services) between synthetic
+     * requests, exactly like a real worker loop would. Without this the
+     * request-scoped heap and EM retain every request's entities — visible
+     * as steadily growing memory and (via the entityFor scan) steadily
+     * growing latency across a benchmark run.
+     */
+    public function cleanup(): void
+    {
+        $this->ctx->clearRequestScope();
     }
 
     /**

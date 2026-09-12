@@ -28,4 +28,16 @@ final class ScopeState
     {
         return $this->trace;
     }
+
+    /**
+     * kernel.reset hook (services_resetter, fired by Kernel::terminate).
+     *
+     * The service is bound for the process lifetime in the warm-mode
+     * worker, and touch() appends per-request entries — without the reset
+     * the trace (and the response payload) would grow every request.
+     */
+    public function resetState(): void
+    {
+        $this->trace = [];
+    }
 }

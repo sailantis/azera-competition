@@ -35,6 +35,9 @@ use Spiral\Validator\Validation;
 
 class FeatureController
 {
+    /** Fixed row written by the events demo — the row count stays stable across benchmark runs. */
+    private const EVENT_SENTINEL_ID = 888801;
+
     public function __construct(
         private readonly AopService $aopService,
         private readonly CacheStorageProviderInterface $cache,
@@ -43,6 +46,7 @@ class FeatureController
         private readonly ConfiguratorInterface $config,
         private readonly ORMInterface $orm,
         private readonly EntityManagerInterface $em,
+        private readonly \Cycle\Database\DatabaseInterface $db,
         private readonly ResponseWrapper $response,
         private readonly ViewsInterface $views,
         private readonly ServerRequestInterface $request,
@@ -209,11 +213,18 @@ class FeatureController
     public function events(): Response
     {
         $title = 'Event Item ' . \date('Y-m-d H:i:s');
-        $item  = new Item($title, \date('Y-m-d H:i:s'));
-        $this->em->persist($item);
-        $this->em->run();
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs.
+        $this->db->insert('items')
+            ->values([
+                'id'         => self::EVENT_SENTINEL_ID,
+                'title'      => $title,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ])
+            ->onConflict('id')
+            ->run();
 
-        $event = new ItemCreated($item->id, $title);
+        $event = new ItemCreated(self::EVENT_SENTINEL_ID, $title);
         $this->events->dispatch($event);
 
         return $this->response->json([

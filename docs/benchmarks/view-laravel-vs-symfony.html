@@ -48,14 +48,14 @@ main{padding-bottom:10px}
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
   <h1>Laravel vs Symfony</h1>
-  <p class="lead">The same dataset, narrowed to two frameworks. Any subset works — no code change.</p>
-  <p class="env">PHP 8.3.6 &middot; Linux 6.8.0-124-generic &middot; warm mode &middot; charts show the median with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="lead">The same dataset, narrowed to two frameworks. Any subset works ??? no code change.</p>
+  <p class="env">PHP 8.3.6 &middot; Linux 6.8.0-124-generic &middot; warm mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
 </header>
 <main>
   <section class="figures">
 <figure>
-  <figcaption>Framework startup (GET /)</figcaption>
-  <img src="svg/laravel-vs-symfony/startup.svg" alt="Framework startup (GET /)" loading="lazy">
+  <figcaption>Framework startup — bootstrap cost (cold + warm; teardown share in prose)</figcaption>
+  <img src="svg/laravel-vs-symfony/startup.svg" alt="Framework startup — bootstrap cost (cold + warm; teardown share in prose)" loading="lazy">
 </figure>
 <figure>
   <figcaption>Total time vs Laravel</figcaption>
@@ -118,31 +118,31 @@ main{padding-bottom:10px}
 </figure>
 </section>
   
-  <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span></h2>
+  <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span> <span class="unit">(sub-line: handle + post-response cleanup, which sum to the total)</span></h2>
 <table class="matrix">
-<thead><tr><th>Request</th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th></tr></thead>
+<thead><tr><th>Request</th><th>Workload</th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th></tr></thead>
 <tbody>
-<tr><td><code>GET /</code></td><td>0.220</td><td class="win">0.088</td></tr>
-<tr><td><code>GET /items</code></td><td>0.765</td><td class="win">0.533</td></tr>
-<tr><td><code>GET /items/1</code></td><td>0.396</td><td class="win">0.168</td></tr>
-<tr><td><code>POST /items</code></td><td>0.413</td><td class="win">0.336</td></tr>
-<tr><td><code>GET /items-qb</code></td><td>0.448</td><td class="win">0.232</td></tr>
-<tr><td><code>GET /items-qb/1</code></td><td>0.315</td><td class="win">0.140</td></tr>
-<tr><td><code>POST /items-qb</code></td><td>1.07</td><td class="win">0.341</td></tr>
-<tr><td><code>GET /api/items</code></td><td>0.617</td><td class="win">0.230</td></tr>
-<tr><td><code>GET /api/items/1</code></td><td>0.410</td><td class="win">0.149</td></tr>
-<tr><td><code>POST /api/items</code></td><td>0.354</td><td class="win">0.302</td></tr>
-<tr><td><code>GET /features/aop</code></td><td>0.351</td><td class="win">0.268</td></tr>
-<tr><td><code>GET /features/cache</code></td><td>0.249</td><td class="win">0.084</td></tr>
-<tr><td><code>GET /features/log</code></td><td>0.224</td><td class="win">0.082</td></tr>
-<tr><td><code>GET /features/retry</code></td><td class="win">0.232</td><td>0.822</td></tr>
-<tr><td><code>GET /features/pipeline</code></td><td>0.228</td><td class="win">0.081</td></tr>
-<tr><td><code>GET /features/db-events</code></td><td class="win">0.401</td><td>0.957</td></tr>
-<tr><td><code>GET /features/events</code></td><td>0.693</td><td class="win">0.318</td></tr>
-<tr><td><code>GET /features/validation</code></td><td>0.871</td><td class="win">0.196</td></tr>
-<tr><td><code>GET /features/config</code></td><td>0.229</td><td class="win">0.083</td></tr>
-<tr><td><code>GET /features/request-scoped</code></td><td class="win">0.221</td><td>0.467</td></tr>
-<tr><td><code>GET /features/rate-limit</code></td><td>0.251</td><td class="win">0.089</td></tr>
+<tr><td><code>GET /</code></td><td class="muted">no DB — routing + template only</td><td class="">0.220 <sub>0.220+0.000</sub></td><td class="win">0.088 <sub>0.087+0.002</sub></td></tr>
+<tr><td><code>GET /items</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="">0.765 <sub>0.765+0.000</sub></td><td class="win">0.533 <sub>0.531+0.002</sub></td></tr>
+<tr><td><code>GET /items/1</code></td><td class="muted">1 item by id</td><td class="">0.396 <sub>0.396+0.000</sub></td><td class="win">0.168 <sub>0.167+0.002</sub></td></tr>
+<tr><td><code>POST /items</code></td><td class="muted">1 row upserted (sentinel #999999)</td><td class="">0.413 <sub>0.412+0.000</sub></td><td class="win">0.336 <sub>0.335+0.001</sub></td></tr>
+<tr><td><code>GET /items-qb</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="">0.448 <sub>0.448+0.000</sub></td><td class="win">0.232 <sub>0.230+0.002</sub></td></tr>
+<tr><td><code>GET /items-qb/1</code></td><td class="muted">1 item by id</td><td class="">0.315</td><td class="win">0.140</td></tr>
+<tr><td><code>POST /items-qb</code></td><td class="muted">1 row upserted (sentinel #999997)</td><td class="">1.07</td><td class="win">0.341</td></tr>
+<tr><td><code>GET /api/items</code></td><td class="muted">20 of 1000 items as JSON</td><td class="">0.617 <sub>0.617+0.000</sub></td><td class="win">0.230 <sub>0.229+0.002</sub></td></tr>
+<tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="">0.410</td><td class="win">0.149</td></tr>
+<tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="">0.354</td><td class="win">0.302</td></tr>
+<tr><td><code>GET /features/aop</code></td><td class="muted">no DB — interceptor pipeline</td><td class="">0.351 <sub>0.351+0.000</sub></td><td class="win">0.268 <sub>0.268+0.001</sub></td></tr>
+<tr><td><code>GET /features/cache</code></td><td class="muted">no DB — cache round-trips</td><td class="">0.249</td><td class="win">0.084</td></tr>
+<tr><td><code>GET /features/log</code></td><td class="muted">no DB — buffered log handlers</td><td class="">0.224</td><td class="win">0.082</td></tr>
+<tr><td><code>GET /features/retry</code></td><td class="muted">no DB — retry policy</td><td class="win">0.232</td><td class="">0.822</td></tr>
+<tr><td><code>GET /features/pipeline</code></td><td class="muted">no DB — middleware pipeline</td><td class="">0.228</td><td class="win">0.081</td></tr>
+<tr><td><code>GET /features/db-events</code></td><td class="muted">1 event row INSERTed per request</td><td class="win">0.401 <sub>0.401+0.000</sub></td><td class="">0.957 <sub>0.947+0.010</sub></td></tr>
+<tr><td><code>GET /features/events</code></td><td class="muted">no DB — in-process listeners</td><td class="">0.693</td><td class="win">0.318</td></tr>
+<tr><td><code>GET /features/validation</code></td><td class="muted">no DB — validator run</td><td class="">0.871</td><td class="win">0.196</td></tr>
+<tr><td><code>GET /features/config</code></td><td class="muted">no DB — config lookup</td><td class="">0.229</td><td class="win">0.083</td></tr>
+<tr><td><code>GET /features/request-scoped</code></td><td class="muted">no DB — scoped service resolve</td><td class="win">0.221</td><td class="">0.467</td></tr>
+<tr><td><code>GET /features/rate-limit</code></td><td class="muted">no DB — cache-backed limiter</td><td class="">0.251</td><td class="win">0.089</td></tr>
 </tbody>
 </table>
 </main>

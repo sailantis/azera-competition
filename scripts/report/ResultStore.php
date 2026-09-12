@@ -26,6 +26,16 @@ final class ResultStore
     /** @var array<string,array<string,array<string,array<string,mixed>>>> app => mode => request => row */
     private array $data = [];
 
+    /**
+     * Framework boot cost, when the dataset carries it:
+     * app => ['cold_ms' => float, 'warm_ms' => float].
+     * Datasets produced before the harness timed bootstrap() have no entry —
+     * the startup chart falls back to the warm GET / measurement in that case.
+     *
+     * @var array<string,array{cold_ms:float,warm_ms:float}>
+     */
+    private array $boot = [];
+
     /** @var list<string> */
     private array $apps = [];
 
@@ -112,6 +122,13 @@ final class ResultStore
         }
         if ($replace) {
             $this->data[$key] = [];
+            unset($this->boot[$key]);
+        }
+        if (isset($app['boot']['cold_ms'], $app['boot']['warm_ms'])) {
+            $this->boot[$key] = [
+                'cold_ms' => (float) $app['boot']['cold_ms'],
+                'warm_ms' => (float) $app['boot']['warm_ms'],
+            ];
         }
         foreach (($app['modes'] ?? []) as $modeName => $mode) {
             foreach (($mode['requests'] ?? []) as $row) {
@@ -154,6 +171,72 @@ final class ResultStore
         $known = array_values(array_filter($order, fn($m) => in_array($m, $this->modes, true)));
         $extra = array_values(array_diff($this->modes, $order));
         return array_merge($known, $extra);
+    }
+
+    /**
+     * Whether this dataset carries per-framework boot measurements
+     * (cold_ms/warm_ms from run-app.php's measureBoot()).
+     */
+    public function hasBoot(): bool
+    {
+        return $this->boot !== [];
+    }
+
+    /**
+     * Boot cost for one app: ['cold_ms' => .., 'warm_ms' => ..], or null when
+     * the dataset predates the boot measurement.
+     *
+     * @return array{cold_ms:float,warm_ms:float}|null
+     */
+    public function boot(string $app): ?array
+    {
+        return $this->boot[$app] ?? null;
+    }
+
+    /**
+     * Whether this dataset carries the handle/cleanup lifecycle split
+     * (handle_ms + cleanup_ms per request row, from the adapters'
+     * dispatch()/cleanup() separation).
+     */
+    public function hasCleanupSplit(): bool
+    {
+        foreach ($this->data as $modes) {
+            foreach ($modes as $requests) {
+                foreach ($requests as $row) {
+                    return isset($row['handle_ms'], $row['cleanup_ms']);
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Average cleanup (post-response teardown) share of a request for one app
+     * in one mode — mean of cleanup_ms / trimmed_mean_ms across all measured
+     * requests. Null when the dataset predates the split or the app's rows
+     * carry no split.
+     *
+     * @return float|null cleanup share in [0..1]
+     */
+    public function cleanupShare(string $app, string $mode): ?float
+    {
+        $ratios = [];
+        foreach (BenchmarkConfig::requestOrder() as $req) {
+            $row = $this->data[$app][$mode][$req] ?? null;
+            if ($row === null || !isset($row['handle_ms'], $row['cleanup_ms'], $row['trimmed_mean_ms'])) {
+                continue;
+            }
+            $total = (float) $row['trimmed_mean_ms'];
+            if ($total <= 0.0) {
+                continue;
+            }
+            $ratios[] = (float) $row['cleanup_ms'] / $total;
+        }
+        if ($ratios === []) {
+            return null;
+        }
+        sort($ratios);
+        return $ratios[(int) floor((count($ratios) - 1) / 2)];
     }
 
     public function has(string $app, string $mode, string $request): bool

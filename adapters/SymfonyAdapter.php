@@ -17,6 +17,15 @@ class SymfonyAdapter implements WebAppAdapter
 {
     private ?BenchKernel $kernel = null;
 
+    /**
+     * Request/response of the last dispatch() — terminate() needs the very
+     * objects handle() saw (services_resetter resolves request-scoped
+     * services from them). Nulled again by cleanup().
+     */
+    private ?Request $lastRequest = null;
+
+    private ?\Symfony\Component\HttpFoundation\Response $lastResponse = null;
+
     public function name(): string
     {
         return 'symfony';
@@ -82,15 +91,8 @@ class SymfonyAdapter implements WebAppAdapter
             $request->headers->set('HOST', 'bench.local');
 
             $response = $this->kernel->handle($request, HttpKernelInterface::MAIN_REQUEST, false);
-
-            // Symfony expects a request/terminate lifecycle. In a long-lived
-            // benchmark process the terminate phase triggers the
-            // services_resetter (kernel.reset tagged services such as the
-            // Doctrine EntityManager and request-scoped state). Without this,
-            // ORM identity-map state accumulates and request-scoped services
-            // leak across dispatches, which shows up as growing latency on
-            // longer-running servers.
-            $this->kernel->terminate($request, $response);
+            $this->lastRequest  = $request;
+            $this->lastResponse = $response;
 
             return (string) $response->getContent();
         } catch (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e) {
@@ -98,5 +100,29 @@ class SymfonyAdapter implements WebAppAdapter
         } catch (\Throwable $e) {
             return '500 ' . \get_class($e) . ': ' . $e->getMessage();
         }
+    }
+
+    /**
+     * Symfony expects a request/terminate lifecycle. In a long-lived
+     * benchmark process the terminate phase triggers the services_resetter
+     * (kernel.reset tagged services such as the Doctrine EntityManager and
+     * request-scoped state). Without this, ORM identity-map state
+     * accumulates and request-scoped services leak across dispatches, which
+     * shows up as growing latency on longer-running servers.
+     *
+     * Needs the request/response of the dispatch it follows — kept via
+     * lastRequest()/lastResponse() set in dispatch().
+     */
+    public function cleanup(): void
+    {
+        \assert($this->kernel instanceof BenchKernel);
+
+        if ($this->lastRequest === null || $this->lastResponse === null) {
+            return;
+        }
+
+        $this->kernel->terminate($this->lastRequest, $this->lastResponse);
+        $this->lastRequest  = null;
+        $this->lastResponse = null;
     }
 }

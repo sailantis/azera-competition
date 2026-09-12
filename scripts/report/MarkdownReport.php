@@ -60,7 +60,15 @@ final class MarkdownReport
         $tables = new Tables($this->store);
         $l[] = '## Latency by endpoint';
         $l[] = '';
-        $l[] = 'Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint.';
+        $l[] = 'Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. '
+            . 'The workload column states what each request reads or writes — the shared SQLite database '
+            . 'holds 1,000 item rows (re-seeded per app × mode), every list endpoint serves page 1 of 20, '
+            . 'and every write upserts exactly one sentinel row.'
+            . ($this->store->hasCleanupSplit()
+                ? "\n\nEach cell also shows the request's lifecycle split as `total <sub>handle + cleanup</sub>` — "
+                    . 'cleanup is the post-response teardown a long-lived worker performs between requests '
+                    . '(terminate() finalizers, request-scoped resets), which the headline number includes.'
+                : '');
         $l[] = '';
         $l[] = $tables->latencyMarkdown($mode, $apps);
         $l[] = '';
@@ -121,14 +129,177 @@ final class MarkdownReport
     private function spreadCaption(): string
     {
         return $this->store->hasMin()
-            ? 'dot = median · whisker = fastest observation → p95 (ms)'
-            : 'dot = median · whisker = median → p95 (ms)';
+            ? 'bar = median · dot = median · whisker = fastest observation → p95 (ms)'
+            : 'bar = median · dot = median · whisker = median → p95 (ms)';
     }
 
     /**
      * @param list<string> $apps
      */
+    /**
+     * Framework startup = the framework's real load cost, measured directly
+     * by the harness (run-app.php's measureBoot): a cold boot is the very
+     * first bootstrap() in a fresh PHP process (autoloader, kernel/container
+     * build, routes, DB connect), a warm boot is a re-bootstrap with
+     * classes/opcache already loaded — what a RoadRunner-style worker pays
+     * per recycle.
+     *
+     * Datasets recorded before boot was timed have no per-boot numbers; the
+     * chart then degrades to the legacy proxy (warm GET / dispatch) so old
+     * result files keep rendering.
+     *
+     * @param list<string> $apps
+     */
     private function hero(string $dir, string $rel, array $apps, string $mode, bool $logScale): string
+    {
+        $hasBoot = $this->store->hasBoot();
+        if ($hasBoot) {
+            return $this->bootChart($dir, $rel, $apps, $logScale);
+        }
+        return $this->legacyStartup($dir, $rel, $apps, $mode, $logScale);
+    }
+
+    /**
+     * Cold + warm bootstrap cost, one band each, per-band anchored at the
+     * fastest framework on that band.
+     *
+     * @param list<string> $apps
+     */
+    private function bootChart(string $dir, string $rel, array $apps, bool $logScale): string
+    {
+        $metrics = [];
+        $colors  = [];
+        $bands   = [
+            'cold' => ['label' => 'Cold boot — fresh PHP process', 'key' => 'cold_ms'],
+            'warm' => ['label' => 'Warm boot — worker recycle', 'key' => 'warm_ms'],
+        ];
+        foreach (array_keys($bands) as $band) {
+            foreach ($apps as $app) {
+                $boot = $this->store->boot($app);
+                if ($boot === null) {
+                    continue;
+                }
+                $label = BenchmarkConfig::appLabel($app);
+                $metrics[$band][$label] = [
+                    'median' => $boot[$bands[$band]['key']],
+                    'low'    => $boot[$bands[$band]['key']],
+                    'high'   => $boot[$bands[$band]['key']],
+                ];
+                $colors[$label] = BenchmarkConfig::appColor($app);
+            }
+        }
+        $cats = [];
+        foreach ($metrics as $band => $bySeries) {
+            if (count($bySeries) >= 2) {
+                $cats[] = $band;
+            }
+        }
+        if ($cats === []) {
+            return '';
+        }
+
+        // The chart is keyed by the band LABEL (it becomes the band heading
+        // inside the SVG); $metrics stays keyed by band key for the prose.
+        $chartMetrics = [];
+        $chartCats    = [];
+        foreach ($cats as $band) {
+            $chartMetrics[$bands[$band]['label']] = $metrics[$band];
+            $chartCats[] = $bands[$band]['label'];
+        }
+
+        // Per-band anchor at the fastest framework on that band (same
+        // convention as the feature charts). Skipped for bands whose fastest
+        // boot is ~0 ms: CodeIgniter/CakePHP re-bootstrap is a guarded no-op
+        // (state reset only, classes already loaded), so dividing by it
+        // yields absurd "x 1000+" annotations that mean nothing.
+        $factors = [];
+        foreach ($cats as $band) {
+            $fastest = min(array_column($metrics[$band], 'median'));
+            if ($fastest < 0.1) {
+                continue;
+            }
+            foreach ($metrics[$band] as $label => $m) {
+                $factors[$bands[$band]['label']][$label] = $m['median'] / max($fastest, 1e-9);
+            }
+        }
+
+        $svg = SvgChart::dotRange(
+            $chartCats,
+            $chartMetrics,
+            $colors,
+            'ms',
+            $logScale,
+            960,
+            360,
+            'Framework startup — bootstrap cost',
+            'cold = first boot in a fresh process · warm = worker recycle (opcache warm)',
+            $factors,
+            'x = median ÷ the fastest boot of that kind'
+        );
+        $file = 'startup.svg';
+        file_put_contents($dir . '/' . $file, $svg);
+
+        // Prose: the cold race (first boot is what a deploy/server start pays).
+        $cold = $metrics['cold'] ?? [];
+        asort($cold);
+        $keys  = array_keys($cold);
+        $best  = $keys[0] ?? null;
+        $worst = $keys[count($keys) - 1] ?? null;
+        if ($best === null || $worst === null) {
+            return '';
+        }
+        $bestMs  = $cold[$best]['median'];
+        $worstMs = $cold[$worst]['median'];
+
+        $warm = $metrics['warm'] ?? [];
+        asort($warm);
+        $warmKeys = array_keys($warm);
+        $warmBest = $warmKeys[0] ?? null;
+
+        // Per-request teardown share, when the dataset carries the split.
+        $cleanupSentence = '';
+        if ($this->store->hasCleanupSplit()) {
+            $shares = [];
+            foreach ($apps as $app) {
+                $share = $this->store->cleanupShare($app, 'warm');
+                if ($share !== null) {
+                    $shares[$app] = $share;
+                }
+            }
+            if ($shares !== []) {
+                asort($shares);
+                $cKeys           = array_keys($shares);
+                $cBest           = BenchmarkConfig::appLabel($cKeys[0]);
+                $cWorst          = BenchmarkConfig::appLabel($cKeys[count($cKeys) - 1]);
+                $cleanupSentence = ' Beyond the boot itself, the split of every request shows how much of each '
+                    . 'request is post-response teardown: from ' . number_format($shares[$cKeys[0]] * 100, 0) . '% ('
+                    . $cBest . ') up to ' . number_format($shares[$cKeys[count($cKeys) - 1]] * 100, 0) . '% ('
+                    . $cWorst . ') — the worker-loop cleanup a RoadRunner-style server pays per request.';
+            }
+        }
+
+        return "## Framework startup\n\n"
+            . "The framework's own load cost, timed directly: autoloader + kernel/container build + routes + DB connect, "
+            . "with no request processed. **{$best}** boots cold in " . SvgChart::fmt($bestMs) . " ms "
+            . "against " . SvgChart::fmt($worstMs) . " ms for {$worst}"
+            . ' — x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . " slower. "
+            . ($warmBest !== null && isset($warm[$warmBest])
+                ? 'A warm recycle (worker restart with opcache warm) is cheaper for everyone: '
+                    . SvgChart::fmt($warm[$warmBest]['median']) . ' ms for ' . $warmBest
+                    . " at the low end — CodeIgniter and CakePHP re-bootstrap is a guarded no-op there."
+                : '')
+            . $cleanupSentence
+            . "\n\n"
+            . '![Framework startup — bootstrap cost](' . $rel . '/' . $file . ')';
+    }
+
+    /**
+     * Legacy fallback: warm GET / dispatch as a startup proxy. Kept for
+     * datasets recorded before run-app.php timed bootstrap() directly.
+     *
+     * @param list<string> $apps
+     */
+    private function legacyStartup(string $dir, string $rel, array $apps, string $mode, bool $logScale): string
     {
         $startup = 'GET /';
         $metrics = [];
@@ -398,7 +569,7 @@ final class MarkdownReport
             960,
             0,
             'Peak memory footprint',
-            'dot = median endpoint · whisker = lightest → heaviest endpoint (MB)',
+            'bar = median · dot = median endpoint · whisker = lightest → heaviest endpoint (MB)',
             $factors,
             'x = median ÷ the lightest framework'
         );

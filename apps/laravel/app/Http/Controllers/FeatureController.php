@@ -22,6 +22,7 @@ use App\Laravel\Service\ScopeState;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pipeline\Pipeline;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Validator;
 
@@ -34,6 +35,9 @@ use function view;
 
 class FeatureController
 {
+    /** Fixed row written by the events demo — the row count stays stable across benchmark runs. */
+    private const EVENT_SENTINEL_ID = 888801;
+
     public function __construct(
         private readonly AopService $aopService,
         private readonly DbEventLog $dbLog,
@@ -194,12 +198,20 @@ class FeatureController
     public function events(): JsonResponse
     {
         $title = 'Event Item ' . \date('Y-m-d H:i:s');
-        $item  = new Item();
-        $item->title      = $title;
-        $item->created_at = \date('Y-m-d H:i:s');
-        $item->save();
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs.
+        DB::table('items')->upsert(
+            [
+                'id'         => self::EVENT_SENTINEL_ID,
+                'title'      => $title,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ],
+            ['id'],
+            ['title', 'created_at'],
+        );
+        $id = self::EVENT_SENTINEL_ID;
 
-        $event = new ItemCreated($item->id, $title);
+        $event = new ItemCreated($id, $title);
         Event::dispatch($event);
 
         return response()->json([

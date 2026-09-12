@@ -452,6 +452,13 @@ final class SvgChart
      * best case, typical case and tail at once, and a tiny value stays a
      * visible dot instead of an invisible bar.
      *
+     * Behind the whisker sits a faint filled bar from the axis to the dot —
+     * the same geometry a bar chart would draw for the median, at low
+     * opacity, with the whisker's height. The dot stays the emphasised
+     * reading of the median (it is the exact p50 and carries the printed
+     * value); the bar is the supporting cue that makes the mark legible as
+     * "a bar with error whiskers", for readers arriving from bar charts.
+     *
      * @param list<string> $categories        group labels (one group per request)
      * @param array<string,array<string,array{median:float,low:float,high:float}>> $metrics
      *        group label => series label => ['median' => p50, 'low' => min, 'high' => p95]
@@ -646,11 +653,27 @@ final class SvgChart
                 $xHi   = $toX($m['high']);
                 $color = $colors[$s] ?? '#64748b';
 
+                // Median bar, drawn FIRST so the whisker + dot sit on top of
+                // it. A faint filled span from the axis to the median dot,
+                // with the end caps' height: the bar-chart reading of the
+                // median, at low opacity, behind the dot-and-range mark that
+                // carries the exact p50. One rect, no rounded corners — on a
+                // whisker-height bar the rounding is invisible.
+                $out[] = sprintf(
+                    '<rect x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.12"/>',
+                    self::n($padL),
+                    self::n($cy - $capH),
+                    self::n(max(0.0, $xMed - $padL)),
+                    self::n($capH * 2),
+                    $color
+                );
                 // Horizontal span, with a vertical bar at each end: fastest on
                 // the left, slowest (p95) on the right, so the two extremes are
                 // legible as hard boundaries rather than fading line tips.
+                // Element-level opacity (not stroke-opacity) so the median bar
+                // underneath is not seen through the translucent span.
                 $out[] = sprintf(
-                    '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.5"/>',
+                    '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>',
                     self::n(min($xLo, $xHi)),
                     self::n($cy),
                     self::n(max($xLo, $xHi)),
@@ -720,7 +743,11 @@ final class SvgChart
                 }
 
                 // Framework name, then its median, in two left-hand columns.
-                $out[] = self::text($nameRight, $cy + 4.5, $s, 12.5, self::INK, 500, false, 'end');
+                // The name takes the series colour — the same one the bar,
+                // whisker and dot use — so each row's text and mark read as
+                // one identity at a glance, set in bold to stand up against
+                // the median value beside it.
+                $out[] = self::text($nameRight, $cy + 4.5, $s, 12.5, $color, 700, false, 'end');
                 $out[] = self::text(
                     $valRight,
                     $cy + 4.5,

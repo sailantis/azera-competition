@@ -87,19 +87,26 @@ final class CodeIgniterAdapter implements WebAppAdapter
             $error    = '500 ' . get_class($e) . ': ' . $e->getMessage();
         }
 
-        // Worker-mode teardown between requests (mirrors the FrankenPHP
-        // worker loop): drop request-scoped services so URI/request/filter
-        // state cannot leak into the next dispatch.
-        \CodeIgniter\Config\Factories::reset();
-        \CodeIgniter\Config\BaseService::resetForWorkerMode(new \Config\WorkerMode());
-
         if (!isset($response)) {
             return $error;
         }
 
-        $this->app->resetForWorkerMode();
-
         return (string) $response->getBody();
+    }
+
+    /**
+     * Worker-mode teardown between requests (mirrors the FrankenPHP
+     * worker loop): drop request-scoped services so URI/request/filter
+     * state cannot leak into the next dispatch. These three reset calls
+     * are CI4's entire between-request bill in worker mode.
+     */
+    public function cleanup(): void
+    {
+        \assert($this->app instanceof \CodeIgniter\CodeIgniter);
+
+        \CodeIgniter\Config\Factories::reset();
+        \CodeIgniter\Config\BaseService::resetForWorkerMode(new \Config\WorkerMode());
+        $this->app->resetForWorkerMode();
     }
 
     /**

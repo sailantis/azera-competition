@@ -34,6 +34,10 @@ use Ci4App\Support\RequestCounter;
 
 final class Feature extends BaseController
 {
+    /** Fixed rows written by the feature demos — the row count stays stable across benchmark runs. */
+    private const FEATURE_SENTINEL_ID = 888800; // aop + db-events
+    private const EVENT_SENTINEL_ID = 888801;   // events
+
     public function __construct()
     {
         // Enable the DBQuery tap the first time any feature endpoint runs.
@@ -77,12 +81,15 @@ final class Feature extends BaseController
         $now  = date('Y-m-d H:i:s');
         $rand = random_int(1000, 9999);
 
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs.
         $db->transBegin();
-        $db->table('items')->insert([
+        $db->table('items')->upsert([
+            'id'         => self::FEATURE_SENTINEL_ID,
             'title'      => 'AOP Item ' . $now . ' #' . $rand,
             'created_at' => $now,
         ]);
-        $id = $db->insertID();
+        $id = self::FEATURE_SENTINEL_ID;
         $db->transCommit();
 
         return $this->response->setJSON([
@@ -212,7 +219,14 @@ final class Feature extends BaseController
 
         $db  = \Config\Database::connect();
         $now = date('Y-m-d H:i:s');
-        $db->table('items')->insert(['title' => 'DbEvent Item ' . $now, 'created_at' => $now]);
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs,
+        // otherwise the countAll() below would measure ever-growing work.
+        $db->table('items')->upsert([
+            'id'         => self::FEATURE_SENTINEL_ID,
+            'title'      => 'DbEvent Item ' . $now,
+            'created_at' => $now,
+        ]);
         $count = (new \Ci4App\Models\Item())->countAll();
 
         return $this->response->setJSON([
@@ -229,8 +243,14 @@ final class Feature extends BaseController
     {
         $db  = \Config\Database::connect();
         $now = date('Y-m-d H:i:s');
-        $db->table('items')->insert(['title' => 'Event Item ' . $now, 'created_at' => $now]);
-        $id = (int) $db->insertID();
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs.
+        $db->table('items')->upsert([
+            'id'         => self::EVENT_SENTINEL_ID,
+            'title'      => 'Event Item ' . $now,
+            'created_at' => $now,
+        ]);
+        $id = self::EVENT_SENTINEL_ID;
 
         $receiver = new EventsReceiver();
         \CodeIgniter\Events\Events::on('item.created', $receiver);

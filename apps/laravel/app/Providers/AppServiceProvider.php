@@ -29,6 +29,26 @@ class AppServiceProvider extends ServiceProvider
 
         // DB event log lives for the process (query log accumulates there).
         $this->app->singleton(DbEventLog::class);
+
+        // Wire Laravel's idiomatic DB observation hooks into the log ONCE
+        // per process: DB::listen() fires per executed query and the
+        // transaction lifecycle events fire per begin/commit/rollback.
+        // Without these listeners the db-events demo reported an empty
+        // events list (the other five adapters show the live pipeline).
+        $log = $this->app->make(DbEventLog::class);
+        \Illuminate\Support\Facades\DB::listen(function (\Illuminate\Database\Events\QueryExecuted $query) use ($log): void {
+            $log->recordQuery($query->sql, $query->time);
+        });
+        $events = $this->app->make(\Illuminate\Contracts\Events\Dispatcher::class);
+        foreach ([
+            \Illuminate\Database\Events\TransactionBeginning::class => 'TransactionStarted',
+            \Illuminate\Database\Events\TransactionCommitted::class => 'TransactionCommitted',
+            \Illuminate\Database\Events\TransactionRolledBack::class => 'TransactionRolledBack',
+        ] as $eventClass => $type) {
+            $events->listen($eventClass, function () use ($log, $type): void {
+                $log->recordTransaction($type);
+            });
+        }
     }
 
     public function boot(Dispatcher $events): void

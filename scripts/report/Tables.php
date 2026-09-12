@@ -27,9 +27,11 @@ final class Tables
 
     /**
      * Per-request latency table: rows = requests, columns = apps, winner bolded.
+     * Each cell carries the handle/cleanup lifecycle split when the dataset
+     * has it (handle_ms + cleanup_ms, which sum to the trimmed mean).
      *
      * @param list<string> $apps
-     * @return list<array{request:string,feature:string,cells:array<string,array{ms:?float,winner:bool}>}>
+     * @return list<array{request:string,feature:string,cells:array<string,array{ms:?float,winner:bool,handle:?float,cleanup:?float}>}>
      */
     public function latencyMatrix(string $mode, array $apps): array
     {
@@ -40,11 +42,16 @@ final class Tables
             $best    = null;
             foreach ($apps as $app) {
                 if ($feature !== '' && !$this->store->supports($app, $feature)) {
-                    $cells[$app] = ['ms' => null, 'winner' => false];
+                    $cells[$app] = ['ms' => null, 'winner' => false, 'handle' => null, 'cleanup' => null];
                     continue;
                 }
                 $ms = $this->store->ms($app, $mode, $req);
-                $cells[$app] = ['ms' => $ms, 'winner' => false];
+                $cells[$app] = [
+                    'ms'      => $ms,
+                    'winner'  => false,
+                    'handle'  => $this->store->ms($app, $mode, $req, 'handle_ms'),
+                    'cleanup' => $this->store->ms($app, $mode, $req, 'cleanup_ms'),
+                ];
                 if ($ms !== null && ($best === null || $ms < $best)) {
                     $best = $ms;
                 }
@@ -98,8 +105,8 @@ final class Tables
         if ($rows === []) {
             return '';
         }
-        $header = ['| Request |'];
-        $sep    = ['|---|'];
+        $header = ['| Request | Workload |'];
+        $sep    = ['|---|---|'];
         foreach ($apps as $app) {
             $header[] = ' ' . BenchmarkConfig::appLabel($app) . ' |';
             $sep[] = '---:|';
@@ -107,18 +114,22 @@ final class Tables
         $l = [];
         $l[] = implode('', $header);
         $l[] = implode('', $sep);
+        $split = $this->store->hasCleanupSplit();
         foreach ($rows as $row) {
-            $cells = ['| `' . $row['request'] . '` |'];
+            $workload = BenchmarkConfig::workloadFor($row['request']);
+            $cells    = ['| `' . $row['request'] . '` | ' . ($workload !== '' ? $workload : '—') . ' |'];
             foreach ($apps as $app) {
-                $c  = $row['cells'][$app] ?? ['ms' => null, 'winner' => false];
+                $c  = $row['cells'][$app] ?? ['ms' => null, 'winner' => false, 'handle' => null, 'cleanup' => null];
                 $ms = $c['ms'];
                 if ($ms === null) {
                     $cells[] = ' — |';
-                } elseif ($c['winner']) {
-                    $cells[] = ' **' . SvgChart::fmt($ms) . '** |';
-                } else {
-                    $cells[] = ' ' . SvgChart::fmt($ms) . ' |';
+                    continue;
                 }
+                $label = SvgChart::fmt($ms);
+                if ($split && $c['handle'] !== null && $c['cleanup'] !== null) {
+                    $label .= ' <sub>' . SvgChart::fmt($c['handle']) . '+' . SvgChart::fmt($c['cleanup']) . '</sub>';
+                }
+                $cells[] = ($c['winner'] ? ' **' . $label . '** |' : ' ' . $label . ' |');
             }
             $l[] = implode('', $cells);
         }
@@ -160,7 +171,7 @@ final class Tables
         if ($rows === []) {
             return '';
         }
-        $head = '<tr><th>Request</th>';
+        $head = '<tr><th>Request</th><th>Workload</th>';
         foreach ($apps as $app) {
             $head .= sprintf(
                 '<th><span class="chip" style="--c:%s">%s</span></th>',
@@ -170,23 +181,31 @@ final class Tables
         }
         $head .= '</tr>';
 
-        $body = '';
+        $body  = '';
+        $split = $this->store->hasCleanupSplit();
         foreach ($rows as $row) {
-            $body .= '<tr><td><code>' . htmlspecialchars($row['request'], ENT_QUOTES, 'UTF-8') . '</code></td>';
+            $workload = BenchmarkConfig::workloadFor($row['request']);
+            $body .= '<tr><td><code>' . htmlspecialchars($row['request'], ENT_QUOTES, 'UTF-8') . '</code></td>'
+                . '<td class="muted">' . htmlspecialchars($workload !== '' ? $workload : '—', ENT_QUOTES, 'UTF-8') . '</td>';
             foreach ($apps as $app) {
-                $c  = $row['cells'][$app] ?? ['ms' => null, 'winner' => false];
+                $c  = $row['cells'][$app] ?? ['ms' => null, 'winner' => false, 'handle' => null, 'cleanup' => null];
                 $ms = $c['ms'];
                 if ($ms === null) {
                     $body .= '<td class="muted">—</td>';
-                } elseif ($c['winner']) {
-                    $body .= '<td class="win">' . SvgChart::fmt($ms) . '</td>';
-                } else {
-                    $body .= '<td>' . SvgChart::fmt($ms) . '</td>';
+                    continue;
                 }
+                $label = SvgChart::fmt($ms);
+                if ($split && $c['handle'] !== null && $c['cleanup'] !== null) {
+                    $label .= ' <sub>' . SvgChart::fmt($c['handle']) . '+' . SvgChart::fmt($c['cleanup']) . '</sub>';
+                }
+                $body .= '<td class="' . ($c['winner'] ? 'win' : '') . '">' . $label . '</td>';
             }
             $body .= "</tr>\n";
         }
 
-        return "<h2>Latency by endpoint <span class=\"unit\">(ms, trimmed mean — lower is better)</span></h2>\n<table class=\"matrix\">\n<thead>{$head}</thead>\n<tbody>\n{$body}</tbody>\n</table>";
+        $sub = $this->store->hasCleanupSplit()
+            ? ' <span class="unit">(sub-line: handle + post-response cleanup, which sum to the total)</span>'
+            : '';
+        return "<h2>Latency by endpoint <span class=\"unit\">(ms, trimmed mean — lower is better)</span>{$sub}</h2>\n<table class=\"matrix\">\n<thead>{$head}</thead>\n<tbody>\n{$body}</tbody>\n</table>";
     }
 }

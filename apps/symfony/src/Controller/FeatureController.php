@@ -29,6 +29,12 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class FeatureController extends AbstractController
 {
+    /** Fixed row written by the events demo — the row count stays stable across benchmark runs. */
+    private const EVENT_SENTINEL_ID = 888801;
+
+    /** Fixed row written by the db-events demo — ditto. */
+    private const DBEVENT_SENTINEL_ID = 888802;
+
     public function __construct(
         private readonly AopService $aopService,
         private readonly DbEventLog $dbLog,
@@ -39,9 +45,8 @@ class FeatureController extends AbstractController
         private readonly RequestCounter $counter,
         private readonly ScopeState $state,
         private readonly RateLimiter $limiter,
-    )
-    {
-    }
+        private readonly \Doctrine\DBAL\Connection $connection,
+    ) {}
 
     /**
      * GET /features — overview page listing all feature demos.
@@ -200,16 +205,22 @@ class FeatureController extends AbstractController
     public function events(): JsonResponse
     {
         $title = 'Event Item ' . \date('Y-m-d H:i:s');
-        // Item uses an assigned identifier (no DB-generated id) so we must
-        // provide a unique id ourselves. Pick a high random id that will
-        // not collide with the seeded 1..N rows or the 999997-999999
-        // sentinel ids used by the benchmark endpoints.
-        $item = new Item($title, \date('Y-m-d H:i:s'));
-        $item->id = \random_int(10_000_000, 99_999_999);
-        $this->em->persist($item);
-        $this->em->flush();
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs.
+        // A high id far above the seeded 1..N rows and the 999997-999999
+        // benchmark sentinels.
+        $this->connection->executeStatement(
+            'INSERT INTO items (id, title, created_at) VALUES (:id, :title, :created_at)'
+                . ' ON CONFLICT(id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at',
+            [
+                'id'         => self::EVENT_SENTINEL_ID,
+                'title'      => $title,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ],
+            ['id' => \Doctrine\DBAL\ParameterType::INTEGER],
+        );
 
-        $event = new ItemCreated($item->id, $title);
+        $event = new ItemCreated(self::EVENT_SENTINEL_ID, $title);
         $this->events->dispatch($event);
 
         return $this->json([
@@ -296,7 +307,10 @@ class FeatureController extends AbstractController
     {
         $this->dbLog->clear();
 
-        // Run a couple of queries + a transaction so the DBAL logger fires.
+        // Write the FIXED feature sentinel row + a transaction so the DBAL
+        // logger fires. Upsert (not a fresh INSERT per request) — the row
+        // count must stay stable across benchmark runs, otherwise the
+        // COUNT below would measure ever-growing work.
         [$id] = $this->aopService->createItem('DbEvent Item ' . \date('Y-m-d H:i:s'));
         $count = (int) $this->em->createQueryBuilder()
             ->select('COUNT(i.id)')

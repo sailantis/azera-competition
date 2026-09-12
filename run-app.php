@@ -126,6 +126,61 @@ require_once __DIR__ . '/adapters/' . $class . '.php';
 /** @var WebAppAdapter $adapter */
 $adapter = new $class();
 
+// --- Framework boot cost -----------------------------------------------------
+
+/**
+ * Time consecutive bootstrap() calls: the framework's real load cost
+ * (autoloader + kernel/container build + routes + DB connect), with
+ * GET / as the first request inside each boot. This is the number a
+ * RoadRunner-style worker pays per cold start and per worker recycle.
+ *
+ * Two numbers go into the result JSON as "boot": { cold_ms, warm_ms }.
+ *   cold_ms = the very first bootstrap in the process (fresh PHP state)
+ *   warm_ms = trimmed mean of N further re-boots (kernel re-created,
+ *             classes/opcache already loaded)
+ */
+function measureBoot(WebAppAdapter $adapter, int $warmRuns = 5): array
+{
+    $t0 = hrtime(true);
+    $adapter->bootstrap();
+    $cold = (hrtime(true) - $t0) / 1e6;
+    // One untimed warm-up dispatch so route compilation/template caches land
+    // before the first timed dispatch of the request loop.
+    $adapter->dispatch('GET', '/');
+    $adapter->cleanup();
+
+    $warmTimes = [];
+    for ($i = 0; $i < $warmRuns; $i++) {
+        $t0 = hrtime(true);
+        $adapter->bootstrap();
+        $warmTimes[] = (hrtime(true) - $t0) / 1e6;
+    }
+    $adapter->dispatch('GET', '/');
+    $adapter->cleanup();
+
+    sort($warmTimes);
+    // Trimmed mean, same shape as the request loop's trimmedMean(): drop
+    // 10% off each end so a single slow boot (fsync, antivirus) doesn't
+    // tilt the number.
+    $drop = max(0, (int) round(count($warmTimes) * 0.1));
+    $kept = array_slice($warmTimes, $drop, count($warmTimes) - 2 * $drop);
+    if ($kept === []) {
+        $kept = $warmTimes;
+    }
+
+    return [
+        'cold_ms' => $cold,
+        'warm_ms' => array_sum($kept) / count($kept),
+    ];
+}
+
+$boot = measureBoot($adapter);
+printf(
+    "  boot — cold %.1f ms, warm %.1f ms\n",
+    $boot['cold_ms'],
+    $boot['warm_ms']
+);
+
 // --- Optional reseed (same rationale as run.php) -----------------------------
 
 if ($doSeed) {
@@ -153,29 +208,41 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
 
     if ($mode === 'warm') {
         $adapter->bootstrap();
-        // one untimed warm-up dispatch
+        // one untimed warm-up dispatch (with its cleanup, so state matches
+        // what the timed loop starts from)
         $adapter->dispatch($method, $uri);
+        $adapter->cleanup();
     }
 
-    $runMeans = [];
-    $allTimes = [];
-    $peakMem  = 0;
+    $runMeans     = [];
+    $handleMeans  = [];
+    $cleanupMeans = [];
+    $allTimes     = [];
+    $peakMem      = 0;
 
     for ($r = 0; $r < $runs; $r++) {
         if ($mode === 'cold') {
             $adapter->bootstrap();
         }
 
-        $times = [];
+        $times        = [];
+        $handleTimes  = [];
+        $cleanupTimes = [];
         for ($i = 0; $i < $itersPerRun; $i++) {
             $t0 = hrtime(true);
             $adapter->dispatch($method, $uri);
             $t1 = hrtime(true);
-            $times[] = ($t1 - $t0) / 1e6;
+            $adapter->cleanup();
+            $t2 = hrtime(true);
+            $handleTimes[] = ($t1 - $t0) / 1e6;
+            $cleanupTimes[] = ($t2 - $t1) / 1e6;
+            $times[] = ($t2 - $t0) / 1e6;
         }
 
         $s = stats($times);
         $runMeans[] = $s['mean'];
+        $handleMeans[] = stats($handleTimes)['mean'];
+        $cleanupMeans[] = stats($cleanupTimes)['mean'];
         $allTimes = array_merge($allTimes, $times);
         $peakMem  = max($peakMem, memory_get_peak_usage(true));
 
@@ -191,6 +258,11 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
     $sAll  = stats($allTimes);
     $tMean = trimmedMean($runMeans);
 
+    // Handle vs teardown split (trimmed mean over per-run means, same
+    // convention as the headline number). handle + cleanup = trimmed_mean.
+    $hMean = trimmedMean($handleMeans);
+    $cMean = trimmedMean($cleanupMeans);
+
     return [
         'request'            => $reqLabel,
         'iterations_per_run' => $itersPerRun,
@@ -201,10 +273,12 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
         'median_ms'          => $sAll['median'],
         'p95_ms'             => $sAll['p95'],
         'peak_mem'           => $peakMem,
+        'handle_ms'          => $hMean,
+        'cleanup_ms'         => $cMean,
     ];
 }
 
-$appResult = ['app' => $appKey, 'modes' => []];
+$appResult = ['app' => $appKey, 'modes' => [], 'boot' => $boot];
 
 echo " -- mode: {$modeName}\n";
 $modeResult = ['requests' => []];

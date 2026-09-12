@@ -101,4 +101,12 @@ class LaravelAdapter implements WebAppAdapter
             return '500 ' . \get_class($e) . ': ' . $e->getMessage();
         }
     }
+
+    /**
+     * Laravel's HTTP kernel handles request-scoped state per handle() call —
+     * the framework has no terminate()-style teardown in this in-process
+     * setup (kernel->terminate() is a no-op without terminable middleware).
+     * Nothing to do between requests.
+     */
+    public function cleanup(): void {}
 }

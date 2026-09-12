@@ -32,9 +32,10 @@ use Cake\Event\EventManager;
 
 final class FeatureController extends AppController
 {
-    /**
-     * GET /features — overview page listing all feature demos.
-     */
+    /** Fixed rows written by the feature demos — the row count stays stable across benchmark runs. */
+    private const FEATURE_SENTINEL_ID = 888800; // aop + db-events
+    private const EVENT_SENTINEL_ID = 888801;   // events
+
     public function index(): \Cake\Http\Response
     {
         $this->set('title', 'Features');
@@ -68,12 +69,17 @@ final class FeatureController extends AppController
         $now        = date('Y-m-d H:i:s');
         $rand       = random_int(1000, 9999);
 
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs.
         $connection->begin();
-        $connection->insert('items', [
+        $connection->insertQuery('items', [
+            'id'         => self::FEATURE_SENTINEL_ID,
             'title'      => 'AOP Item ' . $now . ' #' . $rand,
             'created_at' => $now,
-        ]);
-        $id = (int) $connection->getDriver()->lastInsertId();
+        ])
+            ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at')
+            ->execute();
+        $id = self::FEATURE_SENTINEL_ID;
         $connection->commit();
 
         return $this->json([
@@ -204,7 +210,16 @@ final class FeatureController extends AppController
         $log->clearEntries();
 
         $now = date('Y-m-d H:i:s');
-        $connection->insert('items', ['title' => 'DbEvent Item ' . $now, 'created_at' => $now]);
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs,
+        // otherwise the count() below would measure ever-growing work.
+        $connection->insertQuery('items', [
+            'id'         => self::FEATURE_SENTINEL_ID,
+            'title'      => 'DbEvent Item ' . $now,
+            'created_at' => $now,
+        ])
+            ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at')
+            ->execute();
         $count = $this->items()->find()->count();
 
         return $this->json([
@@ -222,8 +237,16 @@ final class FeatureController extends AppController
     {
         $connection = Db::connection();
         $now        = date('Y-m-d H:i:s');
-        $connection->insert('items', ['title' => 'Event Item ' . $now, 'created_at' => $now]);
-        $id = (int) $connection->getDriver()->lastInsertId();
+        // Fixed feature sentinel row (upsert, not a fresh INSERT per
+        // request) — the row count must stay stable across benchmark runs.
+        $connection->insertQuery('items', [
+            'id'         => self::EVENT_SENTINEL_ID,
+            'title'      => 'Event Item ' . $now,
+            'created_at' => $now,
+        ])
+            ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at')
+            ->execute();
+        $id = self::EVENT_SENTINEL_ID;
 
         $entries = [];
         $events  = new EventManager();

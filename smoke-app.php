@@ -82,6 +82,7 @@ foreach ($checks as $req) {
         $err  = get_class($e) . ': ' . $e->getMessage();
     }
     $ms = (hrtime(true) - $t0) / 1e6;
+    $adapter->cleanup();
 
     $bad = $err !== null || $body === '' || str_starts_with($body, '500 ') || str_starts_with($body, 'Not Found');
 

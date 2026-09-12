@@ -30,4 +30,17 @@ interface WebAppAdapter
      * @return string        Response body (the rendered output)
      */
     public function dispatch(string $method, string $uri): string;
+
+    /**
+     * Per-request teardown — the work a long-lived worker performs AFTER the
+     * response has been sent and BEFORE the next request starts:
+     * terminate()-style finalizers, request-scoped service resets,
+     * per-request container/scope disposal.
+     *
+     * The harness times dispatch() and cleanup() separately but reports their
+     * SUM as the request latency, so published numbers stay comparable with
+     * datasets recorded before this split. The split only exposes where the
+     * cost sits (handle vs teardown) without changing what is measured.
+     */
+    public function cleanup(): void;
 }

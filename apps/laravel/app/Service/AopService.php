@@ -18,11 +18,20 @@ use Closure;
 
 final class AopService
 {
+    /** Fixed row used by every feature-demo write — the row count stays stable across benchmark runs. */
+    public const FEATURE_SENTINEL_ID = 888800;
+
     /** @var list<string> */
     private array $entries = [];
 
     /**
      * Create an item inside an interceptor-wrapped transaction callback.
+     *
+     * Writes the FIXED feature sentinel row (upsert semantics) instead of
+     * a fresh INSERT per request — the demo runs once per benchmark
+     * request, and an unbounded INSERT would grow the shared table every
+     * request (the row count must stay stable so COUNT-style reads measure
+     * constant work).
      *
      * @return array{0: int, 1: list<string>}
      */
@@ -33,11 +42,16 @@ final class AopService
         $id = $this->retryCall(function () use ($title): int {
             // In a real app the interceptor would manage the transaction;
             // here the write happens inside the wrapped callable.
-            $table = app('db')->table('items');
-            return (int) $table->insertGetId([
-                'title'      => $title,
-                'created_at' => \date('Y-m-d H:i:s'),
-            ]);
+            app('db')->table('items')->upsert(
+                [
+                    'id'         => self::FEATURE_SENTINEL_ID,
+                    'title'      => $title,
+                    'created_at' => \date('Y-m-d H:i:s'),
+                ],
+                ['id'],
+                ['title', 'created_at'],
+            );
+            return self::FEATURE_SENTINEL_ID;
         });
 
         return [$id, $this->entries];

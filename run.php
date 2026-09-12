@@ -234,6 +234,8 @@ function writeResults(string $prefix, array $results): void
         'iterations_per_run',
         'runs',
         'trimmed_mean_ms',
+        'handle_ms',
+        'cleanup_ms',
         'min_ms',
         'mean_ms',
         'median_ms',
@@ -250,6 +252,8 @@ function writeResults(string $prefix, array $results): void
                     $req['iterations_per_run'],
                     $req['runs'],
                     $req['trimmed_mean_ms'],
+                    $req['handle_ms'] ?? '',
+                    $req['cleanup_ms'] ?? '',
                     $req['min_ms'],
                     $req['mean_ms'],
                     $req['median_ms'],
@@ -281,17 +285,19 @@ function writeReport(string $prefix, array $results, array $featureMap, array $a
     foreach ($results['apps'] as $app) {
         $lines[] = "### {$app['app']}";
         $lines[] = '';
-        $lines[] = '| Mode | Request | Iter/Run | Runs | Trimmed Mean (ms) | Min (ms) | Mean (ms) | Median (ms) | p95 (ms) | Peak mem |';
-        $lines[] = '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|';
+        $lines[] = '| Mode | Request | Iter/Run | Runs | Trimmed Mean (ms) | Handle (ms) | Cleanup (ms) | Min (ms) | Mean (ms) | Median (ms) | p95 (ms) | Peak mem |';
+        $lines[] = '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|';
         foreach ($app['modes'] as $modeName => $mode) {
             foreach ($mode['requests'] as $req) {
                 $lines[] = sprintf(
-                    '| %s | %s | %d | %d | %.4f | %.4f | %.4f | %.4f | %.4f | %s |',
+                    '| %s | %s | %d | %d | %.4f | %s | %s | %.4f | %.4f | %.4f | %.4f | %s |',
                     $modeName,
                     $req['request'],
                     $req['iterations_per_run'],
                     $req['runs'],
                     $req['trimmed_mean_ms'],
+                    isset($req['handle_ms']) ? sprintf('%.4f', $req['handle_ms']) : '',
+                    isset($req['cleanup_ms']) ? sprintf('%.4f', $req['cleanup_ms']) : '',
                     $req['min_ms'],
                     $req['mean_ms'],
                     $req['median_ms'],
@@ -460,29 +466,40 @@ function benchRequest(
     // Warm-up / bootstrap
     if ($mode === 'warm') {
         $adapter->bootstrap();
-        // one untimed warm-up dispatch
+        // one untimed warm-up dispatch (paired with its cleanup)
         $adapter->dispatch($method, $uri);
+        $adapter->cleanup();
     }
 
-    $runMeans = [];
-    $allTimes = [];
-    $peakMem  = 0;
+    $runMeans     = [];
+    $handleMeans  = [];
+    $cleanupMeans = [];
+    $allTimes     = [];
+    $peakMem      = 0;
 
     for ($r = 0; $r < $runs; $r++) {
         if ($mode === 'cold') {
             $adapter->bootstrap();
         }
 
-        $times = [];
+        $times        = [];
+        $handleTimes  = [];
+        $cleanupTimes = [];
         for ($i = 0; $i < $itersPerRun; $i++) {
             $t0 = hrtime(true);
             $adapter->dispatch($method, $uri);
             $t1 = hrtime(true);
-            $times[] = ($t1 - $t0) / 1e6;
+            $adapter->cleanup();
+            $t2 = hrtime(true);
+            $handleTimes[] = ($t1 - $t0) / 1e6;
+            $cleanupTimes[] = ($t2 - $t1) / 1e6;
+            $times[] = ($t2 - $t0) / 1e6;
         }
 
         $s = stats($times);
         $runMeans[] = $s['mean'];
+        $handleMeans[] = stats($handleTimes)['mean'];
+        $cleanupMeans[] = stats($cleanupTimes)['mean'];
         $allTimes = array_merge($allTimes, $times);
         $peakMem  = max($peakMem, memory_get_peak_usage(true));
 
@@ -508,6 +525,8 @@ function benchRequest(
         'median_ms'          => $sAll['median'],
         'p95_ms'             => $sAll['p95'],
         'peak_mem'           => $peakMem,
+        'handle_ms'          => trimmedMean($handleMeans),
+        'cleanup_ms'         => trimmedMean($cleanupMeans),
     ];
 }
 

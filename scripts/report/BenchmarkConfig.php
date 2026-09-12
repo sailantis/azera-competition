@@ -162,4 +162,50 @@ final class BenchmarkConfig
             'all'            => 'All Endpoints',
         ][$feature] ?? $feature;
     }
+
+    /**
+     * What each benchmarked endpoint actually reads or writes, per request —
+     * the workload behind the number. The DB is seeded with 1000 item rows
+     * (seed.php default, re-seeded per app × mode) and every list endpoint
+     * serves page 1 of 20; every write upserts exactly one sentinel row, so
+     * the row count stays stable across runs. All six adapters hardcode the
+     * same PAGE_SIZE = 20, so the payload is identical no matter the
+     * framework.
+     *
+     * @return array<string,string>
+     */
+    public static function requestWorkload(): array
+    {
+        return [
+            'GET /'                        => 'no DB — routing + template only',
+            'GET /items'                   => '20 of 1000 items (page 1, + COUNT)',
+            'GET /items/1'                 => '1 item by id',
+            'POST /items'                  => '1 row upserted (sentinel #999999)',
+            'GET /items-qb'                => '20 of 1000 items (page 1, + COUNT)',
+            'GET /items-qb/1'              => '1 item by id',
+            'POST /items-qb'               => '1 row upserted (sentinel #999997)',
+            'GET /api/items'               => '20 of 1000 items as JSON',
+            'GET /api/items/1'             => '1 item by id as JSON',
+            'POST /api/items'              => '1 row upserted (sentinel #999998)',
+            'GET /features/aop'            => 'no DB — interceptor pipeline',
+            'GET /features/cache'          => 'no DB — cache round-trips',
+            'GET /features/log'            => 'no DB — buffered log handlers',
+            'GET /features/retry'          => 'no DB — retry policy',
+            'GET /features/pipeline'       => 'no DB — middleware pipeline',
+            'GET /features/db-events'      => '1 event row INSERTed per request',
+            'GET /features/events'         => 'no DB — in-process listeners',
+            'GET /features/validation'     => 'no DB — validator run',
+            'GET /features/config'         => 'no DB — config lookup',
+            'GET /features/request-scoped' => 'no DB — scoped service resolve',
+            'GET /features/rate-limit'     => 'no DB — cache-backed limiter',
+        ];
+    }
+
+    /**
+     * Workload description for a request label; '' when unmapped.
+     */
+    public static function workloadFor(string $request): string
+    {
+        return self::requestWorkload()[$request] ?? '';
+    }
 }

@@ -82,7 +82,9 @@ HTML;
 
         $figures = '';
         $order   = [
-            'startup' => 'Framework startup (GET /)',
+            'startup' => $this->store->hasBoot()
+                ? 'Framework startup — bootstrap cost (cold + warm; teardown share in prose)'
+                : 'Framework startup (GET /)',
             'speedup' => 'Total time vs ' . BenchmarkConfig::appLabel($baseline),
             'memory'  => 'Peak memory footprint',
         ];
@@ -126,7 +128,7 @@ HTML;
 <header>
   <h1>{$this->esc($title)}</h1>
   <p class="lead">{$this->esc((string)($view['subtitle'] ?? ''))}</p>
-  <p class="env">PHP {$env['php_version']} &middot; {$env['os']} &middot; {$mode} mode &middot; charts show the median with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">PHP {$env['php_version']} &middot; {$env['os']} &middot; {$mode} mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
 </header>
 <main>
   <section class="figures">

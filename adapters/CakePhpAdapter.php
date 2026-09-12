@@ -1,4 +1,4 @@
-﻿﻿
+
 <?php
 
 /**
@@ -123,4 +123,13 @@ class CakePhpAdapter implements WebAppAdapter
 
         return (string) $response->getBody();
     }
+
+    /**
+     * CakePHP has no between-request teardown: Server::run() builds a fresh
+     * middleware pipeline per dispatch (state is request-local by
+     * construction — the Request/Response pair dies with the call) and
+     * Cake's app-level finalizers only exist for the CLI shutdown path.
+     * Nothing to do between requests.
+     */
+    public function cleanup(): void {}
 }

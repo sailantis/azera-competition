@@ -90,6 +90,7 @@ foreach ($expect as $req => $needle) {
     [$method, $uri] = explode(' ', $req, 2);
     try {
         $body = $adapter->dispatch($method, $uri);
+        $adapter->cleanup();
     } catch (\Throwable $e) {
         echo "  [FAIL] {$req} — threw: " . $e->getMessage() . "\n";
         $failures++;

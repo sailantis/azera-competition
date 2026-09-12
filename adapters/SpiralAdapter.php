@@ -88,6 +88,13 @@ class SpiralAdapter implements WebAppAdapter
         try {
             // HttpBootloader binds Http + the Request proxy inside the 'http'
             // scope — dispatch within it (as the real HTTP dispatcher does).
+            // The scope is entered AND exited here: the child container is
+            // created inside runScope() and destroyed in its finally. Spiral
+            // has no public API to split scope enter/exit, so the scope
+            // lifecycle stays part of the handle phase; the officially
+            // sanctioned per-request teardown (FinalizerInterface::finalize(),
+            // which Spiral's own dispatchers call per request/iteration) is
+            // what cleanup() times.
             $response = $this->container->runScope(
                 new \Spiral\Core\Scope(name: 'http'),
                 static function (Container $c) use ($request): \Psr\Http\Message\ResponseInterface {
@@ -99,5 +106,23 @@ class SpiralAdapter implements WebAppAdapter
         }
 
         return (string) $response->getBody();
+    }
+
+    /**
+     * Spiral's officially sanctioned per-request teardown, as run by its own
+     * workers: ConsoleDispatcher::serve()'s finally calls
+     * FinalizerInterface::finalize() per request. The registered finalizers
+     * are CycleOrmBootloader's (EntityManager::clean() + ORM heap clean) and
+     * DisconnectsBootloader's (driver disconnects). http-scope services
+     * (CookieQueue, SessionFactory) are already destroyed by the scope exit
+     * in dispatch().
+     */
+    public function cleanup(): void
+    {
+        \assert($this->container instanceof Container);
+
+        try {
+            $this->container->get(\Spiral\Boot\FinalizerInterface::class)->finalize(false);
+        } catch (\Throwable) {}
     }
 }
