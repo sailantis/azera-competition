@@ -255,7 +255,7 @@ final class MarkdownReport
             'Framework startup — boot + teardown',
             'boot + median per-request teardown — both block the worker between requests',
             $factors,
-            'x = median ÷ the fastest boot of that kind'
+            'x = median ÷ the fastest working boot of that kind (no-op re-boots excluded)'
         );
         $file = 'startup.svg';
         file_put_contents($dir . '/' . $file, $svg);
