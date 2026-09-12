@@ -478,6 +478,11 @@ function benchRequest(
     $peakMem      = 0;
 
     for ($r = 0; $r < $runs; $r++) {
+        // Per-run memory window (see run-app.php benchRequest — keeps the
+        // mirrored loops in sync): peak_mem must attribute to THIS endpoint,
+        // not accumulate the whole process high-water mark.
+        memory_reset_peak_usage();
+
         if ($mode === 'cold') {
             $adapter->bootstrap();
         }

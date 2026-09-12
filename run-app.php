@@ -222,6 +222,12 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
     $peakMem      = 0;
 
     for ($r = 0; $r < $runs; $r++) {
+        // Per-run memory window: memory_get_peak_usage() is a PROCESS-LIFETIME
+        // high-water mark — without this reset every endpoint would report
+        // max(all previous endpoints, itself) and the memory chart would
+        // plot benchmark ORDER, not per-endpoint footprint (2026-09-12 bug).
+        memory_reset_peak_usage();
+
         if ($mode === 'cold') {
             $adapter->bootstrap();
         }

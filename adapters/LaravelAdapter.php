@@ -36,8 +36,19 @@ class LaravelAdapter implements WebAppAdapter
      */
     private function bootApplication(): void
     {
+        // Laravel keeps GLOBAL static state across Application instances:
+        // Container::getInstance(), Facade roots and the Eloquent model
+        // resolvers all retain the previous app. In cold mode bootstrap()
+        // runs once per timed run in the SAME process — without flushing,
+        // the old container is retained and memory ratchets up by a full
+        // Application instance per re-boot (2026-09-12: cold peak_mem
+        // climbed 22 → 502 MB over the request sequence). Clear the static
+        // handles first so the previous instance can actually be freed.
+        \Illuminate\Container\Container::setInstance(null);
+
         $this->app    = null;
         $this->kernel = null;
+        \gc_collect_cycles();
 
         // Ensure the runtime dirs Laravel requires exist (bootstrap cache +
         // writable storage). Required before Application::configure runs.
