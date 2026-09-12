@@ -66,6 +66,16 @@ class SymfonyAdapter implements WebAppAdapter
             }
         }
 
+        // Guard against a stale compiled container / route cache. Symfony
+        // invalidates its caches via file mtimes; a git operation (clone,
+        // checkout, stash) resets mtimes in arbitrary order, and a run on a
+        // machine where the cache was built from DIFFERENT app code can then
+        // silently serve a 404 for every feature route (this poisoned the
+        // 2026-09-12 symfony /features/* dataset rows with flat ~0.05 ms
+        // 404 timings). If any tracked source file is newer than the route
+        // cache, wipe the whole cache dir so the kernel rebuilds it.
+        $this->clearStaleCache();
+
         try {
             $this->kernel = new BenchKernel('bench', false);
             $this->kernel->boot();
@@ -80,6 +90,57 @@ class SymfonyAdapter implements WebAppAdapter
         // Warm the kernel now (instead of on the first dispatch) so
         // bootstrap() measures the full boot cost.
         $this->kernel->handle(Request::create('/', 'GET'));
+    }
+
+    /**
+     * Drop the compiled container/route cache when any app source file or
+     * config is newer than the cached route matcher. Cheap (a handful of
+     * filemtime calls) and only ever triggers after a real code change or
+     * a git operation — never mid-benchmark.
+     */
+    private function clearStaleCache(): void
+    {
+        $cacheDir = __DIR__ . '/../apps/symfony/var/cache/bench';
+        $matcher  = $cacheDir . '/url_matching_routes.php';
+        if (!is_file($matcher)) {
+            return; // nothing cached yet — kernel will build fresh
+        }
+
+        $cacheMtime = filemtime($matcher);
+        $roots      = [
+            __DIR__ . '/../apps/symfony/config',
+            __DIR__ . '/../apps/symfony/src',
+        ];
+        foreach ($roots as $root) {
+            $it = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($it as $file) {
+                /** @var \SplFileInfo $file */
+                if ($file->isFile() && filemtime($file->getPathname()) > $cacheMtime) {
+                    // Stale cache — remove it and stop looking.
+                    $this->rrmdir($cacheDir);
+                    return;
+                }
+            }
+        }
+    }
+
+    /** Recursively delete a directory (best-effort, errors ignored). */
+    private function rrmdir(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($it as $file) {
+            /** @var \SplFileInfo $file */
+            $file->isDir() ? @rmdir($file->getPathname()) : @unlink($file->getPathname());
+        }
+        @rmdir($dir);
     }
 
     public function dispatch(string $method, string $uri): string

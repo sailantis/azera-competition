@@ -229,11 +229,24 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
         $handleTimes  = [];
         $cleanupTimes = [];
         for ($i = 0; $i < $itersPerRun; $i++) {
-            $t0 = hrtime(true);
-            $adapter->dispatch($method, $uri);
-            $t1 = hrtime(true);
+            $t0   = hrtime(true);
+            $body = $adapter->dispatch($method, $uri);
+            $t1   = hrtime(true);
             $adapter->cleanup();
             $t2 = hrtime(true);
+            // Harness guard — an adapter that swallows an error (404/500)
+            // returns a short error string instead of the real response.
+            // Timing those would silently poison the dataset (this is how
+            // the 2026-09-12 symfony /features/* rows came out flat at
+            // ~0.05 ms: every request was actually a 404). Fail loudly
+            // instead so the run can be fixed and re-run.
+            if (str_starts_with($body, 'Not Found') || str_starts_with($body, '500 ')) {
+                fwrite(STDERR, "\n[ABORT] {$mode} {$reqLabel} returned an error response\n"
+                    . "  body: " . substr($body, 0, 300) . "\n"
+                    . "  A dataset must never contain error responses — fix the app\n"
+                    . "  (stale cache? missing route? changed signature?) and re-run.\n");
+                exit(1);
+            }
             $handleTimes[] = ($t1 - $t0) / 1e6;
             $cleanupTimes[] = ($t2 - $t1) / 1e6;
             $times[] = ($t2 - $t0) / 1e6;
