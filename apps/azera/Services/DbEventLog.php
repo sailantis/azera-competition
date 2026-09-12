@@ -8,7 +8,7 @@
  * it back to show that the Db event pipeline is live.
  */
 
-namespace App\Services;
+namespace App\Azera\Services;
 
 use Azera\Lifecycle\RequestScoped;
 

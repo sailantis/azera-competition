@@ -14,9 +14,9 @@
  * (the EM never writes clean entities).
  */
 
-namespace App\Services;
+namespace App\Azera\Services;
 
-use App\Models\Item;
+use App\Azera\Models\Item;
 use Azera\AppContext;
 use Azera\Db\Event\QueryExecuted;
 use Azera\Db\Event\TransactionCommitted;
@@ -28,9 +28,7 @@ class OrmDemoService
     public function __construct(
         private AppContext $ctx,
         private DbEventLog $log,
-    )
-    {
-    }
+    ) {}
 
     /**
      * Load the sentinel item through the EntityManager (heap probe + Store
@@ -42,7 +40,7 @@ class OrmDemoService
         $this->log->clear();
 
         $sentinelId = 999999;
-        $em = $this->ctx->entityManager();
+        $em         = $this->ctx->entityManager();
 
         // 1) Load — heap probe first, then one SELECT via the Store seam
         //    (no ResultSet, no FETCH_CLASS).
@@ -52,8 +50,8 @@ class OrmDemoService
         if ($created) {
             // First run on a fresh DB: seed the sentinel through the EM itself.
             $item = new Item();
-            $item->id = $sentinelId;
-            $item->title = 'EM Item ' . date('Y-m-d H:i:s');
+            $item->id         = $sentinelId;
+            $item->title      = 'EM Item ' . date('Y-m-d H:i:s');
             $item->created_at = date('Y-m-d H:i:s');
             $em->persist($item);
             $em->flush();
@@ -73,12 +71,12 @@ class OrmDemoService
         $node = $em->heap()->findById(Item::class, ['id' => $sentinelId]);
 
         return [
-            'created' => $created,
-            'identity' => ['id' => $sentinelId],
-            'title' => $item->title,
-            'events' => $this->log->all(),
+            'created'                    => $created,
+            'identity'                   => ['id' => $sentinelId],
+            'title'                      => $item->title,
+            'events'                     => $this->log->all(),
             'second_flush_emits_nothing' => $this->queryCount() === $sqlBeforeSecondFlush,
-            'snapshot' => $node?->data,
+            'snapshot'                   => $node?->data,
         ];
     }
 
@@ -94,8 +92,8 @@ class OrmDemoService
         $items = \array_slice($items, 0, $limit);
 
         return [
-            'count' => \count($items),
-            'first' => isset($items[0]) ? $items[0]->id : null,
+            'count'    => \count($items),
+            'first'    => isset($items[0]) ? $items[0]->id : null,
             'entities' => \array_map(fn($e) => $em->heap()->find($e)?->data, $items),
         ];
     }

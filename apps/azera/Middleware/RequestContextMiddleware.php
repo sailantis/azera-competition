@@ -12,7 +12,7 @@
  * deterministic.
  */
 
-namespace App\Middleware;
+namespace App\Azera\Middleware;
 
 use Azera\AppContext;
 use Azera\Core\MiddlewareInterface;

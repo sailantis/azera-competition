@@ -6,10 +6,10 @@
  * routes.  Called by AzeraAdapter::bootstrap().
  */
 
-namespace App;
+namespace App\Azera;
 
-use App\Controllers\BenchController;
-use App\Models\Item;
+use App\Azera\Controllers\BenchController;
+use App\Azera\Models\Item;
 use Azera\AppContext;
 use Azera\Db\Database;
 use Azera\Db\DatabaseManager;
@@ -74,7 +74,7 @@ class Bootstrap
         $ctx = AppContext::instance();
 
         // Reset benchmark state for cold-mode reproducibility
-        \App\Middleware\RequestContextMiddleware::reset();
+        \App\Azera\Middleware\RequestContextMiddleware::reset();
 
         // --- Database (SQLite) ---
         // Use a factory so we can configure PRAGMAs right after connecting.
@@ -144,7 +144,7 @@ class Bootstrap
 
         // --- Dispatcher + Global Middleware ---
         $dispatcher = $ctx->dispatcher();
-        $dispatcher->setBaseNamespace('\\App\\Controllers');
+        $dispatcher->setBaseNamespace('\App\Azera\Controllers');
 
         // Global middleware pipeline (runs on every dispatched request):
         //   1. SecurityHeadersMiddleware — sets common security headers
@@ -153,8 +153,8 @@ class Bootstrap
         //      from request headers, picks a locale, stamps view vars
         // This mirrors typical real-app middleware stacks and adds realistic
         // per-request overhead that all full-stack frameworks pay.
-        $dispatcher->addMiddleware(new \App\Middleware\SecurityHeadersMiddleware());
-        $dispatcher->addMiddleware(new \App\Middleware\RequestContextMiddleware());
+        $dispatcher->addMiddleware(new \App\Azera\Middleware\SecurityHeadersMiddleware());
+        $dispatcher->addMiddleware(new \App\Azera\Middleware\RequestContextMiddleware());
 
         // --- Enterprise Infrastructure (PSR-3/14/16 + AOP) ---
         self::registerEnterpriseServices($ctx);
@@ -163,12 +163,12 @@ class Bootstrap
         // Registered as a class string (no factory) so AppContext::build()
         // generates the AOP proxy.  The constructor receives AppContext
         // which is already available as a registered service.
-        $ctx->set(\App\Services\FeatureService::class);
+        $ctx->set(\App\Azera\Services\FeatureService::class);
 
         // --- RequestScoped demo service ---
         // Registered as a class string so AppContext::build() instantiates
         // it once; clearRequestScope() calls its resetState() hook.
-        $ctx->set(\App\Services\RequestCounter::class);
+        $ctx->set(\App\Azera\Services\RequestCounter::class);
 
         // --- Config ---
         // Register a Config instance with a small nested array so the
@@ -194,7 +194,7 @@ class Bootstrap
         // Endpoints that exercise the new enterprise features (AOP,
         // events, cache, logging, security).  These don't interfere
         // with benchmark routes.
-        $router->controller(\App\Controllers\FeatureController::class, function (\Azera\Core\Router $r) {
+        $router->controller(\App\Azera\Controllers\FeatureController::class, function (\Azera\Core\Router $r) {
             $r->get('/features', '::indexAction');
             $r->get('/features/aop', '::aopAction');
             $r->get('/features/cache', '::cacheAction');
@@ -222,7 +222,7 @@ class Bootstrap
         // A dedicated JSON API category.  Every framework implements the
         // same /api/* endpoints so routing + controller + JSON
         // serialization overhead is compared apples-to-apples.
-        $router->controller(\App\Controllers\ApiController::class, function (\Azera\Core\Router $r) {
+        $router->controller(\App\Azera\Controllers\ApiController::class, function (\Azera\Core\Router $r) {
             $r->get('/api/items', '::indexAction');
             $r->get('/api/items/{id:int}', '::showAction');
             $r->post('/api/items', '::createAction');
@@ -253,35 +253,35 @@ class Bootstrap
         // interceptor (which resolves LoggerInterface) and the controller
         // (which injects MemoryLogger) share the same object.  Swap to
         // Monolog for real logs.
-        $memoryLogger = new \App\Services\MemoryLogger();
-        $ctx->set(\App\Services\MemoryLogger::class, $memoryLogger);
+        $memoryLogger = new \App\Azera\Services\MemoryLogger();
+        $ctx->set(\App\Azera\Services\MemoryLogger::class, $memoryLogger);
         $ctx->set(LoggerInterface::class, $memoryLogger);
 
         // --- PSR-14 Event Dispatcher ---
         $ctx->set(EventDispatcherInterface::class, function () {
             $dispatcher = new EventDispatcher();
             $dispatcher->listen(
-                \App\Events\ItemCreated::class,
-                \App\Events\Listener\ItemCreatedListener::class,
+                \App\Azera\Events\ItemCreated::class,
+                \App\Azera\Events\Listener\ItemCreatedListener::class,
             );
             // Db event listeners — one handler per concrete event class.
             // EventDispatcher also resolves listeners for parent classes
             // and interfaces, so each registration covers its subtype.
             $dispatcher->listen(
                 \Azera\Db\Event\QueryExecuted::class,
-                \App\Events\Listener\DatabaseEventListener::class,
+                \App\Azera\Events\Listener\DatabaseEventListener::class,
             );
             $dispatcher->listen(
                 \Azera\Db\Event\StatementPrepared::class,
-                \App\Events\Listener\DatabaseEventListener::class,
+                \App\Azera\Events\Listener\DatabaseEventListener::class,
             );
             $dispatcher->listen(
                 \Azera\Db\Event\TransactionStarted::class,
-                \App\Events\Listener\DatabaseEventListener::class,
+                \App\Azera\Events\Listener\DatabaseEventListener::class,
             );
             $dispatcher->listen(
                 \Azera\Db\Event\TransactionCommitted::class,
-                \App\Events\Listener\DatabaseEventListener::class,
+                \App\Azera\Events\Listener\DatabaseEventListener::class,
             );
             return $dispatcher;
         });
@@ -293,8 +293,8 @@ class Bootstrap
         $ctx->set(QueueInterface::class, fn() => new SyncQueue());
 
         // --- Demo services (autowired) ---
-        $ctx->set(\App\Services\DbEventLog::class);
-        $ctx->set(\App\Services\OrmDemoService::class);
+        $ctx->set(\App\Azera\Services\DbEventLog::class);
+        $ctx->set(\App\Azera\Services\OrmDemoService::class);
 
         // --- AOP Interceptors ---
         // Enable proxy generation for #[Advised] classes.

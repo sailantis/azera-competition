@@ -8,7 +8,7 @@
  * #[Transactional] or #[Cache] to activate interception.
  */
 
-namespace App\Services;
+namespace App\Azera\Services;
 
 use Azera\Aop\Advised;
 use Azera\Aop\Cache;
@@ -54,7 +54,7 @@ class FeatureService
 
         // Dispatch an event — the listener will run synchronously
         // because we use EventDispatcher (PSR-14).
-        $this->ctx->events()->dispatch(new \App\Events\ItemCreated($id, $title));
+        $this->ctx->events()->dispatch(new \App\Azera\Events\ItemCreated($id, $title));
 
         return $id;
     }
@@ -85,7 +85,7 @@ class FeatureService
      */
     public function countItemsHit(): bool
     {
-        $cache = $this->ctx->get('Azera\\Cache\\ArrayCache');
+        $cache = $this->ctx->get('App\\Azera\\Cache\\ArrayCache');
         return $cache !== null && $cache->has('item_count');
     }
     /**

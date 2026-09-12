@@ -24,6 +24,7 @@ if ($key === 'codeigniter') {
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
+require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
 
 $map = [
     'azera'       => 'AzeraAdapter',

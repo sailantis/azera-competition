@@ -4,7 +4,7 @@
  * and dispatches synthetic requests in-process.
  */
 
-use App\Bootstrap;
+use App\Azera\Bootstrap;
 use Azera\AppContext;
 use Azera\Http\Request;
 use Azera\Http\Response;
@@ -33,22 +33,12 @@ class AzeraAdapter implements WebAppAdapter
     public function bootstrap(): void
     {
         // PSR-4 autoloader for the App namespace used by the Azera benchmark app.
-        // Azera's own autoloader is provided by composer.
-        spl_autoload_register(function (string $class): void {
-            $prefix = 'App\\';
-            if (!str_starts_with($class, $prefix)) {
-                return;
-            }
-            $relative = substr($class, strlen($prefix));
-            $file     = __DIR__ . '/../apps/azera/' . str_replace('\\', '/', $relative) . '.php';
-            // Guard: other benchmark apps (e.g. App\Spiral\...) share the App\
-            // prefix but live elsewhere — let their autoloaders handle them.
-            if (is_file($file)) {
-                require $file;
-            }
-        });
+        // Azera's own autoloader is provided by composer. The shared loader is
+        // idempotent — re-calling this from every bootstrap() never grows the
+        // SPL stack (see BenchmarkAutoloader docblock).
+        BenchmarkAutoloader::map('App\\Azera\\', __DIR__ . '/../apps/azera');
 
-        $this->ctx = \App\Bootstrap::boot($this->dbPath);
+        $this->ctx = \App\Azera\Bootstrap::boot($this->dbPath);
     }
 
     public function dispatch(string $method, string $uri): string

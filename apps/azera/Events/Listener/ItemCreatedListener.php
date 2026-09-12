@@ -7,9 +7,9 @@
  * by EventDispatcher when ItemCreated is dispatched.
  */
 
-namespace App\Events\Listener;
+namespace App\Azera\Events\Listener;
 
-use App\Events\ItemCreated;
+use App\Azera\Events\ItemCreated;
 use Psr\Log\LoggerInterface;
 
 class ItemCreatedListener

@@ -24,19 +24,9 @@ class LaravelAdapter implements WebAppAdapter
 
     public function bootstrap(): void
     {
-        // PSR-4 autoloader for the Laravel benchmark app namespace.
-        spl_autoload_register(function (string $class): void {
-            $prefix = 'App\\Laravel\\';
-            if (!str_starts_with($class, $prefix)) {
-                return;
-            }
-            $relative = substr($class, strlen($prefix));
-            $file     = __DIR__ . '/../apps/laravel/app/' . str_replace('\\', '/', $relative) . '.php';
-            // Guard required when multiple adapters share one process.
-            if (is_file($file)) {
-                require $file;
-            }
-        });
+        // PSR-4 autoloader for the Laravel benchmark app namespace (shared,
+        // idempotent loader — see BenchmarkAutoloader).
+        BenchmarkAutoloader::map('App\\Laravel\\', __DIR__ . '/../apps/laravel/app');
 
         $this->bootApplication();
     }

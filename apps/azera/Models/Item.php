@@ -6,7 +6,7 @@
  * for the /items endpoints.
  */
 
-namespace App\Models;
+namespace App\Azera\Models;
 
 use Azera\Orm\Model;
 

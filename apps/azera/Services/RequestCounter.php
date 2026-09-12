@@ -10,7 +10,7 @@
  * clearRequestScope() between requests proves the state does not leak.
  */
 
-namespace App\Services;
+namespace App\Azera\Services;
 
 use Azera\Lifecycle\RequestScoped;
 

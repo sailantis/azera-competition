@@ -8,7 +8,7 @@
  * on the LoggerInterface.
  */
 
-namespace App\Services;
+namespace App\Azera\Services;
 
 use Azera\Lifecycle\RequestScoped;
 use Psr\Log\LoggerInterface;

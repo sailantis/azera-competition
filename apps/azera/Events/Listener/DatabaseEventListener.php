@@ -10,9 +10,9 @@
  * DatabaseEvent subtype.
  */
 
-namespace App\Events\Listener;
+namespace App\Azera\Events\Listener;
 
-use App\Services\DbEventLog;
+use App\Azera\Services\DbEventLog;
 use Azera\Db\Event\QueryExecuted;
 use Azera\Db\Event\StatementPrepared;
 use Azera\Db\Event\TransactionCommitted;

@@ -13,9 +13,9 @@
  *   POST   /api/items       — create an item (JSON with new id)
  */
 
-namespace App\Controllers;
+namespace App\Azera\Controllers;
 
-use App\Models\Item;
+use App\Azera\Models\Item;
 use Azera\Core\Controller;
 use Azera\Http\Response;
 

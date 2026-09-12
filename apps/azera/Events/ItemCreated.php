@@ -3,7 +3,7 @@
  * Event dispatched when a new item is created via FeatureService.
  */
 
-namespace App\Events;
+namespace App\Azera\Events;
 
 class ItemCreated
 {

@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/WebAppAdapter.php';
+require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
 
 $opts   = getopt('', ['app::', 'out-json::']);
 $appKey = trim((string) ($opts['app'] ?? 'azera'));
