@@ -1,6 +1,6 @@
-# Azera vs All Frameworks — PHP-FPM (fresh boot per request)
+# Framework Competition — Cold Start
 
-The same benchmark under the classic PHP-FPM deployment model: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.
+PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.
 
 **Environment** — PHP 8.3.6 · Linux 6.8.0-124-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
 
@@ -10,13 +10,13 @@ _Measured 2026-09-12T11:45:03+00:00 · azera-framework `b1c4900`_
 
 The framework's own load cost, timed directly: autoloader + kernel/container build + routes + DB connect, with no request processed — plus the median post-response teardown, because boot and cleanup are the same kind of time: during both, the worker cannot serve another request. **CakePHP** pays 4.48 ms cold against 100.0 ms for Spiral — x 22.3 slower. A warm recycle (worker restart with opcache warm) is cheaper for everyone: 0.009 ms for CakePHP at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild. The teardown share of a full request ranges from 0% (Laravel) up to 3% (Spiral).
 
-![Framework startup — boot + teardown](svg/azera-vs-all-fpm/startup.svg)
+![Framework startup — boot + teardown](svg/cold-start/startup.svg)
 
 ## Total response times
 
 Total time to serve one of each of the 21 endpoints, relative to Azera (1.0 = the baseline's own total, higher = slower). The closest rival is Symfony, needing x 3.1 the same total.
 
-![Total response times](svg/azera-vs-all-fpm/speedup.svg)
+![Total response times](svg/cold-start/speedup.svg)
 
 ## Feature benchmarks
 
@@ -35,57 +35,57 @@ Total time to serve one of each of the 21 endpoints, relative to Azera (1.0 = th
 
 ### Routing
 
-![Routing](svg/azera-vs-all-fpm/feature-routing.svg)
+![Routing](svg/cold-start/feature-routing.svg)
 
 ### ORM / Active Record
 
-![ORM / Active Record](svg/azera-vs-all-fpm/feature-orm.svg)
+![ORM / Active Record](svg/cold-start/feature-orm.svg)
 
 ### Query Builder
 
-![Query Builder](svg/azera-vs-all-fpm/feature-query-builder.svg)
+![Query Builder](svg/cold-start/feature-query-builder.svg)
 
 ### REST API (JSON)
 
-![REST API (JSON)](svg/azera-vs-all-fpm/feature-rest-api.svg)
+![REST API (JSON)](svg/cold-start/feature-rest-api.svg)
 
 ### AOP (Aspect-Oriented)
 
-![AOP (Aspect-Oriented)](svg/azera-vs-all-fpm/feature-aop.svg)
+![AOP (Aspect-Oriented)](svg/cold-start/feature-aop.svg)
 
 ### Cache
 
-![Cache](svg/azera-vs-all-fpm/feature-cache.svg)
+![Cache](svg/cold-start/feature-cache.svg)
 
 ### Database Events
 
-![Database Events](svg/azera-vs-all-fpm/feature-db-events.svg)
+![Database Events](svg/cold-start/feature-db-events.svg)
 
 ### Event Dispatcher
 
-![Event Dispatcher](svg/azera-vs-all-fpm/feature-events.svg)
+![Event Dispatcher](svg/cold-start/feature-events.svg)
 
 ### Validation
 
-![Validation](svg/azera-vs-all-fpm/feature-validation.svg)
+![Validation](svg/cold-start/feature-validation.svg)
 
 ### Config
 
-![Config](svg/azera-vs-all-fpm/feature-config.svg)
+![Config](svg/cold-start/feature-config.svg)
 
 ### Request-Scoped Services
 
-![Request-Scoped Services](svg/azera-vs-all-fpm/feature-request-scoped.svg)
+![Request-Scoped Services](svg/cold-start/feature-request-scoped.svg)
 
 ### Rate Limiter
 
-![Rate Limiter](svg/azera-vs-all-fpm/feature-rate-limiter.svg)
+![Rate Limiter](svg/cold-start/feature-rate-limiter.svg)
 
 ## Peak memory
 
 Peak memory reached on any endpoint. **CodeIgniter** stays under 8.50 MB, against 502 MB for the heaviest framework (x 59.1 more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
 
-![Peak memory footprint](svg/azera-vs-all-fpm/memory.svg)
+![Peak memory footprint](svg/cold-start/memory.svg)
 
 ## Wins per framework
 

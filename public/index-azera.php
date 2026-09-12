@@ -40,7 +40,7 @@ if (!file_exists($dbPath)) {
     exit;
 }
 
-$ctx = \App\Bootstrap::boot($dbPath);
+$ctx = \App\Azera\Bootstrap::boot($dbPath);
 
 $path   = $ctx->request()->path();
 $method = $ctx->request()->method();

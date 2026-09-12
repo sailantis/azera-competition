@@ -51,9 +51,9 @@ return [
     'views' => [
         // The headline comparison, ROADRUNNER story: resident worker, boot
         // paid once. Published into the framework docs + README.
-        'azera-vs-all' => [
-            'title'     => 'Azera vs All Frameworks — RoadRunner-style resident worker',
-            'subtitle'  => 'A full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response) with the framework booted once, as a RoadRunner/Octane-style worker serves it.',
+        'warm-start' => [
+            'title'     => 'Framework Competition — Warm Start',
+            'subtitle'  => 'RoadRunner/Octane-style resident worker: the framework boots once, then serves every request. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).',
             'dataset'   => 'free-for-all',
             'baseline'  => 'azera',
             'mode'      => 'warm',
@@ -68,9 +68,9 @@ return [
         // opcache retained — the bytecode-sharing real FPM workers enjoy).
         // Published alongside the warm story so readers pick their
         // deployment; the two views never blend modes.
-        'azera-vs-all-fpm' => [
-            'title'      => 'Azera vs All Frameworks — PHP-FPM (fresh boot per request)',
-            'subtitle'   => 'The same benchmark under the classic PHP-FPM deployment model: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.',
+        'cold-start' => [
+            'title'      => 'Framework Competition — Cold Start',
+            'subtitle'   => 'PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.',
             'dataset'    => 'deployments',
             'baseline'   => 'azera',
             'mode'       => 'php-fpm',
@@ -79,19 +79,6 @@ return [
             'charts'     => ['hero', 'speedup', 'features', 'memory', 'wins'],
             'publish'    => ['framework'],
             'publish_md' => '19-BENCHMARKS-FPM.md',
-        ],
-
-        // Proof that a view can be anything: two frameworks, no Azera.
-        'laravel-vs-symfony' => [
-            'title'     => 'Laravel vs Symfony — RoadRunner-style resident worker',
-            'subtitle'  => 'The same dataset, narrowed to two frameworks. Any subset works — no code change.',
-            'dataset'   => 'free-for-all',
-            'baseline'  => 'laravel',
-            'mode'      => 'warm',
-            'log_scale' => false,
-            'apps'      => ['laravel', 'symfony'],
-            'charts'    => ['hero', 'speedup', 'features', 'memory'],
-            'publish'   => [], // not published anywhere
         ],
 
         // A memory-focused cut of the same dataset (peak memory is

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Azera vs All Frameworks — RoadRunner-style resident worker</title>
+<title>Framework Competition — Warm Start</title>
 <style>
 :root{color-scheme:light dark;--bg:            #f8fafc;--card:#fff;--ink:#0f172a;--muted:#64748b;--edge:#e2e8f0;--accent:#3459e6}
 @media (prefers-color-scheme:dark){:root{--bg: #0b1120;--card:#111a2e;--ink:#e2e8f0;--muted:#94a3b8;--edge:#1e293b}}
@@ -47,74 +47,74 @@ main{padding-bottom:10px}
 <body>
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
-  <h1>Azera vs All Frameworks — RoadRunner-style resident worker</h1>
-  <p class="lead">A full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response) with the framework booted once, as a RoadRunner/Octane-style worker serves it.</p>
+  <h1>Framework Competition — Warm Start</h1>
+  <p class="lead">RoadRunner/Octane-style resident worker: the framework boots once, then serves every request. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).</p>
   <p class="env">PHP 8.3.6 &middot; Linux 6.8.0-124-generic &middot; warm mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
 </header>
 <main>
   <section class="figures">
 <figure>
   <figcaption>Framework startup — boot + teardown (cold + warm)</figcaption>
-  <img src="svg/azera-vs-all/startup.svg" alt="Framework startup — boot + teardown (cold + warm)" loading="lazy">
+  <img src="svg/warm-start/startup.svg" alt="Framework startup — boot + teardown (cold + warm)" loading="lazy">
 </figure>
 <figure>
   <figcaption>Total response times</figcaption>
-  <img src="svg/azera-vs-all/speedup.svg" alt="Total response times" loading="lazy">
+  <img src="svg/warm-start/speedup.svg" alt="Total response times" loading="lazy">
 </figure>
 <figure>
   <figcaption>Peak memory footprint</figcaption>
-  <img src="svg/azera-vs-all/memory.svg" alt="Peak memory footprint" loading="lazy">
+  <img src="svg/warm-start/memory.svg" alt="Peak memory footprint" loading="lazy">
 </figure>
   </section>
   <h2>Feature benchmarks</h2>
 <section class="figures">
 <figure>
   <figcaption>Routing</figcaption>
-  <img src="svg/azera-vs-all/feature-routing.svg" alt="Routing" loading="lazy">
+  <img src="svg/warm-start/feature-routing.svg" alt="Routing" loading="lazy">
 </figure>
 <figure>
   <figcaption>ORM / Active Record</figcaption>
-  <img src="svg/azera-vs-all/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
+  <img src="svg/warm-start/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
 </figure>
 <figure>
   <figcaption>Query Builder</figcaption>
-  <img src="svg/azera-vs-all/feature-query-builder.svg" alt="Query Builder" loading="lazy">
+  <img src="svg/warm-start/feature-query-builder.svg" alt="Query Builder" loading="lazy">
 </figure>
 <figure>
   <figcaption>REST API (JSON)</figcaption>
-  <img src="svg/azera-vs-all/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
+  <img src="svg/warm-start/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
 </figure>
 <figure>
   <figcaption>AOP (Aspect-Oriented)</figcaption>
-  <img src="svg/azera-vs-all/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
+  <img src="svg/warm-start/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
 </figure>
 <figure>
   <figcaption>Cache</figcaption>
-  <img src="svg/azera-vs-all/feature-cache.svg" alt="Cache" loading="lazy">
+  <img src="svg/warm-start/feature-cache.svg" alt="Cache" loading="lazy">
 </figure>
 <figure>
   <figcaption>Database Events</figcaption>
-  <img src="svg/azera-vs-all/feature-db-events.svg" alt="Database Events" loading="lazy">
+  <img src="svg/warm-start/feature-db-events.svg" alt="Database Events" loading="lazy">
 </figure>
 <figure>
   <figcaption>Event Dispatcher</figcaption>
-  <img src="svg/azera-vs-all/feature-events.svg" alt="Event Dispatcher" loading="lazy">
+  <img src="svg/warm-start/feature-events.svg" alt="Event Dispatcher" loading="lazy">
 </figure>
 <figure>
   <figcaption>Validation</figcaption>
-  <img src="svg/azera-vs-all/feature-validation.svg" alt="Validation" loading="lazy">
+  <img src="svg/warm-start/feature-validation.svg" alt="Validation" loading="lazy">
 </figure>
 <figure>
   <figcaption>Config</figcaption>
-  <img src="svg/azera-vs-all/feature-config.svg" alt="Config" loading="lazy">
+  <img src="svg/warm-start/feature-config.svg" alt="Config" loading="lazy">
 </figure>
 <figure>
   <figcaption>Request-Scoped Services</figcaption>
-  <img src="svg/azera-vs-all/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
+  <img src="svg/warm-start/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
 </figure>
 <figure>
   <figcaption>Rate Limiter</figcaption>
-  <img src="svg/azera-vs-all/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
+  <img src="svg/warm-start/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
 </figure>
 </section>
   <h2>Wins per framework</h2>

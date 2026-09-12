@@ -1,6 +1,6 @@
-# Azera vs All Frameworks — RoadRunner-style resident worker
+# Framework Competition — Warm Start
 
-A full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response) with the framework booted once, as a RoadRunner/Octane-style worker serves it.
+RoadRunner/Octane-style resident worker: the framework boots once, then serves every request. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).
 
 **Environment** — PHP 8.3.6 · Linux 6.8.0-124-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
 
@@ -10,13 +10,13 @@ _Measured 2026-09-12T11:45:03+00:00 · azera-framework `b1c4900`_
 
 The framework's own load cost, timed directly: autoloader + kernel/container build + routes + DB connect, with no request processed — plus the median post-response teardown, because boot and cleanup are the same kind of time: during both, the worker cannot serve another request. **CakePHP** pays 4.48 ms cold against 100.0 ms for Spiral — x 22.3 slower. A warm recycle (worker restart with opcache warm) is cheaper for everyone: 0.009 ms for CakePHP at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild. The teardown share of a full request ranges from 0% (Laravel) up to 3% (Spiral).
 
-![Framework startup — boot + teardown](svg/azera-vs-all/startup.svg)
+![Framework startup — boot + teardown](svg/warm-start/startup.svg)
 
 ## Total response times
 
 Total time to serve one of each of the 21 endpoints, relative to Azera (1.0 = the baseline's own total, higher = slower). The closest rival is Symfony, needing x 3.0 the same total.
 
-![Total response times](svg/azera-vs-all/speedup.svg)
+![Total response times](svg/warm-start/speedup.svg)
 
 ## Feature benchmarks
 
@@ -35,57 +35,57 @@ Total time to serve one of each of the 21 endpoints, relative to Azera (1.0 = th
 
 ### Routing
 
-![Routing](svg/azera-vs-all/feature-routing.svg)
+![Routing](svg/warm-start/feature-routing.svg)
 
 ### ORM / Active Record
 
-![ORM / Active Record](svg/azera-vs-all/feature-orm.svg)
+![ORM / Active Record](svg/warm-start/feature-orm.svg)
 
 ### Query Builder
 
-![Query Builder](svg/azera-vs-all/feature-query-builder.svg)
+![Query Builder](svg/warm-start/feature-query-builder.svg)
 
 ### REST API (JSON)
 
-![REST API (JSON)](svg/azera-vs-all/feature-rest-api.svg)
+![REST API (JSON)](svg/warm-start/feature-rest-api.svg)
 
 ### AOP (Aspect-Oriented)
 
-![AOP (Aspect-Oriented)](svg/azera-vs-all/feature-aop.svg)
+![AOP (Aspect-Oriented)](svg/warm-start/feature-aop.svg)
 
 ### Cache
 
-![Cache](svg/azera-vs-all/feature-cache.svg)
+![Cache](svg/warm-start/feature-cache.svg)
 
 ### Database Events
 
-![Database Events](svg/azera-vs-all/feature-db-events.svg)
+![Database Events](svg/warm-start/feature-db-events.svg)
 
 ### Event Dispatcher
 
-![Event Dispatcher](svg/azera-vs-all/feature-events.svg)
+![Event Dispatcher](svg/warm-start/feature-events.svg)
 
 ### Validation
 
-![Validation](svg/azera-vs-all/feature-validation.svg)
+![Validation](svg/warm-start/feature-validation.svg)
 
 ### Config
 
-![Config](svg/azera-vs-all/feature-config.svg)
+![Config](svg/warm-start/feature-config.svg)
 
 ### Request-Scoped Services
 
-![Request-Scoped Services](svg/azera-vs-all/feature-request-scoped.svg)
+![Request-Scoped Services](svg/warm-start/feature-request-scoped.svg)
 
 ### Rate Limiter
 
-![Rate Limiter](svg/azera-vs-all/feature-rate-limiter.svg)
+![Rate Limiter](svg/warm-start/feature-rate-limiter.svg)
 
 ## Peak memory
 
 Peak memory reached on any endpoint. **CodeIgniter** stays under 8.50 MB, against 263 MB for the heaviest framework (x 30.9 more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
 
-![Peak memory footprint](svg/azera-vs-all/memory.svg)
+![Peak memory footprint](svg/warm-start/memory.svg)
 
 ## Wins per framework
 

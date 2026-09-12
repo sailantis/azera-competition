@@ -14,7 +14,7 @@ declare(strict_types=1);
  *
  * Usage:
  *   php scripts/report.php                          # all views
- *   php scripts/report.php --view=azera-vs-all      # one view
+ *   php scripts/report.php --view=warm-start        # one view
  *   php scripts/report.php --dataset=free-for-all   # pick dataset by name
  *   php scripts/report.php --dataset=results/free-for-all-opcache.json
  *   php scripts/report.php --list                   # list datasets + views
@@ -256,7 +256,7 @@ function publish(
         // the views share chart filenames (startup.svg, feature-orm.svg, …)
         // but describe different deployment models, so a flat copy would
         // silently overwrite the first story with the second.
-        $publishMd = ($view['publish_md'] ?? null) ?? ($key === 'azera-vs-all' ? '19-BENCHMARKS.md' : "19-BENCHMARKS-{$key}.md");
+        $publishMd = ($view['publish_md'] ?? null) ?? ($key === 'warm-start' ? '19-BENCHMARKS.md' : "19-BENCHMARKS-{$key}.md");
         $imagesDir = $framework . '/docs/images/benchmarks/' . $key;
         if (!is_dir($imagesDir) && !mkdir($imagesDir, 0777, true) && !is_dir($imagesDir)) {
             $log[] = "cannot create {$imagesDir}";
