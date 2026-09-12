@@ -95,8 +95,12 @@ function startRoadRunner(string $root, string $deployDir, string $appKey, string
 {
     echo "  starting RoadRunner ({$appKey}, port {$port})...\n";
 
+    // NOTE: -d xdebug.mode=off is a PHP flag — the Go binary rejects it
+    // ("unknown command"). Xdebug-off applies to the PHP WORKERS, which
+    // inherit php.ini (CLI ini already has xdebug disabled on the VM);
+    // RR itself needs `-o logs.level=…` style overrides only.
     $cmd = sprintf(
-        'cd %s && %s -d xdebug.mode=off serve -c %s 2>&1',
+        'cd %s && %s serve -c %s 2>&1',
         escapeshellarg($root),
         escapeshellarg($rrBinary),
         escapeshellarg("{$deployDir}/.rr-{$appKey}.yaml")
