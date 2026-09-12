@@ -10,10 +10,22 @@
  * each app in its own fresh process: run.php spawns `php run-app.php
  * <key> [options]` per app and merges the JSON results.
  *
+ * Endpoint-block isolation: memory_get_peak_usage() is a process-lifetime
+ * high-water mark and frameworks accumulate state across re-boots (service
+ * containers, static caches, opcache bookkeeping). Measuring all endpoint
+ * blocks of one app x mode in a single process therefore made peak_mem
+ * staircase with the block ORDER instead of reflecting the per-endpoint
+ * footprint (2026-09-12: Laravel cold climbed 32 MB -> 502 MB across 21
+ * endpoints). When more than one request is given, this process thus acts
+ * as a pure orchestrator and re-spawns ITSELF once per request — every
+ * (app, mode, request) block runs in a fresh PHP process with a clean
+ * high-water mark. Only the first block measures boot cost (--skip-boot is
+ * passed to the rest); --seed is applied once, before the blocks.
+ *
  * Everything after the shared preamble mirrors run.php's per-app loop.
  */
 
-$opts = getopt('', ['app::', 'mode::', 'iterations-per-run::', 'runs::', 'requests::', 'seed', 'rows::', 'out-json::']);
+$opts = getopt('', ['app::', 'mode::', 'iterations-per-run::', 'runs::', 'requests::', 'seed', 'rows::', 'out-json::', 'skip-boot']);
 
 $appKey = $opts['app'] ?? 'azera';
 
@@ -121,6 +133,81 @@ if (!isset($adapterClasses[$appKey])) {
     exit(1);
 }
 
+// --- Endpoint-block isolation (orchestrator mode) ----------------------------
+//
+// With more than one request we do NOT measure in this process. Instead we
+// spawn one fresh child per request (this same script with a single request)
+// and merge the per-block results. Rationale: see the header comment — a
+// fresh process per block is the only way to get an honest per-endpoint
+// peak_mem, because the frameworks' state accumulates over process lifetime.
+// The recursion is self-limiting: each child receives exactly one request
+// and therefore takes the normal measuring path below.
+
+if (count($requests) > 1) {
+    echo " -- mode: {$modeName} — " . count($requests) . " endpoint blocks, one fresh process each\n";
+
+    if ($doSeed) {
+        echo "    reseeding database ({$seedRows} rows)...\n";
+        $seedScript  = escapeshellarg(__DIR__ . '/seed.php');
+        $seedRowsArg = escapeshellarg((string) $seedRows);
+        passthru("php {$seedScript} --rows={$seedRowsArg}", $seedExit);
+        if ($seedExit !== 0) {
+            echo "Seed failed (exit {$seedExit}), aborting.\n";
+            exit(1);
+        }
+    }
+
+    $merged = ['app' => $appKey, 'modes' => [$modeName => ['requests' => []]], 'boot' => null];
+
+    foreach ($requests as $blockIdx => $request) {
+        $label   = "{$request[0]} {$request[1]}";
+        $tmpJson = tempnam(sys_get_temp_dir(), 'bench-block-') . '.json';
+        $cmd     = sprintf(
+            '%s %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(__FILE__),
+            escapeshellarg($appKey),
+            escapeshellarg($modeName),
+            $itersPerRun,
+            $runs,
+            escapeshellarg($label),
+            escapeshellarg($tmpJson),
+            $blockIdx === 0 ? '' : ' --skip-boot'
+        );
+
+        passthru($cmd, $blockExit);
+        if ($blockExit !== 0 || !is_file($tmpJson)) {
+            fwrite(STDERR, "Block benchmark for {$label} failed (exit {$blockExit}), aborting.\n");
+            exit(1);
+        }
+
+        $block = json_decode((string) file_get_contents($tmpJson), true);
+        unlink($tmpJson);
+        if (!is_array($block) || !isset($block['modes'][$modeName]['requests'][0])) {
+            fwrite(STDERR, "Block benchmark for {$label} returned no results, aborting.\n");
+            exit(1);
+        }
+
+        $merged['modes'][$modeName]['requests'][] = $block['modes'][$modeName]['requests'][0];
+        if ($merged['boot'] === null && isset($block['boot'])) {
+            $merged['boot'] = $block['boot'];
+        }
+    }
+
+    $json = json_encode($merged);
+    if (is_string($outJsonPath) && $outJsonPath !== '') {
+        if (file_put_contents($outJsonPath, $json) === false) {
+            fwrite(STDERR, "Failed to write results to {$outJsonPath}\n");
+            exit(1);
+        }
+        echo "Results written to {$outJsonPath}\n";
+    } else {
+        echo "---RESULTS---\n";
+        echo $json . "\n";
+    }
+    exit(0);
+}
+
 $class = $adapterClasses[$appKey];
 require_once __DIR__ . '/adapters/' . $class . '.php';
 
@@ -175,12 +262,17 @@ function measureBoot(WebAppAdapter $adapter, int $warmRuns = 5): array
     ];
 }
 
-$boot = measureBoot($adapter);
-printf(
-    "  boot — cold %.1f ms, warm %.1f ms\n",
-    $boot['cold_ms'],
-    $boot['warm_ms']
-);
+// Non-first blocks (spawned by the orchestrator above) skip the boot
+// measurement: the boot numbers come from this mode's first block, and
+// skipping keeps later blocks free of extra re-boot state.
+$boot = isset($opts['skip-boot']) ? null : measureBoot($adapter);
+if ($boot !== null) {
+    printf(
+        "  boot — cold %.1f ms, warm %.1f ms\n",
+        $boot['cold_ms'],
+        $boot['warm_ms']
+    );
+}
 
 // --- Optional reseed (same rationale as run.php) -----------------------------
 

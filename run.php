@@ -541,7 +541,10 @@ function benchRequest(
 // colliding names (config(), view(), env(), ...), so two of them can never
 // share one process — whichever loads first shadows the other. Separate
 // processes also give every framework identical opcache/jit conditions.
-// The per-request benchmark loop itself lives in run-app.php.
+// Within the child, every (mode, request) block is isolated AGAIN in its
+// own grandchild process: memory_get_peak_usage() is a process-lifetime
+// high-water mark, so honest per-endpoint peak_mem needs a fresh process
+// per block (see "Endpoint-block isolation" in run-app.php).
 
 echo "=== azera-competition benchmark ===\n";
 echo "Apps: " . implode(', ', $apps) . "\n";
