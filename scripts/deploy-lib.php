@@ -241,18 +241,19 @@ function waitForServer(string $baseUrl, string $server, string $appKey): void
 
 // --- http-bench child -------------------------------------------------------------------
 
-function runHttpBench(string $root, string $server, string $appKey, string $baseUrl, int $itersPerRun, int $runs, string $tmpJson): void
+function runHttpBench(string $root, string $server, string $appKey, string $baseUrl, int $itersPerRun, int $runs, string $tmpJson, string $extraArgs = ''): void
 {
     echo "  benchmarking {$server}/{$appKey} @ {$baseUrl}...\n";
     shellRun(sprintf(
-        'cd %s && php scripts/http-bench.php --server=%s --app=%s --base-url=%s --iterations-per-run=%d --runs=%d --out-json=%s',
+        'cd %s && php scripts/http-bench.php --server=%s --app=%s --base-url=%s --iterations-per-run=%d --runs=%d --out-json=%s %s',
         escapeshellarg($root),
         escapeshellarg($server),
         escapeshellarg($appKey),
         escapeshellarg($baseUrl),
         $itersPerRun,
         $runs,
-        escapeshellarg($tmpJson)
+        escapeshellarg($tmpJson),
+        $extraArgs
     ), "http-bench {$server}/{$appKey}");
 }
 
@@ -374,7 +375,9 @@ function measureFloors(
 function measureFloorApp(string $root, string $name, string $mode, string $baseUrl, int $itersPerRun, int $runs): array
 {
     $tmpJson = "{$root}/temp/bench-floor-{$name}.json";
-    runHttpBench($root, $mode === 'roadrunner' ? 'rr' : 'fpm', $name, $baseUrl, $itersPerRun, $runs, $tmpJson);
+    // Floors are single-endpoint probes (GET / only) — never the full label
+    // list; the report only reads the GET / entry.
+    runHttpBench($root, $mode === 'roadrunner' ? 'rr' : 'fpm', $name, $baseUrl, $itersPerRun, $runs, $tmpJson, '--requests="GET /"');
 
     $data = json_decode((string) file_get_contents($tmpJson), true);
     unlink($tmpJson);
