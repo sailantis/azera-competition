@@ -69,6 +69,25 @@ function stampAllDeployConfigs(
     }
 
     echo "Deploy configs stamped into {$deployDir}\n";
+
+    // Remove STALE stamps from previous runs: ensureFpmRunning() installs
+    // every bench-*.conf/.nginx in $deployDir — leftovers from runs with
+    // other app lists (or older stamping bugs, e.g. empty user) would be
+    // reinstalled and can poison the FPM reload for the whole run.
+    foreach (glob("{$deployDir}/bench-*.conf") ?: [] as $stale) {
+        $app = basename($stale, '.conf');
+        $app = preg_replace('/^bench-/', '', $app);
+        if (!in_array($app, $apps, true)) {
+            @unlink($stale);
+        }
+    }
+    foreach (glob("{$deployDir}/bench-*.nginx") ?: [] as $stale) {
+        $app = basename($stale, '.nginx');
+        $app = preg_replace('/^bench-/', '', $app);
+        if (!in_array($app, $apps, true)) {
+            @unlink($stale);
+        }
+    }
 }
 
 // --- SQLite seeding --------------------------------------------------------------
