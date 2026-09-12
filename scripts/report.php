@@ -34,7 +34,6 @@ require_once __DIR__ . '/report/Tables.php';
 require_once __DIR__ . '/report/MarkdownReport.php';
 require_once __DIR__ . '/report/HtmlReport.php';
 
-use AzeraCompetition\Report\BenchmarkConfig;
 use AzeraCompetition\Report\HtmlReport;
 use AzeraCompetition\Report\MarkdownReport;
 use AzeraCompetition\Report\ResultStore;

@@ -1,0 +1,38 @@
+; PHP-FPM pool for benchmark app {{APP}} — COLD model (real worker recycling).
+; pm.max_requests = 1 → the worker is recycled after every request: a real
+; fresh boot per request with opcache retained. One worker total for SQLite
+; write parity with the in-process harness.
+;
+; Runs as {{USER}} (the benchmark user who owns the repo + SQLite data),
+; NOT www-data — the socket is chown'd to www-data's group only for nginx
+; readability.
+
+[bench-{{APP}}]
+user = {{USER}}
+group = {{USER}}
+listen = /run/php-fpm-bench/{{APP}}.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0666
+
+pm = static
+pm.max_children = 1
+pm.max_requests = 1
+
+; Framework boot per request — generous timeouts so cold boots never get
+; killed mid-request during measurement.
+request_terminate_timeout = 120s
+request_slowlog_timeout = 0
+
+php_admin_value[opcache.enable] = 1
+php_admin_value[opcache.enable_cli] = 1
+php_admin_value[opcache.validate_timestamps] = 0
+php_admin_value[error_log] = {{ROOT}}/temp/fpm-{{APP}}.log
+php_admin_value[memory_limit] = 512M
+
+; No Xdebug in benchmark pools (measurable per-request overhead).
+php_admin_value[xdebug.mode] = off
+php_admin_flag[xdebug.start_with_request] = no
+
+catch_workers_output = yes
+decorate_workers_output = no

@@ -38,6 +38,17 @@ return [
             'label' => 'Deployment models — the free-for-all run, warm/cold relabelled as roadrunner/php-fpm',
             'file'  => $root . '/results/free-for-all-opcache-deployments.json',
         ],
+
+        // REAL deployment measurements (scripts/run-http.php on the benchmark
+        // VM): RoadRunner resident worker (mode roadrunner) and nginx +
+        // php-fpm with pm.max_requests=1 (mode php-fpm) — the real servers,
+        // not the harness simulation. End-to-end HTTP over loopback, so the
+        // constant webserver overhead is INCLUDED in every number; the
+        // floor-* pseudo-apps in the dataset expose that overhead explicitly.
+        'real-deployments' => [
+            'label' => 'Real deployments — RoadRunner + nginx/FPM on the benchmark VM (HTTP over loopback)',
+            'file'  => $root . '/results/real-deployments.json',
+        ],
     ],
 
     // --- Views ------------------------------------------------------------
@@ -79,6 +90,40 @@ return [
             'charts'     => ['hero', 'speedup', 'features', 'memory', 'wins'],
             'publish'    => ['framework'],
             'publish_md' => '19-BENCHMARKS-FPM.md',
+        ],
+
+        // REAL RoadRunner: actual RoadRunner server + resident worker over
+        // HTTP (loopback). End-to-end numbers include the constant
+        // webserver/IPC overhead — sub-0.1 ms framework features are expected
+        // to disappear into that floor; heavy features stay meaningful.
+        'real-roadrunner' => [
+            'title'      => 'Framework Competition — Real RoadRunner',
+            'subtitle'   => 'Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.',
+            'dataset'    => 'real-deployments',
+            'baseline'   => 'azera',
+            'mode'       => 'roadrunner',
+            'log_scale'  => false,
+            'apps'       => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'charts'     => ['hero', 'speedup', 'features', 'wins'],
+            'publish'    => ['framework'],
+            'publish_md' => '19-BENCHMARKS-REAL.md',
+        ],
+
+        // REAL PHP-FPM + nginx: the pool recycles the worker after every
+        // request (pm.max_requests=1) — a real fresh boot per request with
+        // opcache retained. The honest real-world counterpart of the
+        // simulated cold-start view.
+        'real-fpm' => [
+            'title'      => 'Framework Competition — Real PHP-FPM',
+            'subtitle'   => 'Real nginx + PHP-FPM, worker recycled after every request (pm.max_requests=1): a genuine fresh boot per request with opcache retained. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.',
+            'dataset'    => 'real-deployments',
+            'baseline'   => 'azera',
+            'mode'       => 'php-fpm',
+            'log_scale'  => false,
+            'apps'       => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'charts'     => ['hero', 'speedup', 'features', 'wins'],
+            'publish'    => ['framework'],
+            'publish_md' => '19-BENCHMARKS-REAL-FPM.md',
         ],
 
         // A memory-focused cut of the same dataset (peak memory is
