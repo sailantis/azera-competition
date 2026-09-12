@@ -362,7 +362,9 @@ function measureFloors(
     if ($useRr) {
         $worker = "{$root}/temp/floor-rr-worker.php";
         file_put_contents($worker, floorRrWorkerSource());
-        $cfg = "{$root}/temp/.rr-floor.yaml";
+        // Must live in $deployDir as .rr-<appKey>.yaml — startRoadRunner()
+        // derives the config path from (deployDir, appKey).
+        $cfg = "{$deployDir}/.rr-floor-rr.yaml";
         file_put_contents($cfg, str_replace(
             ['{{APP}}', '{{PORT}}'],
             ['floor-rr', '9902'],
@@ -379,7 +381,7 @@ function measureFloors(
             YAML
         ));
 
-        $proc = startRoadRunner($root, dirname($cfg), 'floor-rr', $rrBinary, 9902);
+        $proc = startRoadRunner($root, $deployDir, 'floor-rr', $rrBinary, 9902);
         try {
             waitForServer('http://127.0.0.1:9902', 'rr', 'floor-rr');
             $floors[] = measureFloorApp($root, 'floor-rr', 'roadrunner', 'http://127.0.0.1:9902', $itersPerRun, $runs);
