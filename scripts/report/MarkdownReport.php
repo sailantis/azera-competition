@@ -221,26 +221,27 @@ final class MarkdownReport
         // Per-band anchor at the fastest framework on that band (same
         // convention as the feature charts). One wrinkle: some re-boots are
         // guarded no-ops (CodeIgniter/CakePHP reset state only — classes are
-        // already loaded; azera/symfony/laravel re-bootstrap in ~0.001 ms
-        // once opcache holds the bytecode). Anchoring such a band at a
-        // no-op would print absurd "x 3000+" factors for everyone else, so
-        // the anchor becomes the fastest BOOT THAT ACTUALLY WORKS (>= 0.1 ms)
-        // and the no-op rows simply get no factor label — their ~0 ms median
-        // already tells the whole story.
+        // already loaded; azera re-boots in ~0.001 ms once opcache holds the
+        // bytecode). Anchoring such a band at a no-op would print absurd
+        // "x 3000+" factors, so the anchor is the fastest BOOT THAT ACTUALLY
+        // WORKS (>= 0.1 ms). Every row still gets a factor — the no-op rows
+        // read "x 0.0" and the anchor row reads "x 1.0" — so the chart states
+        // the calculation on each line and the reader can see exactly which
+        // boot the numbers are measured against.
         $factors = [];
         foreach ($cats as $band) {
-            $byLabel = [];
+            $working = [];
             foreach ($metrics[$band] as $label => $m) {
                 if ($m['median'] >= 0.1) {
-                    $byLabel[$label] = $m['median'];
+                    $working[$label] = $m['median'];
                 }
             }
-            if ($byLabel === []) {
+            if ($working === []) {
                 continue; // every row in this band is a no-op — nothing to anchor
             }
-            $fastest = min($byLabel);
-            foreach ($byLabel as $label => $median) {
-                $factors[$bands[$band]['label']][$label] = $median / max($fastest, 1e-9);
+            $fastest = min($working);
+            foreach ($metrics[$band] as $label => $m) {
+                $factors[$bands[$band]['label']][$label] = $m['median'] / max($fastest, 1e-9);
             }
         }
 
@@ -255,7 +256,8 @@ final class MarkdownReport
             'Framework startup — boot + teardown',
             'boot + median per-request teardown — both block the worker between requests',
             $factors,
-            'x = median ÷ the fastest working boot of that kind (no-op re-boots excluded)'
+            'x = median ÷ the fastest working boot of that kind (no-op re-boots excluded)',
+            true
         );
         $file = 'startup.svg';
         file_put_contents($dir . '/' . $file, $svg);
