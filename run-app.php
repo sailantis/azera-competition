@@ -310,6 +310,7 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
     $runMeans     = [];
     $handleMeans  = [];
     $cleanupMeans = [];
+    $bootMeans    = [];
     $allTimes     = [];
     $peakMem      = 0;
 
@@ -321,18 +322,30 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
         memory_reset_peak_usage();
 
         if ($mode === 'cold') {
+            // One untimed priming cycle: the very first boot of a PHP process
+            // pays one-time costs (opcache bookkeeping, FS cache cold, static
+            // map init) that later boots never pay again. Without priming,
+            // every timed boot would double-count those one-time costs.
             $adapter->bootstrap();
         }
 
         $times        = [];
         $handleTimes  = [];
         $cleanupTimes = [];
+        $bootTimes    = [];
         for ($i = 0; $i < $itersPerRun; $i++) {
-            $t0   = hrtime(true);
+            // Cold mode times the FULL request lifecycle: a fresh boot is
+            // part of the work the request must wait for, exactly like a
+            // real PHP-FPM worker building the app before serving.
+            $t0 = hrtime(true);
+            if ($mode === 'cold') {
+                $adapter->bootstrap();
+            }
+            $t1 = hrtime(true);
             $body = $adapter->dispatch($method, $uri);
-            $t1   = hrtime(true);
-            $adapter->cleanup();
             $t2 = hrtime(true);
+            $adapter->cleanup();
+            $t3 = hrtime(true);
             // Harness guard — an adapter that swallows an error (404/500)
             // returns a short error string instead of the real response.
             // Timing those would silently poison the dataset (this is how
@@ -346,15 +359,19 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
                     . "  (stale cache? missing route? changed signature?) and re-run.\n");
                 exit(1);
             }
-            $handleTimes[] = ($t1 - $t0) / 1e6;
-            $cleanupTimes[] = ($t2 - $t1) / 1e6;
-            $times[] = ($t2 - $t0) / 1e6;
+            $bootTimes[] = ($t1 - $t0) / 1e6;
+            $handleTimes[] = ($t2 - $t1) / 1e6;
+            $cleanupTimes[] = ($t3 - $t2) / 1e6;
+            $times[] = ($t3 - $t0) / 1e6;
         }
 
         $s = stats($times);
         $runMeans[] = $s['mean'];
         $handleMeans[] = stats($handleTimes)['mean'];
         $cleanupMeans[] = stats($cleanupTimes)['mean'];
+        if ($bootTimes !== []) {
+            $bootMeans[] = stats($bootTimes)['mean'];
+        }
         $allTimes = array_merge($allTimes, $times);
         $peakMem  = max($peakMem, memory_get_peak_usage(true));
 
@@ -371,7 +388,9 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
     $tMean = trimmedMean($runMeans);
 
     // Handle vs teardown split (trimmed mean over per-run means, same
-    // convention as the headline number). handle + cleanup = trimmed_mean.
+    // convention as the headline number). In cold mode handle includes the
+    // fresh boot — boot_ms reports it separately so the report can state
+    // the boot share explicitly instead of leaving it buried.
     $hMean = trimmedMean($handleMeans);
     $cMean = trimmedMean($cleanupMeans);
 
@@ -387,10 +406,11 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
         'peak_mem'           => $peakMem,
         'handle_ms'          => $hMean,
         'cleanup_ms'         => $cMean,
+        'boot_ms'            => $bootTimes !== [] ? trimmedMean($bootMeans) : null,
     ];
 }
 
-$appResult = ['app' => $appKey, 'modes' => [], 'boot' => $boot];
+$appResult = ['app' => $appKey, 'modes' => [], 'boot' => $boot, 'cold_boot_included' => $modeName === 'cold'];
 
 echo " -- mode: {$modeName}\n";
 $modeResult = ['requests' => []];

@@ -1,6 +1,6 @@
 # Framework Competition — Cold Start
 
-PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.
+PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained) — boot is timed separately, the request numbers show post-boot work only. FPM worker management itself is not simulated — these are lower bounds for real FPM latency.
 
 **Environment** — PHP 8.3.33 · Linux 6.8.0-85-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
 

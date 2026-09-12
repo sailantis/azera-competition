@@ -206,6 +206,9 @@ final class Tables
         $sub = $this->store->hasCleanupSplit()
             ? ' <span class="unit">(sub-line: handle + post-response cleanup, which sum to the total)</span>'
             : '';
+        if ($this->store->coldBootIncluded() && in_array($mode, ['cold', 'php-fpm'], true)) {
+            $sub .= ' <span class="unit">— cold rows are end-to-end: each iteration pays a fresh boot inside the request clock (FPM story)</span>';
+        }
         return "<h2>Latency by endpoint <span class=\"unit\">(ms, trimmed mean — lower is better)</span>{$sub}</h2>\n<table class=\"matrix\">\n<thead>{$head}</thead>\n<tbody>\n{$body}</tbody>\n</table>";
     }
 }

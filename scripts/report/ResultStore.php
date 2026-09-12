@@ -150,6 +150,18 @@ final class ResultStore
     }
 
     /**
+     * Whether this dataset's cold-mode request timings INCLUDE the
+     * per-iteration boot in the request clock (the FPM story). Datasets
+     * recorded before the flag existed timed the request only, with boot
+     * measured separately — the report captions must not claim boot is
+     * included for those.
+     */
+    public function coldBootIncluded(): bool
+    {
+        return (bool) ($this->env['cold_boot_included'] ?? false);
+    }
+
+    /**
      * Apps present in the dataset, ordered by BenchmarkConfig::appOrder(),
      * then any unknown extras alphabetically.
      *

@@ -181,6 +181,10 @@ function envInfo(): array
         'sapi'                => PHP_SAPI,
         'timestamp'           => date('c'),
         'azera_framework_ref' => azeraFrameworkRef(),
+        // Cold-mode semantics: since this flag exists, cold-mode timings
+        // include the per-iteration boot in the request clock (the FPM
+        // story); older datasets timed the request only, boot separate.
+        'cold_boot_included'  => true,
     ];
 }
 
@@ -474,6 +478,7 @@ function benchRequest(
     $runMeans     = [];
     $handleMeans  = [];
     $cleanupMeans = [];
+    $bootMeans    = [];
     $allTimes     = [];
     $peakMem      = 0;
 
@@ -484,27 +489,41 @@ function benchRequest(
         memory_reset_peak_usage();
 
         if ($mode === 'cold') {
+            // One untimed priming cycle (see run-app.php benchRequest):
+            // absorbs one-time costs the first boot of a process pays.
             $adapter->bootstrap();
         }
 
         $times        = [];
         $handleTimes  = [];
         $cleanupTimes = [];
+        $bootTimes    = [];
         for ($i = 0; $i < $itersPerRun; $i++) {
+            // Cold mode times the FULL request lifecycle: a fresh boot is
+            // part of the work the request must wait for, exactly like a
+            // real PHP-FPM worker building the app before serving.
             $t0 = hrtime(true);
-            $adapter->dispatch($method, $uri);
+            if ($mode === 'cold') {
+                $adapter->bootstrap();
+            }
             $t1 = hrtime(true);
-            $adapter->cleanup();
+            $adapter->dispatch($method, $uri);
             $t2 = hrtime(true);
-            $handleTimes[] = ($t1 - $t0) / 1e6;
-            $cleanupTimes[] = ($t2 - $t1) / 1e6;
-            $times[] = ($t2 - $t0) / 1e6;
+            $adapter->cleanup();
+            $t3 = hrtime(true);
+            $bootTimes[] = ($t1 - $t0) / 1e6;
+            $handleTimes[] = ($t2 - $t1) / 1e6;
+            $cleanupTimes[] = ($t3 - $t2) / 1e6;
+            $times[] = ($t3 - $t0) / 1e6;
         }
 
         $s = stats($times);
         $runMeans[] = $s['mean'];
         $handleMeans[] = stats($handleTimes)['mean'];
         $cleanupMeans[] = stats($cleanupTimes)['mean'];
+        if ($bootTimes !== []) {
+            $bootMeans[] = stats($bootTimes)['mean'];
+        }
         $allTimes = array_merge($allTimes, $times);
         $peakMem  = max($peakMem, memory_get_peak_usage(true));
 
@@ -520,6 +539,13 @@ function benchRequest(
     $sAll  = stats($allTimes);
     $tMean = trimmedMean($runMeans);
 
+    // Handle vs teardown split (trimmed mean over per-run means, same
+    // convention as the headline number). In cold mode handle includes the
+    // fresh boot — boot_ms reports it separately so the report can state
+    // the boot share explicitly instead of leaving it buried.
+    $hMean = trimmedMean($handleMeans);
+    $cMean = trimmedMean($cleanupMeans);
+
     return [
         'request'            => $reqLabel,
         'iterations_per_run' => $itersPerRun,
@@ -530,8 +556,9 @@ function benchRequest(
         'median_ms'          => $sAll['median'],
         'p95_ms'             => $sAll['p95'],
         'peak_mem'           => $peakMem,
-        'handle_ms'          => trimmedMean($handleMeans),
-        'cleanup_ms'         => trimmedMean($cleanupMeans),
+        'handle_ms'          => $hMean,
+        'cleanup_ms'         => $cMean,
+        'boot_ms'            => $bootTimes !== [] ? trimmedMean($bootMeans) : null,
     ];
 }
 

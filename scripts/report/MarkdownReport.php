@@ -43,7 +43,19 @@ final class MarkdownReport
         $l = [];
         $l[] = '# ' . ($this->view['title'] ?? 'Benchmark');
         $l[] = '';
-        $l[] = (string) ($this->view['subtitle'] ?? '');
+        // The cold-start view's headline claim depends on how the dataset was
+        // recorded: since cold_boot_included, cold timings carry the boot in
+        // the request clock (the FPM story); older datasets timed the request
+        // only. Never render a subtitle the numbers cannot support.
+        $subtitle = (string) ($this->view['subtitle'] ?? '');
+        if (in_array($mode, ['cold', 'php-fpm'], true) && !$this->store->coldBootIncluded()) {
+            $subtitle = str_replace(
+                'the application boots for every request (harness cold mode, opcache retained).',
+                'the application boots for every request (harness cold mode, opcache retained) — boot is timed separately, the request numbers show post-boot work only.',
+                $subtitle
+            );
+        }
+        $l[] = $subtitle;
         $l[] = '';
         $l[] = $this->envBlock();
         $l[] = '';
@@ -68,6 +80,11 @@ final class MarkdownReport
                 ? "\n\nEach cell also shows the request's lifecycle split as `total <sub>handle + cleanup</sub>` — "
                     . 'cleanup is the post-response teardown a long-lived worker performs between requests '
                     . '(terminate() finalizers, request-scoped resets), which the headline number includes.'
+                : '')
+            . (in_array($mode, ['cold', 'php-fpm'], true) && $this->store->coldBootIncluded()
+                ? "\n\nThis dataset times cold requests END-TO-END: every iteration pays a fresh framework boot "
+                    . 'inside the request clock, exactly like a real PHP-FPM worker building the app before serving. '
+                    . 'The handle share therefore carries the boot cost; the totals here are the numbers a user waits for.'
                 : '');
         $l[] = '';
         $l[] = $tables->latencyMarkdown($mode, $apps);
@@ -411,15 +428,15 @@ final class MarkdownReport
                     break;
                 }
                 $total['median'] += $spread['median'];
-                $total['low']    += $spread['low'];
-                $total['high']   += $spread['high'];
+                $total['low'] += $spread['low'];
+                $total['high'] += $spread['high'];
             }
             if ($total === null) {
                 continue; // only frameworks that measured every endpoint take part
             }
             $label = BenchmarkConfig::appLabel($app);
             $metrics[$label] = $total;
-            $colors[$label]  = BenchmarkConfig::appColor($app);
+            $colors[$label] = BenchmarkConfig::appColor($app);
         }
         $base      = BenchmarkConfig::appLabel($baseline);
         $baseTotal = $metrics[$base]['median'] ?? 0.0;

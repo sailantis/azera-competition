@@ -79,6 +79,16 @@ HTML;
         $baseline = (string) ($view['baseline'] ?? ($apps[0] ?? ''));
         $mode     = (string) ($view['mode'] ?? 'warm');
         $env      = $this->store->env();
+        // Same flag guard as MarkdownReport: only claim boot inclusion when
+        // the dataset was recorded with boot inside the request clock.
+        $subtitle = (string) ($view['subtitle'] ?? '');
+        if (in_array($mode, ['cold', 'php-fpm'], true) && !$this->store->coldBootIncluded()) {
+            $subtitle = str_replace(
+                'the application boots for every request (harness cold mode, opcache retained).',
+                'the application boots for every request (harness cold mode, opcache retained) — boot is timed separately, the request numbers show post-boot work only.',
+                $subtitle
+            );
+        }
 
         $figures = '';
         $order   = [
