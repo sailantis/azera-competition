@@ -368,87 +368,6 @@ final class SvgChart
     }
 
     /**
-     * Horizontal bar chart — ranks categories by a single value.
-     *
-     * Value labels use the same "x 8.5" notation as the factor labels on the
-     * dot-and-range charts, so the two chart families share one language.
-     * Row order is the caller's business: the speedup chart passes its values
-     * pre-sorted by speed (fastest first).
-     *
-     * @param array<string,float>  $values  label => value
-     * @param array<string,string> $colors  label => colour
-     * @param string $caption  small italic line under the title
-     */
-    public static function horizontalBars(
-        array $values,
-        array $colors,
-        string $title = '',
-        string $caption = '',
-        int $width = 960,
-        int $rowH = 30
-    ): string {
-        $padL   = 150;
-        $padR   = 90;
-        $padT   = $title !== '' ? 56 : 20;
-        $padB   = 16;
-        $height = $padT + count($values) * $rowH + $padB;
-        $plotW  = $width - $padL - $padR;
-        $max    = 0.0;
-        foreach ($values as $v) {
-            if ($v > $max) {
-                $max = $v;
-            }
-        }
-        if ($max <= 0) {
-            $max = 1.0;
-        }
-        $axisTop = self::niceCeil($max);
-
-        $out = [];
-        $out[] = self::svgOpen($width, $height, $title);
-        $out[] = self::card($width, $height);
-        if ($title !== '') {
-            $out[] = self::text($padL, 30, $title, 15, self::INK, 700);
-            $out[] = self::text($padL, 48, $caption, 11, self::INK_SOFT, 400, true);
-        }
-
-        $i = 0;
-        foreach ($values as $label => $v) {
-            $y    = $padT + $i * $rowH;
-            $cy   = $y + $rowH / 2;
-            $w    = $plotW * ($v / $axisTop);
-            $fill = $colors[$label] ?? '#64748b';
-            // Row label in the bar's own colour, bold — the same name style
-            // the dot-and-range charts use, so the two chart families share
-            // one identity language.
-            $out[] = self::text($padL - 10, $cy + 4, $label, 12, $fill, 700, false, 'end');
-            // Translucent fill so the bars don't outweigh the data they
-            // carry — full-saturation blocks read heavier than the marks on
-            // the dot-and-range charts. The label keeps full opacity.
-            $out[] = sprintf(
-                '<rect x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="0.75"/>',
-                self::n($padL),
-                self::n($y + 5),
-                self::n(max(1.0, $w)),
-                self::n($rowH - 12),
-                $fill
-            );
-            $out[] = self::text(
-                $padL + max(1.0, $w) + 8,
-                $cy + 4,
-                'x ' . self::fmtFactor($v),
-                11,
-                self::INK,
-                600
-            );
-            $i++;
-        }
-
-        $out[] = '</svg>';
-        return implode("\n", $out);
-    }
-
-    /**
      * Dot-and-range chart — the readable alternative to bars when the spread
      * between frameworks is large (Azera can be 20× faster than the next
      * framework, which collapses its bar to a sliver).
@@ -485,6 +404,9 @@ final class SvgChart
      *        when the anchor leads its band: the top row IS the obvious
      *        reference there. Default false keeps the old behaviour: only
      *        non-1.0 rows are labelled.
+     * @param string $valueHeader label of the left-hand value column
+     *        ("median" by default; callers that print another aggregate in
+     *        this column — the totals chart — rename it)
      */
     public static function dotRange(
         array $categories,
@@ -498,7 +420,8 @@ final class SvgChart
         string $caption = '',
         ?array $factors = null,
         string $factorNote = 'x = median ÷ the best in this chart',
-        bool $labelAllFactors = false
+        bool $labelAllFactors = false,
+        string $valueHeader = 'median'
     ): string {
         unset($height);
 
@@ -596,8 +519,10 @@ final class SvgChart
             }
         }
 
-        // Column header for the median values, aligned with the value column.
-        $out[] = self::text($valRight, $padT - 6, 'median', 11, self::INK_SOFT, 600, false, 'end');
+        // Column header for the value column, aligned with the printed
+        // values. Renamable so a caller printing another aggregate in this
+        // column (the totals chart) can label it honestly.
+        $out[] = self::text($valRight, $padT - 6, $valueHeader, 11, self::INK_SOFT, 600, false, 'end');
 
         // Vertical grid + x-axis ticks. Tick labels carry the unit so a bare
         // "0.02" can never be mistaken for a ratio or a second scale.

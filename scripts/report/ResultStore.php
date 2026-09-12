@@ -534,69 +534,6 @@ final class ResultStore
     }
 
     /**
-     * Geometric-free aggregate speed-up vs baseline across several requests:
-     * sum of baseline ms / sum of app ms ("total time to serve one of each").
-     *
-     * @param list<string> $requests
-     * @param list<string>|null $restrict
-     * @return array<string,float> app => multiplier
-     */
-    public function aggregateSpeedupVs(string $baseline, string $mode, array $requests, ?array $restrict = null): array
-    {
-        $baseTotal = 0.0;
-        foreach ($requests as $req) {
-            $baseTotal += (float) ($this->ms($baseline, $mode, $req) ?? 0.0);
-        }
-        if ($baseTotal <= 0) {
-            return [];
-        }
-        $out = [];
-        foreach ($this->apps() as $app) {
-            if ($restrict !== null && !in_array($app, $restrict, true)) {
-                continue;
-            }
-            $total = 0.0;
-            $ok    = true;
-            foreach ($requests as $req) {
-                $ms = $this->ms($app, $mode, $req);
-                if ($ms === null) {
-                    $ok = false;
-                    break;
-                }
-                $total += $ms;
-            }
-            if ($ok && $total > 0) {
-                $out[$app] = $baseTotal / $total;
-            }
-        }
-        arsort($out);
-        return $out;
-    }
-
-    /**
-     * Inverse of aggregateSpeedupVs, expressed as "× the baseline's total
-     * time" — the baseline is exactly 1.0 and higher means slower, which is
-     * the natural reading for a chart. Only apps that measured *every* request
-     * take part, so no framework is flattered by a shorter route list.
-     *
-     * @param list<string> $requests
-     * @param list<string>|null $restrict
-     * @return array<string,float> app => multiple of baseline total time
-     */
-    public function aggregateTimeRatioVs(string $baseline, string $mode, array $requests, ?array $restrict = null): array
-    {
-        $speedups = $this->aggregateSpeedupVs($baseline, $mode, $requests, $restrict);
-        $out      = [];
-        foreach ($speedups as $app => $speedup) {
-            if ($speedup > 0) {
-                $out[$app] = 1 / $speedup;
-            }
-        }
-        asort($out);
-        return $out;
-    }
-
-    /**
      * Requests that every app in $apps has a measurement for (fair comparison).
      *
      * @param list<string> $apps

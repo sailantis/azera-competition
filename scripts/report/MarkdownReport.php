@@ -387,51 +387,87 @@ final class MarkdownReport
     }
 
     /**
-     * "× the baseline's total time" plot. This is the readable stand-in for a
-     * dual axis: every framework is divided by the baseline's own total, so
-     * the comparison is scale-free and the baseline is pinned at exactly 1.0×.
+     * "× the baseline's total time" plot, drawn with the same dot-and-range
+     * mark as every other time chart. Each framework's total is the sum of
+     * its per-endpoint spreads over the common endpoints — the dot is the
+     * sum of medians, the whisker spans sum-of-fastest → sum-of-p95 — so the
+     * chart's numbers decompose into exactly the latencies the table prints
+     * instead of being a second, unverifiable aggregate.
      *
      * @param list<string> $apps
      */
     private function speedup(string $dir, string $rel, array $apps, string $baseline, string $mode): string
     {
         $requests = $this->store->commonRequests($mode, $apps);
-        $ratios   = $this->store->aggregateTimeRatioVs($baseline, $mode, $requests, $apps);
-        if (count($ratios) < 2) {
+
+        $metrics = [];
+        $colors  = [];
+        foreach ($apps as $app) {
+            $total = ['median' => 0.0, 'low' => 0.0, 'high' => 0.0];
+            foreach ($requests as $req) {
+                $spread = $this->store->spread($app, $mode, $req);
+                if ($spread === null) {
+                    $total = null;
+                    break;
+                }
+                $total['median'] += $spread['median'];
+                $total['low']    += $spread['low'];
+                $total['high']   += $spread['high'];
+            }
+            if ($total === null) {
+                continue; // only frameworks that measured every endpoint take part
+            }
+            $label = BenchmarkConfig::appLabel($app);
+            $metrics[$label] = $total;
+            $colors[$label]  = BenchmarkConfig::appColor($app);
+        }
+        $base      = BenchmarkConfig::appLabel($baseline);
+        $baseTotal = $metrics[$base]['median'] ?? 0.0;
+        if (count($metrics) < 2 || $baseTotal <= 0) {
             return '';
         }
-        $values = [];
-        $colors = [];
-        foreach ($ratios as $app => $mult) {
-            $label = BenchmarkConfig::appLabel($app);
-            $values[$label] = $mult;
-            $colors[$label] = BenchmarkConfig::appColor($app);
+
+        // The baseline is pinned at exactly 1.0× and every other row states
+        // how many of the baseline's own totals it needed — the same
+        // scale-free reading the chart had as a bar chart, now carried by
+        // the dot the factor label stands behind.
+        $factors = [];
+        foreach ($metrics as $label => $m) {
+            $factors[$label] = $m['median'] / max($baseTotal, 1e-9);
         }
-        asort($values);
-        $base = BenchmarkConfig::appLabel($baseline);
-        $svg  = SvgChart::horizontalBars(
-            $values,
+        $svg = SvgChart::dotRange(
+            [''],
+            ['' => $metrics],
             $colors,
-            'Total response times',
-            '1.0 = ' . $base . "'s own total · higher = slower",
+            'ms',
+            false,
             960,
-            32
+            0,
+            'Total response times',
+            'dot = sum of the ' . count($requests) . ' endpoint medians · whisker = sum of fastest → sum of p95 (ms)',
+            $factors,
+            "x = total ÷ {$base}'s total · 1.0 = {$base}",
+            false,
+            'total'
         );
         $file = 'speedup.svg';
         file_put_contents($dir . '/' . $file, $svg);
 
-        // Fastest non-baseline app for the prose.
-        $others = $values;
-        unset($others[$base]);
+        // Fastest non-baseline app for the prose, ranked on the same sum of
+        // medians the dot shows.
+        $totals = array_map(static fn(array $m): float => $m['median'], $metrics);
+        asort($totals);
+        unset($totals[$base]);
         $extra = '';
-        if ($others !== []) {
-            $closest = array_key_first($others);
-            $extra   = " The closest rival is {$closest}, needing x " . SvgChart::fmtFactor($others[$closest]) . ' the same total.';
+        if ($totals !== []) {
+            $closest = array_key_first($totals);
+            $extra   = " The closest rival is {$closest}, needing x " . SvgChart::fmtFactor($factors[$closest]) . ' the same total.';
         }
 
         return "## Total response times\n\n"
-            . 'Total time to serve one of each of the ' . count($requests) . " endpoints, relative to {$base} "
-            . "(1.0 = the baseline's own total, higher = slower).{$extra}\n\n"
+            . 'Total time to serve one of each of the ' . count($requests) . " endpoints — the sum of the endpoints' "
+            . "medians, not a single response time — relative to {$base} (1.0 = the baseline's own total, "
+            . "higher = slower).{$extra}\n\n"
             . '![Total response times](' . $rel . '/' . $file . ')';
     }
 

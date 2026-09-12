@@ -8,7 +8,7 @@ _Measured 2026-09-12T14:43:29+00:00 · azera-framework `b1c4900`_
 
 ## Total response times
 
-Total time to serve one of each of the 21 endpoints, relative to Azera (1.0 = the baseline's own total, higher = slower). The closest rival is Symfony, needing x 3.7 the same total.
+Total time to serve one of each of the 21 endpoints — the sum of the endpoints' medians, not a single response time — relative to Azera (1.0 = the baseline's own total, higher = slower). The closest rival is Symfony, needing x 3.7 the same total.
 
 ![Total response times](svg/relative/speedup.svg)
 
