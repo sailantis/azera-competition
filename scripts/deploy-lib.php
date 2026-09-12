@@ -167,8 +167,12 @@ function ensureFpmRunning(string $root, string $phpFpmBin, string $deployDir): a
     foreach (glob("{$deployDir}/bench-*.conf") ?: [] as $pool) {
         shellRun(sprintf('sudo -n cp %s /etc/php/8.3/fpm/pool.d/%s', escapeshellarg($pool), escapeshellarg(basename($pool))), 'cp pool');
     }
+    // nginx.conf ships with `include /etc/nginx/conf.d/*.conf;` — vhosts
+    // MUST land with a .conf suffix or the glob ignores them (silent: reload
+    // succeeds, but the server block never activates, nothing listens).
     foreach (glob("{$deployDir}/bench-*.nginx") ?: [] as $vhost) {
-        shellRun(sprintf('sudo -n cp %s /etc/nginx/conf.d/%s', escapeshellarg($vhost), escapeshellarg(basename($vhost))), 'cp vhost');
+        $dst = '/etc/nginx/conf.d/' . str_replace('.nginx', '.conf', basename($vhost));
+        shellRun(sprintf('sudo -n cp %s %s', escapeshellarg($vhost), escapeshellarg($dst)), 'cp vhost');
     }
 
     @mkdir('/run/php-fpm-bench', 0775, true);
@@ -200,7 +204,8 @@ function removeDeployConfigs(string $deployDir): void
         @unlink('/etc/php/8.3/fpm/pool.d/' . basename($pool));
     }
     foreach (glob("{$deployDir}/bench-*.nginx") ?: [] as $vhost) {
-        @unlink('/etc/nginx/conf.d/' . basename($vhost));
+        // Mirror ensureFpmRunning(): installed as <name>.conf (include glob).
+        @unlink('/etc/nginx/conf.d/' . str_replace('.nginx', '.conf', basename($vhost)));
     }
     shellRun('sudo -n sh -c "rm -f /etc/php/8.3/fpm/pool.d/bench-* /etc/nginx/conf.d/bench-*"', 'rm configs');
     shellRun('sudo -n systemctl reload php8.3-fpm || true', 'fpm reload');
