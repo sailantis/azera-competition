@@ -85,6 +85,7 @@ foreach ($requests as [$method, $uri]) {
     for ($r = 0; $r < $runs; $r++) {
         $times    = [];
         $connects = [];
+        $connect  = 0.0;
 
         for ($i = 0; $i < $itersPerRun; $i++) {
             $t = httpTimedRequest($baseUrl, $method, $uri, $connect);
