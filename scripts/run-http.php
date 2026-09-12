@@ -44,7 +44,12 @@ $itersPerRun = (int) ($opts['iterations-per-run'] ?? 1000);
 $runs        = (int) ($opts['runs'] ?? 10);
 $rows        = (int) ($opts['rows'] ?? 1000);
 $outPrefix   = $opts['out'] ?? 'results/real-deployments';
-$rrBinary    = $opts['rr-binary'] ?? (__DIR__ . '/../vendor/bin/rr');
+// RR binary lives OUTSIDE vendor/ on the bench VM: composer install prunes
+// vendor/bin/rr because it is not owned by any installed package (only the
+// roadrunner-cli proxy knows it). Default order: explicit --rr-binary wins,
+// then ~/bin/rr (stable home on the VM), then the legacy vendor path.
+$homeBinRr   = rtrim((string) ($_SERVER['HOME'] ?? $_SERVER['USERPROFILE'] ?? ''), '/\\') . '/bin/rr';
+$rrBinary    = $opts['rr-binary'] ?? (is_file($homeBinRr) ? $homeBinRr : (__DIR__ . '/../vendor/bin/rr'));
 $phpFpmBin   = $opts['php-fpm'] ?? 'php-fpm8.3';
 $benchUser   = $opts['bench-user'] ?? getenv('BENCH_USER') ?: get_current_user();
 $useRr       = true;
