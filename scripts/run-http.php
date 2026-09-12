@@ -50,12 +50,12 @@ $outPrefix   = $opts['out'] ?? 'results/real-deployments';
 // then ~/bin/rr (stable home on the VM), then the legacy vendor path.
 // NOTE: getenv('HOME') — $_SERVER['HOME'] is NOT populated in PHP CLI on
 // Ubuntu 24.04, the fallback below silently picked the dead vendor path.
-$homeBinRr   = rtrim((string) (getenv('HOME') ?: ($_SERVER['USERPROFILE'] ?? '')), "/\\") . '/bin/rr';
-$rrBinary    = $opts['rr-binary'] ?? (is_file($homeBinRr) ? $homeBinRr : (__DIR__ . '/../vendor/bin/rr'));
-$phpFpmBin   = $opts['php-fpm'] ?? 'php-fpm8.3';
-$benchUser   = $opts['bench-user'] ?? getenv('BENCH_USER') ?: get_current_user();
-$useRr       = true;
-$useFpm      = true;
+$homeBinRr = rtrim((string) (getenv('HOME') ?: ($_SERVER['USERPROFILE'] ?? '')), "/\\") . '/bin/rr';
+$rrBinary  = $opts['rr-binary'] ?? (is_file($homeBinRr) ? $homeBinRr : (__DIR__ . '/../vendor/bin/rr'));
+$phpFpmBin = $opts['php-fpm'] ?? 'php-fpm8.3';
+$benchUser = $opts['bench-user'] ?? getenv('BENCH_USER') ?: get_current_user();
+$useRr     = true;
+$useFpm    = true;
 
 $serversArg = array_map('trim', explode(',', (string) ($opts['servers'] ?? 'rr,fpm')));
 $useRr      = in_array('rr', $serversArg, true);

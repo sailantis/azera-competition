@@ -4,11 +4,11 @@ Highest peak memory per framework. Low memory is what makes Azera cheap to run a
 
 **Environment** — PHP 8.3.6 · Linux 6.8.0-124-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
 
-_Measured 2026-09-12T11:45:03+00:00 · azera-framework `b1c4900`_
+_Measured 2026-09-12T14:43:29+00:00 · azera-framework `b1c4900`_
 
 ## Peak memory
 
-Peak memory reached on any endpoint. **CodeIgniter** stays under 8.50 MB, against 263 MB for the heaviest framework (x 30.9 more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
+Peak memory reached on any endpoint. **Azera** stays under 8.50 MB, against 303 MB for the heaviest framework (x 35.6 more). Each dot is the median endpoint and the whisker spans the lightest to the heaviest endpoint.
 
 ![Peak memory footprint](svg/memory/memory.svg)
 
@@ -20,27 +20,27 @@ Each cell also shows the request's lifecycle split as `total <sub>handle + clean
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `GET /` | no DB — routing + template only | **0.016 <sub>0.016+0.001</sub>** | 0.217 <sub>0.216+0.000</sub> | 0.089 <sub>0.087+0.002</sub> | 0.283 <sub>0.273+0.010</sub> | 0.467 <sub>0.458+0.009</sub> | 0.146 <sub>0.146+0.000</sub> |
-| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.142 <sub>0.139+0.003</sub>** | 0.751 <sub>0.750+0.000</sub> | 0.539 <sub>0.536+0.003</sub> | 0.567 <sub>0.551+0.016</sub> | 0.766 <sub>0.753+0.012</sub> | 0.512 <sub>0.512+0.000</sub> |
-| `GET /items/1` | 1 item by id | **0.052 <sub>0.051+0.002</sub>** | 0.396 <sub>0.395+0.000</sub> | 0.176 <sub>0.173+0.002</sub> | 0.385 <sub>0.372+0.013</sub> | 0.671 <sub>0.658+0.012</sub> | 0.336 <sub>0.335+0.000</sub> |
-| `POST /items` | 1 row upserted (sentinel #999999) | **0.108 <sub>0.106+0.002</sub>** | 0.425 <sub>0.425+0.000</sub> | 0.336 <sub>0.333+0.003</sub> | 0.436 <sub>0.422+0.013</sub> | 0.743 <sub>0.730+0.013</sub> | 0.449 <sub>0.449+0.000</sub> |
-| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.096 <sub>0.094+0.001</sub>** | 0.440 <sub>0.439+0.000</sub> | 0.237 <sub>0.235+0.002</sub> | 0.384 <sub>0.372+0.012</sub> | 0.748 <sub>0.735+0.012</sub> | 0.308 <sub>0.307+0.000</sub> |
-| `GET /items-qb/1` | 1 item by id | **0.051 <sub>0.050+0.001</sub>** | 0.312 <sub>0.312+0.000</sub> | 0.144 <sub>0.142+0.002</sub> | 0.342 <sub>0.331+0.011</sub> | 0.660 <sub>0.647+0.012</sub> | 0.248 <sub>0.248+0.000</sub> |
-| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.085 <sub>0.083+0.001</sub>** | 0.412 <sub>0.412+0.000</sub> | 0.340 <sub>0.337+0.003</sub> | 0.385 <sub>0.372+0.012</sub> | 0.851 <sub>0.838+0.013</sub> | 0.322 <sub>0.322+0.000</sub> |
-| `GET /api/items` | 20 of 1000 items as JSON | **0.041 <sub>0.040+0.001</sub>** | 0.636 <sub>0.635+0.000</sub> | 0.235 <sub>0.233+0.002</sub> | 0.452 <sub>0.436+0.016</sub> | 0.621 <sub>0.610+0.011</sub> | 0.271 <sub>0.270+0.000</sub> |
-| `GET /api/items/1` | 1 item by id as JSON | **0.037 <sub>0.036+0.001</sub>** | 0.424 <sub>0.423+0.000</sub> | 0.154 <sub>0.152+0.002</sub> | 0.341 <sub>0.329+0.012</sub> | 0.580 <sub>0.569+0.011</sub> | 0.243 <sub>0.242+0.000</sub> |
-| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.053 <sub>0.052+0.002</sub>** | 0.359 <sub>0.359+0.000</sub> | 0.289 <sub>0.286+0.003</sub> | 0.385 <sub>0.372+0.013</sub> | 0.656 <sub>0.644+0.011</sub> | 0.343 <sub>0.342+0.000</sub> |
-| `GET /features/aop` | no DB — interceptor pipeline | 0.186 <sub>0.185+0.002</sub> | 0.343 <sub>0.343+0.000</sub> | **0.053 <sub>0.052+0.000</sub>** | 0.613 <sub>0.597+0.016</sub> | — | — |
-| `GET /features/cache` | no DB — cache round-trips | **0.014 <sub>0.013+0.001</sub>** | 0.250 <sub>0.250+0.000</sub> | 0.052 <sub>0.052+0.000</sub> | 0.334 <sub>0.324+0.010</sub> | 0.451 <sub>0.442+0.009</sub> | 0.110 <sub>0.110+0.000</sub> |
-| `GET /features/log` | no DB — buffered log handlers | **0.013 <sub>0.012+0.001</sub>** | 0.224 <sub>0.223+0.000</sub> | 0.052 <sub>0.052+0.000</sub> | 0.325 <sub>0.314+0.011</sub> | — | — |
-| `GET /features/retry` | no DB — retry policy | **0.010 <sub>0.009+0.001</sub>** | 0.236 <sub>0.235+0.000</sub> | 0.052 <sub>0.052+0.000</sub> | 0.336 <sub>0.325+0.011</sub> | — | — |
-| `GET /features/pipeline` | no DB — middleware pipeline | **0.015 <sub>0.014+0.001</sub>** | 0.229 <sub>0.229+0.000</sub> | 0.053 <sub>0.053+0.000</sub> | 0.322 <sub>0.312+0.010</sub> | — | — |
-| `GET /features/db-events` | 1 event row INSERTed per request | **0.043 <sub>0.042+0.001</sub>** | 0.414 <sub>0.414+0.000</sub> | 0.053 <sub>0.052+0.000</sub> | 0.511 <sub>0.498+0.013</sub> | 0.759 <sub>0.746+0.013</sub> | 0.276 <sub>0.276+0.000</sub> |
-| `GET /features/events` | no DB — in-process listeners | **0.040 <sub>0.039+0.001</sub>** | 0.314 <sub>0.313+0.000</sub> | 0.052 <sub>0.052+0.000</sub> | 0.384 <sub>0.373+0.011</sub> | 0.714 <sub>0.702+0.012</sub> | 0.187 <sub>0.187+0.000</sub> |
-| `GET /features/validation` | no DB — validator run | **0.019 <sub>0.018+0.001</sub>** | 0.883 <sub>0.883+0.000</sub> | 0.053 <sub>0.052+0.000</sub> | 0.353 <sub>0.343+0.010</sub> | 0.686 <sub>0.672+0.013</sub> | 0.197 <sub>0.196+0.000</sub> |
-| `GET /features/config` | no DB — config lookup | **0.010 <sub>0.009+0.001</sub>** | 0.232 <sub>0.232+0.000</sub> | 0.052 <sub>0.052+0.000</sub> | 0.319 <sub>0.309+0.010</sub> | 0.422 <sub>0.413+0.009</sub> | 0.099 <sub>0.099+0.000</sub> |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **0.009 <sub>0.008+0.001</sub>** | 0.227 <sub>0.226+0.000</sub> | 0.053 <sub>0.053+0.000</sub> | 0.348 <sub>0.338+0.011</sub> | 0.413 <sub>0.405+0.008</sub> | 0.098 <sub>0.097+0.000</sub> |
-| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.010 <sub>0.009+0.001</sub>** | 0.256 <sub>0.256+0.000</sub> | 0.053 <sub>0.052+0.000</sub> | 0.349 <sub>0.339+0.010</sub> | 0.450 <sub>0.441+0.009</sub> | 0.110 <sub>0.110+0.000</sub> |
+| `GET /` | no DB — routing + template only | **0.016 <sub>0.016+0.001</sub>** | 0.218 <sub>0.218+0.000</sub> | 0.090 <sub>0.088+0.002</sub> | 0.284 <sub>0.274+0.010</sub> | 0.466 <sub>0.457+0.009</sub> | 0.140 <sub>0.139+0.000</sub> |
+| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.143 <sub>0.139+0.003</sub>** | 0.753 <sub>0.753+0.000</sub> | 0.540 <sub>0.537+0.003</sub> | 0.573 <sub>0.556+0.017</sub> | 0.767 <sub>0.754+0.012</sub> | 0.508 <sub>0.508+0.000</sub> |
+| `GET /items/1` | 1 item by id | **0.054 <sub>0.052+0.002</sub>** | 0.399 <sub>0.398+0.000</sub> | 0.172 <sub>0.170+0.002</sub> | 0.390 <sub>0.377+0.013</sub> | 0.668 <sub>0.656+0.012</sub> | 0.333 <sub>0.333+0.000</sub> |
+| `POST /items` | 1 row upserted (sentinel #999999) | **0.109 <sub>0.107+0.002</sub>** | 0.431 <sub>0.430+0.000</sub> | 0.337 <sub>0.334+0.003</sub> | 0.441 <sub>0.428+0.013</sub> | 0.747 <sub>0.734+0.013</sub> | 0.445 <sub>0.445+0.000</sub> |
+| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.098 <sub>0.096+0.002</sub>** | 0.447 <sub>0.447+0.000</sub> | 0.236 <sub>0.234+0.002</sub> | 0.384 <sub>0.372+0.012</sub> | 0.749 <sub>0.736+0.012</sub> | 0.310 <sub>0.310+0.000</sub> |
+| `GET /items-qb/1` | 1 item by id | **0.052 <sub>0.051+0.002</sub>** | 0.320 <sub>0.320+0.000</sub> | 0.141 <sub>0.139+0.002</sub> | 0.342 <sub>0.330+0.011</sub> | 0.661 <sub>0.649+0.012</sub> | 0.239 <sub>0.238+0.000</sub> |
+| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.088 <sub>0.086+0.002</sub>** | 0.420 <sub>0.419+0.000</sub> | 0.344 <sub>0.341+0.003</sub> | 0.379 <sub>0.367+0.012</sub> | 0.850 <sub>0.836+0.014</sub> | 0.315 <sub>0.315+0.000</sub> |
+| `GET /api/items` | 20 of 1000 items as JSON | **0.043 <sub>0.041+0.001</sub>** | 0.635 <sub>0.635+0.000</sub> | 0.233 <sub>0.231+0.002</sub> | 0.446 <sub>0.430+0.016</sub> | 0.613 <sub>0.602+0.011</sub> | 0.278 <sub>0.278+0.000</sub> |
+| `GET /api/items/1` | 1 item by id as JSON | **0.039 <sub>0.037+0.002</sub>** | 0.421 <sub>0.420+0.000</sub> | 0.151 <sub>0.149+0.002</sub> | 0.350 <sub>0.337+0.013</sub> | 0.581 <sub>0.570+0.011</sub> | 0.248 <sub>0.247+0.000</sub> |
+| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.054 <sub>0.053+0.002</sub>** | 0.356 <sub>0.355+0.000</sub> | 0.298 <sub>0.295+0.003</sub> | 0.392 <sub>0.379+0.013</sub> | 0.650 <sub>0.639+0.011</sub> | 0.344 <sub>0.343+0.000</sub> |
+| `GET /features/aop` | no DB — interceptor pipeline | **0.180 <sub>0.178+0.002</sub>** | 0.341 <sub>0.341+0.000</sub> | 0.296 <sub>0.293+0.003</sub> | 0.626 <sub>0.609+0.016</sub> | — | — |
+| `GET /features/cache` | no DB — cache round-trips | **0.015 <sub>0.013+0.001</sub>** | 0.249 <sub>0.249+0.000</sub> | 0.086 <sub>0.084+0.002</sub> | 0.329 <sub>0.319+0.010</sub> | 0.445 <sub>0.436+0.009</sub> | 0.108 <sub>0.108+0.000</sub> |
+| `GET /features/log` | no DB — buffered log handlers | **0.014 <sub>0.013+0.001</sub>** | 0.227 <sub>0.227+0.000</sub> | 0.083 <sub>0.081+0.002</sub> | 0.322 <sub>0.311+0.011</sub> | — | — |
+| `GET /features/retry` | no DB — retry policy | **0.011 <sub>0.010+0.001</sub>** | 0.239 <sub>0.239+0.000</sub> | 0.088 <sub>0.086+0.002</sub> | 0.332 <sub>0.322+0.010</sub> | — | — |
+| `GET /features/pipeline` | no DB — middleware pipeline | **0.015 <sub>0.014+0.001</sub>** | 0.229 <sub>0.228+0.000</sub> | 0.083 <sub>0.081+0.002</sub> | 0.323 <sub>0.313+0.010</sub> | — | — |
+| `GET /features/db-events` | 1 event row INSERTed per request | **0.045 <sub>0.043+0.002</sub>** | 0.413 <sub>0.413+0.000</sub> | 0.202 <sub>0.200+0.002</sub> | 0.504 <sub>0.492+0.013</sub> | 0.749 <sub>0.737+0.012</sub> | 0.277 <sub>0.277+0.000</sub> |
+| `GET /features/events` | no DB — in-process listeners | **0.043 <sub>0.041+0.002</sub>** | 0.317 <sub>0.316+0.000</sub> | 0.116 <sub>0.114+0.002</sub> | 0.382 <sub>0.371+0.011</sub> | 0.705 <sub>0.693+0.012</sub> | 0.187 <sub>0.186+0.000</sub> |
+| `GET /features/validation` | no DB — validator run | **0.020 <sub>0.019+0.001</sub>** | 0.884 <sub>0.883+0.000</sub> | 0.197 <sub>0.195+0.002</sub> | 0.352 <sub>0.341+0.010</sub> | 0.682 <sub>0.668+0.013</sub> | 0.195 <sub>0.195+0.000</sub> |
+| `GET /features/config` | no DB — config lookup | **0.010 <sub>0.009+0.001</sub>** | 0.234 <sub>0.233+0.000</sub> | 0.083 <sub>0.081+0.002</sub> | 0.318 <sub>0.308+0.010</sub> | 0.424 <sub>0.415+0.009</sub> | 0.099 <sub>0.098+0.000</sub> |
+| `GET /features/request-scoped` | no DB — scoped service resolve | **0.010 <sub>0.009+0.001</sub>** | 0.227 <sub>0.226+0.000</sub> | 0.082 <sub>0.080+0.002</sub> | 0.341 <sub>0.330+0.010</sub> | 0.411 <sub>0.402+0.008</sub> | 0.097 <sub>0.096+0.000</sub> |
+| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.011 <sub>0.010+0.001</sub>** | 0.257 <sub>0.256+0.000</sub> | 0.091 <sub>0.089+0.002</sub> | 0.345 <sub>0.335+0.010</sub> | 0.446 <sub>0.437+0.009</sub> | 0.110 <sub>0.109+0.000</sub> |
 
 ---
 

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Framework Competition — Real RoadRunner</title>
+<style>
+:root{color-scheme:light dark;--bg:            #f8fafc;--card:#fff;--ink:#0f172a;--muted:#64748b;--edge:#e2e8f0;--accent:#3459e6}
+@media (prefers-color-scheme:dark){:root{--bg: #0b1120;--card:#111a2e;--ink:#e2e8f0;--muted:#94a3b8;--edge:#1e293b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+header,main,nav,footer{max-width:1040px;margin:0 auto;padding:0 20px}
+header{padding-top:44px;padding-bottom:8px}
+nav{padding-top:24px}
+nav a{color:var(--accent);text-decoration:none;font-weight:600;font-size:14px}
+h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em}
+h2{font-size:20px;margin:36px 0 12px}
+h3{font-size:17px;margin:0 0 6px}
+.lead{margin:0 0 8px;font-size:16px;max-width:72ch}
+.env{margin:0;color:var(--muted);font-size:13px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin:24px 0 48px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:18px 18px 16px;text-decoration:none;color:inherit;transition:transform .12s ease,border-color .12s ease}
+.card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.card p{color:var(--muted);font-size:13px;margin:0 0 12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid var(--c);color:var(--c)}
+.figures{display:flex;flex-direction:column;gap:20px;margin:20px 0 8px}
+figure{margin:0;background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:16px}
+figcaption{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px}
+figure img{display:block;width:100%;height:auto}
+main img{background:#fff;border-radius:8px}
+table{border-collapse:collapse;width:100%;margin:14px 0 30px;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--edge)}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td:first-child{font-weight:600}
+table.matrix td{text-align:right;font-variant-numeric:tabular-nums}
+table.matrix th{text-align:right}
+table.matrix td:first-child,table.matrix th:first-child{text-align:left;font-weight:500}
+td.win{font-weight:700;color:var(--accent);background:rgba(52,89,230,.10)}
+td.muted{color:var(--muted)}
+.unit{font-weight:400;color:var(--muted);font-size:13px;text-transform:none;letter-spacing:0}
+footer{padding:32px 20px 56px;color:var(--muted);font-size:13px}
+code{background:rgba(148,163,184,.16);padding:1px 5px;border-radius:4px;font-size:.92em}
+main{padding-bottom:10px}
+</style>
+</head>
+<body>
+<nav><a href="index.html">&larr; All benchmarks</a></nav>
+<header>
+  <h1>Framework Competition — Real RoadRunner</h1>
+  <p class="lead">Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.</p>
+  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-85-generic &middot; roadrunner mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+</header>
+<main>
+  <section class="figures">
+  </section>
+  
+  
+  <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span></h2>
+<table class="matrix">
+<thead><tr><th>Request</th><th>Workload</th><th><span class="chip" style="--c:#3459e6">Azera</span></th></tr></thead>
+<tbody>
+<tr><td><code>GET /</code></td><td class="muted">no DB — routing + template only</td><td class="win">0.279</td></tr>
+<tr><td><code>GET /items</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">0.478</td></tr>
+<tr><td><code>GET /items/1</code></td><td class="muted">1 item by id</td><td class="win">0.314</td></tr>
+<tr><td><code>POST /items</code></td><td class="muted">1 row upserted (sentinel #999999)</td><td class="win">0.442</td></tr>
+<tr><td><code>GET /items-qb</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">0.425</td></tr>
+<tr><td><code>GET /items-qb/1</code></td><td class="muted">1 item by id</td><td class="win">0.391</td></tr>
+<tr><td><code>POST /items-qb</code></td><td class="muted">1 row upserted (sentinel #999997)</td><td class="win">0.453</td></tr>
+<tr><td><code>GET /api/items</code></td><td class="muted">20 of 1000 items as JSON</td><td class="win">0.347</td></tr>
+<tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="win">0.348</td></tr>
+<tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="win">0.394</td></tr>
+<tr><td><code>GET /features/aop</code></td><td class="muted">no DB — interceptor pipeline</td><td class="win">1.43</td></tr>
+<tr><td><code>GET /features/cache</code></td><td class="muted">no DB — cache round-trips</td><td class="win">0.301</td></tr>
+<tr><td><code>GET /features/log</code></td><td class="muted">no DB — buffered log handlers</td><td class="win">0.294</td></tr>
+<tr><td><code>GET /features/retry</code></td><td class="muted">no DB — retry policy</td><td class="win">0.246</td></tr>
+<tr><td><code>GET /features/pipeline</code></td><td class="muted">no DB — middleware pipeline</td><td class="win">0.248</td></tr>
+<tr><td><code>GET /features/db-events</code></td><td class="muted">1 event row INSERTed per request</td><td class="win">0.341</td></tr>
+<tr><td><code>GET /features/events</code></td><td class="muted">no DB — in-process listeners</td><td class="win">0.279</td></tr>
+<tr><td><code>GET /features/validation</code></td><td class="muted">no DB — validator run</td><td class="win">0.251</td></tr>
+<tr><td><code>GET /features/config</code></td><td class="muted">no DB — config lookup</td><td class="win">0.230</td></tr>
+<tr><td><code>GET /features/request-scoped</code></td><td class="muted">no DB — scoped service resolve</td><td class="win">0.242</td></tr>
+<tr><td><code>GET /features/rate-limit</code></td><td class="muted">no DB — cache-backed limiter</td><td class="win">0.240</td></tr>
+</tbody>
+</table>
+</main>
+<footer>
+  Generated from <code>results/</code> by <code>scripts/report.php</code>.
+</footer>
+</body>
+</html>

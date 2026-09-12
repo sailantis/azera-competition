@@ -6,18 +6,18 @@
 <rect x="150" y="61" width="48" height="20" rx="3" fill="#3459e6" fill-opacity="0.75"/>
 <text x="206" y="76" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 1.0</text>
 <text x="140" y="108" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#7048e8" text-anchor="end">Symfony</text>
-<rect x="150" y="93" width="146.51" height="20" rx="3" fill="#7048e8" fill-opacity="0.75"/>
-<text x="304.51" y="108" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 3.1</text>
+<rect x="150" y="93" width="191.54" height="20" rx="3" fill="#7048e8" fill-opacity="0.75"/>
+<text x="349.54" y="108" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 4.0</text>
 <text x="140" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#d6409f" text-anchor="end">CakePHP</text>
-<rect x="150" y="125" width="244.72" height="20" rx="3" fill="#d6409f" fill-opacity="0.75"/>
-<text x="402.72" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 5.1</text>
+<rect x="150" y="125" width="220.23" height="20" rx="3" fill="#d6409f" fill-opacity="0.75"/>
+<text x="378.23" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 4.6</text>
 <text x="140" y="172" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#e5484d" text-anchor="end">Laravel</text>
-<rect x="150" y="157" width="335.01" height="20" rx="3" fill="#e5484d" fill-opacity="0.75"/>
-<text x="493.01" y="172" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 7.0</text>
+<rect x="150" y="157" width="364.75" height="20" rx="3" fill="#e5484d" fill-opacity="0.75"/>
+<text x="522.75" y="172" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 7.6</text>
 <text x="140" y="204" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#0ca678" text-anchor="end">Spiral</text>
-<rect x="150" y="189" width="348.86" height="20" rx="3" fill="#0ca678" fill-opacity="0.75"/>
-<text x="506.86" y="204" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 7.3</text>
+<rect x="150" y="189" width="376.58" height="20" rx="3" fill="#0ca678" fill-opacity="0.75"/>
+<text x="534.58" y="204" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 7.8</text>
 <text x="140" y="236" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="700" fill="#e8590c" text-anchor="end">CodeIgniter</text>
-<rect x="150" y="221" width="534.08" height="20" rx="3" fill="#e8590c" fill-opacity="0.75"/>
-<text x="692.08" y="236" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 11.1</text>
+<rect x="150" y="221" width="579.37" height="20" rx="3" fill="#e8590c" fill-opacity="0.75"/>
+<text x="737.37" y="236" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#1e293b" text-anchor="start">x 12.1</text>
 </svg>
