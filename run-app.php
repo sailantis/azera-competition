@@ -50,6 +50,18 @@ $doSeed      = isset($opts['seed']);
 $seedRows    = isset($opts['rows']) ? (int) $opts['rows'] : 1000;
 $outJsonPath = $opts['out-json'] ?? null;
 
+// Cold mode boots the framework on EVERY timed iteration (boot inside the
+// request clock), so a 1000×30 block would run 30,000 full boots in one
+// process — memory ratchets (allocator + static residue never fully return
+// to the OS) until a small VM swaps to death (2026-09-13). Cap cold at
+// 50×30 = 1,500 samples unless the caller explicitly raised iterations.
+// Mirrors the same cap in run.php; one of the two is authoritative per
+// spawn path, and both must agree so parent and child never disagree.
+$coldItersCap = 50;
+if ($modeName === 'cold' && !isset($opts['iterations-per-run'])) {
+    $itersPerRun = $coldItersCap;
+}
+
 // Requests: same default list as run.php (duplicated here because the child
 // process re-parses options from scratch).
 $requests = isset($opts['requests'])
@@ -163,7 +175,7 @@ if (count($requests) > 1) {
         $label   = "{$request[0]} {$request[1]}";
         $tmpJson = tempnam(sys_get_temp_dir(), 'bench-block-') . '.json';
         $cmd     = sprintf(
-            '%s %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
+            '%s -d memory_limit=512M %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
             escapeshellarg(PHP_BINARY),
             escapeshellarg(__FILE__),
             escapeshellarg($appKey),
@@ -341,9 +353,9 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
             if ($mode === 'cold') {
                 $adapter->bootstrap();
             }
-            $t1 = hrtime(true);
+            $t1   = hrtime(true);
             $body = $adapter->dispatch($method, $uri);
-            $t2 = hrtime(true);
+            $t2   = hrtime(true);
             $adapter->cleanup();
             $t3 = hrtime(true);
             // Harness guard — an adapter that swallows an error (404/500)

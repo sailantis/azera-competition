@@ -84,6 +84,20 @@ $outPrefix   = $opts['out'] ?? null;
 $clearCache  = isset($opts['clear-cache']);
 $doSeed      = isset($opts['seed']);
 $seedRows    = isset($opts['rows']) ? (int) $opts['rows'] : 1000;
+
+// Cold mode times bootstrap() INSIDE the request clock (FPM story), so the
+// iteration count multiplies the number of full framework boots per endpoint
+// block. At the 1000×30 default that is 30,000 boots per block — a full
+// Laravel/Symfony boot every ~3 ms for hours, which ratchets process memory
+// (allocator + static residue never fully returns to the OS mid-process)
+// until a small VM swaps to death (2026-09-13: 2 GB box, 1.4 GB/s disk I/O,
+// console unresponsive). Cold numbers are boot-dominated and converge fast:
+// cap at 50×30 = 1,500 samples (≈4,500 boot+request cycles, plenty for a
+// stable trimmed mean) unless the caller explicitly raised iterations.
+$coldItersCap = 50;
+if ($doCold && (!$doWarm || $itersPerRun > $coldItersCap) && !isset($opts['iterations-per-run'])) {
+    $itersPerRun = $coldItersCap;
+}
 $requests    = isset($opts['requests'])
     ? array_map('trim', explode(',', $opts['requests']))
     : [
@@ -184,7 +198,7 @@ function envInfo(): array
         // Cold-mode semantics: since this flag exists, cold-mode timings
         // include the per-iteration boot in the request clock (the FPM
         // story); older datasets timed the request only, boot separate.
-        'cold_boot_included'  => true,
+        'cold_boot_included' => true,
     ];
 }
 
@@ -620,9 +634,12 @@ foreach ($apps as $key) {
 
         // Spawn the per-app child process. It writes this app x mode's
         // result JSON to a temp file; run.php merges it into $results.
+        // The child gets a hard memory_limit: a leaking framework boot must
+        // fatal ITS block, not push a 2 GB VM into the swap storm that
+        // killed the 2026-09-13 run (see the cold-iteration cap above).
         $tmpJson = tempnam(sys_get_temp_dir(), 'bench-') . '.json';
         $cmd     = sprintf(
-            '%s %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
+            '%s -d memory_limit=512M %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
             escapeshellarg(PHP_BINARY),
             escapeshellarg(__DIR__ . '/run-app.php'),
             escapeshellarg($key),
