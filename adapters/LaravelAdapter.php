@@ -107,7 +107,24 @@ class LaravelAdapter implements WebAppAdapter
      * Laravel's HTTP kernel handles request-scoped state per handle() call —
      * the framework has no terminate()-style teardown in this in-process
      * setup (kernel->terminate() is a no-op without terminable middleware).
-     * Nothing to do between requests.
+     *
+     * COLD MODE NOTE: each boot opens a new SQLite PDO (db + WAL + shm = 3
+     * fds) behind DatabaseManager's connection pool. Cold re-boots in ONE
+     * process (in-process fallback + measureBoot's warm re-boots) would
+     * leak those fds — 2026-09-13: "Too many open files" past ~500 boots.
+     * Nilling the app/kernel references releases the pooled connection so
+     * PHP closes the fds (the fork-based cold loop makes this moot — the
+     * child dies after one request — but measureBoot still re-boots in
+     * process, and Windows has no fork).
      */
-    public function cleanup(): void {}
+    public function cleanup(): void
+    {
+        // Request-scoped state is discarded by the kernel per handle(); what
+        // would OUTLIVE the request is the app container + its pooled DB
+        // connection — release them so the next boot starts fd-clean.
+        \Illuminate\Container\Container::setInstance(null);
+        $this->app    = null;
+        $this->kernel = null;
+        \gc_collect_cycles();
+    }
 }

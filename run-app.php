@@ -307,6 +307,176 @@ if ($doSeed) {
 
 // --- Benchmark loop (mirrors run.php benchRequest) ---------------------------
 
+// Cold mode runs one fresh boot per timed iteration. Two implementations:
+//
+//   fork (default on Linux, pcntl available): pcntl_fork() per iteration —
+//     the child boots, dispatches, cleans up, exits. The forked child
+//     inherits the parent's loaded classes + shared opcache copy-on-write,
+//     exactly like a real FPM master→worker fork. No accumulation: every
+//     iteration is a genuinely fresh process, so memory and fds can never
+//     ratchet (2026-09-13: in-process cold OOM'd at 512 MB after ~1,500
+//     Laravel boots and then leaked SQLite fds past the 1,024 ulimit).
+//     peak_mem becomes the honest per-request footprint (one boot + one
+//     request, then the process dies). Fork cost (~0.1-0.3 ms) is INCLUDED
+//     in the measured time — real FPM pays it per recycled worker too.
+//
+//   in-process (Windows / no pcntl fallback): the legacy loop that re-boots
+//     the SAME adapter 50×30 times. Boot residue accumulates ~0.3 MB per
+//     Laravel boot — fine for local smoke runs, never run full cold blocks
+//     with it (raise --iterations-per-run only on Linux).
+//
+// The forked child reports its three phase times (boot/handle/cleanup) and
+// its own peak memory over a socketpair; the parent folds them into the
+// per-run statistics exactly like the in-process loop's arrays.
+function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPerRun, int $runs): array
+{
+    [$method, $uri] = $request;
+    $reqLabel = "{$method} {$uri}";
+
+    echo "  [cold/fork] {$reqLabel} — {$itersPerRun}×{$runs}\n";
+
+    // One untimed priming boot in the PARENT: warms opcache + class tables
+    // so the forked children inherit compiled bytecode (the FPM master
+    // preloads nothing, but opcache sharing via fork is exactly what real
+    // FPM workers get). Without priming, every child would pay one-time
+    // class-load costs that a real worker never pays after the first
+    // request — same rationale as the in-process priming cycle.
+    $adapter->bootstrap();
+    $adapter->dispatch('GET', '/');
+    $adapter->cleanup();
+
+    $runMeans     = [];
+    $handleMeans  = [];
+    $cleanupMeans = [];
+    $bootMeans    = [];
+    $allTimes     = [];
+    $peakMem      = 0;
+
+    for ($r = 0; $r < $runs; $r++) {
+        $times        = [];
+        $handleTimes  = [];
+        $cleanupTimes = [];
+        $bootTimes    = [];
+
+        for ($i = 0; $i < $itersPerRun; $i++) {
+            // socketpair: the child writes [boot_ms, handle_ms, cleanup_ms,
+            // peak_mem_bytes] as a 4x8-byte little-endian payload + one
+            // status byte (0 = ok, 1 = error body).
+            $socks = [];
+            if (!@socket_create_pair(AF_UNIX, SOCK_STREAM, 0, $socks)) {
+                fwrite(STDERR, "\n[ABORT] socket_create_pair failed: " . socket_strerror(socket_last_error()) . "\n");
+                exit(1);
+            }
+            [$pairParent, $pairChild] = $socks;
+
+            $t0 = hrtime(true);
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                fwrite(STDERR, "\n[ABORT] pcntl_fork failed\n");
+                exit(1);
+            }
+
+            if ($pid === 0) {
+                // ---- child: one fresh request lifecycle, then die -------
+                socket_close($pairParent);
+                memory_reset_peak_usage();
+                $cb = []; $ch = []; $cc = []; $status = 0;
+                try {
+                    $tb0 = hrtime(true);
+                    $adapter->bootstrap();
+                    $tb1 = hrtime(true);
+                    $body = $adapter->dispatch($method, $uri);
+                    $tb2 = hrtime(true);
+                    $adapter->cleanup();
+                    $tb3 = hrtime(true);
+                    if (str_starts_with((string) $body, 'Not Found') || str_starts_with((string) $body, '500 ')) {
+                        $status = 1;
+                    }
+                    $cb[] = ($tb1 - $tb0) / 1e6;
+                    $ch[] = ($tb2 - $tb1) / 1e6;
+                    $cc[] = ($tb3 - $tb2) / 1e6;
+                } catch (\Throwable $e) {
+                    $status = 1;
+                }
+                // 4 float64 + 1 byte = 33 bytes, one write, then exit.
+                @socket_write($pairChild, pack('E3C', $cb[0] ?? 0, $ch[0] ?? 0, $cc[0] ?? 0, $status), 25);
+                socket_close($pairChild);
+                // A clean exit releases EVERYTHING this iteration touched:
+                // memory, fds, the framework instance. exit() inside the
+                // forked child must never run destructors of parent state.
+                posix_kill(posix_getpid(), SIGKILL);
+            }
+
+            // ---- parent: wait, read the child's report -------------------
+            socket_close($pairChild);
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+            $raw = '';
+            // Read until EOF (child closes after its single write).
+            while (($chunk = @socket_read($pairParent, 64)) !== false && $chunk !== '') {
+                $raw .= $chunk;
+            }
+            socket_close($pairParent);
+            $t3 = hrtime(true);
+
+            if (strlen($raw) !== 25 || exitcode($status) !== 0) {
+                fwrite(STDERR, "\n[ABORT] {$reqLabel} fork child failed (exit " . pcntl_wexitstatus($status) . ", raw " . strlen($raw) . " bytes)\n");
+                exit(1);
+            }
+            $msg = unpack('Eboot/Ehandle/Ecleanup/Cstatus', $raw);
+            if ($msg['status'] === 1) {
+                fwrite(STDERR, "\n[ABORT] {$reqLabel} returned an error response (fork child reported status 1)\n");
+                exit(1);
+            }
+
+            $bootTimes[]    = $msg['boot'];
+            $handleTimes[]  = $msg['handle'] + (($t3 - $t0) / 1e6 - $msg['boot'] - $msg['handle'] - $msg['cleanup']);
+            $cleanupTimes[] = $msg['cleanup'];
+            $times[]        = ($t3 - $t0) / 1e6;
+            $peakMem        = max($peakMem, memory_get_peak_usage(true));
+        }
+
+        $s = stats($times);
+        $runMeans[]    = $s['mean'];
+        $handleMeans[] = stats($handleTimes)['mean'];
+        $cleanupMeans[] = stats($cleanupTimes)['mean'];
+        $bootMeans[]   = stats($bootTimes)['mean'];
+        $allTimes      = array_merge($allTimes, $times);
+
+        echo sprintf(
+            "    run %2d/%d — mean %.4f ms, median %.4f ms\n",
+            $r + 1,
+            $runs,
+            $s['mean'],
+            $s['median']
+        );
+    }
+
+    $sAll  = stats($allTimes);
+    $tMean = trimmedMean($runMeans);
+
+    return [
+        'request'            => $reqLabel,
+        'iterations_per_run' => $itersPerRun,
+        'runs'               => $runs,
+        'trimmed_mean_ms'    => $tMean,
+        'min_ms'             => $sAll['min'],
+        'mean_ms'            => $sAll['mean'],
+        'median_ms'          => $sAll['median'],
+        'p95_ms'             => $sAll['p95'],
+        'peak_mem'           => $peakMem,
+        'handle_ms'          => trimmedMean($handleMeans),
+        'cleanup_ms'         => trimmedMean($cleanupMeans),
+        'boot_ms'            => trimmedMean($bootMeans),
+        'fork_mode'          => true,
+    ];
+}
+
+function exitcode(int $status): int
+{
+    return pcntl_wexitstatus($status);
+}
+
 /**
  * Time a single request combination.
  */
@@ -433,6 +603,17 @@ $appResult = ['app' => $appKey, 'modes' => [], 'boot' => $boot, 'cold_boot_inclu
 echo " -- mode: {$modeName}\n";
 $modeResult = ['requests' => []];
 foreach ($requests as $request) {
+    if ($modeName === 'cold' && function_exists('pcntl_fork')) {
+        // Linux: fork-per-iteration cold — each iteration is a genuinely
+        // fresh process (real FPM worker model), no boot-ratchet artifacts.
+        $modeResult['requests'][] = benchRequestForked(
+            $adapter,
+            $request,
+            $itersPerRun,
+            $runs
+        );
+        continue;
+    }
     $modeResult['requests'][] = benchRequest(
         $adapter,
         $modeName,
