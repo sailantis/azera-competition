@@ -93,11 +93,23 @@ $seedRows    = isset($opts['rows']) ? (int) $opts['rows'] : 1000;
 // until a small VM swaps to death (2026-09-13: 2 GB box, 1.4 GB/s disk I/O,
 // console unresponsive). Cold numbers are boot-dominated and converge fast:
 // cap at 50×30 = 1,500 samples (≈4,500 boot+request cycles, plenty for a
-// stable trimmed mean) unless the caller explicitly raised iterations.
+// stable trimmed mean). Warm mode is unaffected: boot happens once per
+// block, so it keeps the full 1000×30 sample budget.
+// Applied per mode (warm/cold), NOT to the shared $itersPerRun — a combined
+// --warm --cold run must keep warm at the full default while capping cold.
 $coldItersCap = 50;
-if ($doCold && (!$doWarm || $itersPerRun > $coldItersCap) && !isset($opts['iterations-per-run'])) {
-    $itersPerRun = $coldItersCap;
+if ($doCold) {
+    $warmIters = $doWarm
+        ? (isset($opts['iterations-per-run']) ? (int) $opts['iterations-per-run'] : 1000)
+        : null;
+    $coldIters = isset($opts['iterations-per-run'])
+        ? (int) $opts['iterations-per-run']
+        : $coldItersCap;
+} else {
+    $warmIters = $itersPerRun;
+    $coldIters = null;
 }
+$modeIters = ['warm' => $warmIters, 'cold' => $coldIters];
 $requests    = isset($opts['requests'])
     ? array_map('trim', explode(',', $opts['requests']))
     : [
@@ -589,8 +601,12 @@ function benchRequest(
 
 echo "=== azera-competition benchmark ===\n";
 echo "Apps: " . implode(', ', $apps) . "\n";
-echo "Iterations/run: {$itersPerRun}, Runs: {$runs}\n";
-echo "Modes: " . implode(', ', array_filter(['warm' => $doWarm, 'cold' => $doCold])) . "\n";
+foreach ($modeIters as $mi => $miIters) {
+    if ($miIters !== null) {
+        echo "Iterations/run ({$mi}): {$miIters}, Runs: {$runs}\n";
+    }
+}
+echo "Modes: " . implode(', ', array_keys(array_filter(['warm' => $doWarm, 'cold' => $doCold], fn($v) => $v === true))) . "\n";
 echo "Requests: " . implode(', ', array_map(fn($r) => "{$r[0]} {$r[1]}", $requests)) . "\n\n";
 
 $results = [
@@ -637,6 +653,9 @@ foreach ($apps as $key) {
         // The child gets a hard memory_limit: a leaking framework boot must
         // fatal ITS block, not push a 2 GB VM into the swap storm that
         // killed the 2026-09-13 run (see the cold-iteration cap above).
+        // Iteration count is per mode: warm keeps the full default (1000),
+        // cold is capped at 50 (see $coldItersCap above).
+        $itersForMode = $modeIters[$modeName] ?? $itersPerRun;
         $tmpJson = tempnam(sys_get_temp_dir(), 'bench-') . '.json';
         $cmd     = sprintf(
             '%s -d memory_limit=512M %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
@@ -644,7 +663,7 @@ foreach ($apps as $key) {
             escapeshellarg(__DIR__ . '/run-app.php'),
             escapeshellarg($key),
             escapeshellarg($modeName),
-            $itersPerRun,
+            $itersForMode,
             $runs,
             escapeshellarg($requestArg),
             escapeshellarg($tmpJson),
