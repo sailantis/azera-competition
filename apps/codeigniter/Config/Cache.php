@@ -5,12 +5,19 @@ declare(strict_types=1);
 /**
  * CodeIgniter 4 benchmark app — Cache config.
  *
- * File handler (the only always-available persistent handler in CI4 4.7;
- * the 50ms cache-miss sleep in /features/cache dominates its cost anyway).
+ * In-memory array handler (Ci4App\Cache\ArrayHandler): process-lifetime
+ * store, matching the cache semantics of the other five benchmark apps
+ * (azera ArrayCache, Symfony ArrayAdapter, Laravel array store, ...).
+ * Entries survive between warm/worker requests but die with each fresh
+ * boot — so cold mode pays the 50ms simulated cache-miss on every
+ * iteration, exactly like every other framework. (The previous file
+ * handler survived re-boots from disk, letting CI4 skip the miss that
+ * dominates the cold /features/cache + /features/db-events rows.)
  */
 
 namespace Config;
 
+use Ci4App\Cache\ArrayHandler;
 use CodeIgniter\Cache\CacheInterface;
 use CodeIgniter\Cache\Handlers\DummyHandler;
 use CodeIgniter\Cache\Handlers\FileHandler;
@@ -18,7 +25,7 @@ use CodeIgniter\Config\BaseConfig;
 
 class Cache extends BaseConfig
 {
-    public string $handler = 'file';
+    public string $handler = 'array';
 
     public string $backupHandler = 'dummy';
 
@@ -58,6 +65,7 @@ class Cache extends BaseConfig
      */
     public array $validHandlers = [
         'dummy' => DummyHandler::class,
+        'array' => ArrayHandler::class,
         'file'  => FileHandler::class,
     ];
 

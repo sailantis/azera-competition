@@ -83,13 +83,13 @@ return [
         // Published alongside the warm story so readers pick their
         // deployment; the two views never blend modes.
         'cold-start' => [
-            'title'      => 'Framework Competition — Cold Start',
-            'subtitle'   => 'PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.',
-            'dataset'    => 'deployments',
-            'baseline'   => 'azera',
-            'mode'       => 'php-fpm',
-            'log_scale'  => false,
-            'apps'       => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'title'     => 'Framework Competition — Cold Start',
+            'subtitle'  => 'PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.',
+            'dataset'   => 'deployments',
+            'baseline'  => 'azera',
+            'mode'      => 'php-fpm',
+            'log_scale' => false,
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
             // No 'memory' chart in cold mode: cold blocks re-boot the
             // framework 50x30 times in ONE process, and boot residue
             // accumulates ~0.3 MB per boot — reported peak_mem there

@@ -110,7 +110,7 @@ if ($doCold) {
     $coldIters = null;
 }
 $modeIters = ['warm' => $warmIters, 'cold' => $coldIters];
-$requests    = isset($opts['requests'])
+$requests  = isset($opts['requests'])
     ? array_map('trim', explode(',', $opts['requests']))
     : [
         // HTML benchmark endpoints
@@ -663,8 +663,8 @@ foreach ($apps as $key) {
         // 1 G; warm boots once per block and stays at 512 M.
         $itersForMode = $modeIters[$modeName] ?? $itersPerRun;
         $memLimit     = $modeName === 'cold' ? '1024M' : '512M';
-        $tmpJson = tempnam(sys_get_temp_dir(), 'bench-') . '.json';
-        $cmd     = sprintf(
+        $tmpJson      = tempnam(sys_get_temp_dir(), 'bench-') . '.json';
+        $cmd          = sprintf(
             '%s -d memory_limit=%s %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
             escapeshellarg(PHP_BINARY),
             $memLimit,

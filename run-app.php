@@ -172,14 +172,14 @@ if (count($requests) > 1) {
     $merged = ['app' => $appKey, 'modes' => [$modeName => ['requests' => []]], 'boot' => null];
 
     foreach ($requests as $blockIdx => $request) {
-        $label   = "{$request[0]} {$request[1]}";
+        $label = "{$request[0]} {$request[1]}";
         // Memory limit per mode (mirrors run.php's spawn): cold re-boots the
         // framework per iteration in one process — boot residue accumulates
         // ~0.3 MB per boot and OOM'd a 512 M child at the 50×30 cap
         // (2026-09-13) — so cold blocks get 1 G, warm stays at 512 M.
         $memLimit = $modeName === 'cold' ? '1024M' : '512M';
-        $tmpJson = tempnam(sys_get_temp_dir(), 'bench-block-') . '.json';
-        $cmd     = sprintf(
+        $tmpJson  = tempnam(sys_get_temp_dir(), 'bench-block-') . '.json';
+        $cmd      = sprintf(
             '%s -d memory_limit=%s %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
             escapeshellarg(PHP_BINARY),
             $memLimit,
@@ -369,7 +369,7 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
             }
             [$pairParent, $pairChild] = $socks;
 
-            $t0 = hrtime(true);
+            $t0  = hrtime(true);
             $pid = pcntl_fork();
             if ($pid === -1) {
                 fwrite(STDERR, "\n[ABORT] pcntl_fork failed\n");
@@ -380,13 +380,16 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
                 // ---- child: one fresh request lifecycle, then die -------
                 socket_close($pairParent);
                 memory_reset_peak_usage();
-                $cb = []; $ch = []; $cc = []; $status = 0;
+                $cb     = [];
+                $ch     = [];
+                $cc     = [];
+                $status = 0;
                 try {
                     $tb0 = hrtime(true);
                     $adapter->bootstrap();
-                    $tb1 = hrtime(true);
+                    $tb1  = hrtime(true);
                     $body = $adapter->dispatch($method, $uri);
-                    $tb2 = hrtime(true);
+                    $tb2  = hrtime(true);
                     $adapter->cleanup();
                     $tb3 = hrtime(true);
                     if (str_starts_with((string) $body, 'Not Found') || str_starts_with((string) $body, '500 ')) {
@@ -429,19 +432,19 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
                 exit(1);
             }
 
-            $bootTimes[]    = $msg['boot'];
-            $handleTimes[]  = $msg['handle'] + (($t3 - $t0) / 1e6 - $msg['boot'] - $msg['handle'] - $msg['cleanup']);
+            $bootTimes[] = $msg['boot'];
+            $handleTimes[] = $msg['handle'] + (($t3 - $t0) / 1e6 - $msg['boot'] - $msg['handle'] - $msg['cleanup']);
             $cleanupTimes[] = $msg['cleanup'];
-            $times[]        = ($t3 - $t0) / 1e6;
-            $peakMem        = max($peakMem, memory_get_peak_usage(true));
+            $times[] = ($t3 - $t0) / 1e6;
+            $peakMem = max($peakMem, memory_get_peak_usage(true));
         }
 
         $s = stats($times);
-        $runMeans[]    = $s['mean'];
+        $runMeans[] = $s['mean'];
         $handleMeans[] = stats($handleTimes)['mean'];
         $cleanupMeans[] = stats($cleanupTimes)['mean'];
-        $bootMeans[]   = stats($bootTimes)['mean'];
-        $allTimes      = array_merge($allTimes, $times);
+        $bootMeans[] = stats($bootTimes)['mean'];
+        $allTimes = array_merge($allTimes, $times);
 
         echo sprintf(
             "    run %2d/%d — mean %.4f ms, median %.4f ms\n",
