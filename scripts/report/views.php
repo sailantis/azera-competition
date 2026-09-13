@@ -58,7 +58,10 @@ return [
     // than Symfony's 0.166???0.241 ms (1.4x) ??? even though Symfony's spread is
     // 3.4x larger in absolute milliseconds. Log made the fastest framework
     // look like the most volatile one. Linear keeps drawn width proportional
-    // to real spread. (Peak memory was always linear.)
+    // to real spread. (Peak memory is linear too — but only in WARM mode:
+    // cold blocks re-boot the framework 50x30 times in one process, so cold
+    // peak_mem measures harness boot residue, not the framework footprint;
+    // the cold-start view omits the memory chart.)
     'views' => [
         // The headline comparison, ROADRUNNER story: resident worker, boot
         // paid once. Published into the framework docs + README.
@@ -87,7 +90,14 @@ return [
             'mode'       => 'php-fpm',
             'log_scale'  => false,
             'apps'       => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            'charts'     => ['hero', 'speedup', 'features', 'memory', 'wins'],
+            // No 'memory' chart in cold mode: cold blocks re-boot the
+            // framework 50x30 times in ONE process, and boot residue
+            // accumulates ~0.3 MB per boot — reported peak_mem there
+            // (~500 MB for Laravel) is a harness artifact, not a real FPM
+            // per-request footprint (real FPM kills the worker after every
+            // request, so memory never accumulates). Timing is unaffected
+            // (residue is unreachable; boot_ms and run means stay flat).
+            'charts'     => ['hero', 'speedup', 'features', 'wins'],
             'publish'    => ['framework'],
             'publish_md' => '19-BENCHMARKS-FPM.md',
         ],
