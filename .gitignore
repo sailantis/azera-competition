@@ -13,6 +13,9 @@
 
 # Per-app compiled template caches
 apps/**/cache/
+# ...except CI4's in-memory cache handler class (a real source file, not a runtime cache dir)
+!apps/codeigniter/Cache/
+!apps/codeigniter/Cache/*.php
 apps/**/storage/
 apps/**/writable/
 apps/**/tmp/

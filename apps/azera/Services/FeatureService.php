@@ -78,6 +78,24 @@ class FeatureService
 
         return (int) ($row['c'] ?? 0);
     }
+
+    /**
+     * Count items WITHOUT the #[Cache] interceptor — the plain query path.
+     *
+     * Used by the Db Events demo, which must exercise a real query (and its
+     * QueryExecuted / StatementPrepared events) on EVERY request instead of
+     * a cache hit; routing it through countItems() would (a) pay the 50ms
+     * simulated cold query on every fresh boot and (b) turn most calls into
+     * no-op cache reads that fire no Db events.
+     */
+    public function countItemsQuery(): int
+    {
+        $row = $this->ctx->dbManager()
+            ->getOrDefault('default')
+            ->selectRow('SELECT COUNT(*) AS c FROM items', null, \PDO::FETCH_ASSOC);
+
+        return (int) ($row['c'] ?? 0);
+    }
     /**
      * Internal hook used by the cache endpoint to inspect whether the
      * #[Cache] interceptor actually hit without changing the public method

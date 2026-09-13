@@ -256,8 +256,11 @@ class FeatureController extends Controller
         $log->clear();
 
         // Run a couple of queries + a transaction so the Db events fire.
+        // The count deliberately bypasses the #[Cache] demo (countItems())
+        // — a cached hit fires no Db events, and a cold miss would pay the
+        // demo's simulated 50ms query in this benchmark row.
         $service->createItemTransactional('DbEvent Item ' . date('Y-m-d H:i:s'));
-        $service->countItems();
+        $service->countItemsQuery();
 
         return Response::json([
             'feature'     => 'Db Events',

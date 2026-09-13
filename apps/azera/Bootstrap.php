@@ -9,25 +9,25 @@
 namespace App\Azera;
 
 use App\Azera\Controllers\BenchController;
-use App\Azera\Models\Item;
-use Azera\AppContext;
-use Azera\Db\Database;
-use Azera\Db\DatabaseManager;
-use Azera\Cache\ArrayCache;
-use Azera\Event\EventDispatcher;
-use Azera\Queue\SyncQueue;
-use Azera\Aop\TransactionalInterceptor;
+use Azera\Aop\Cache as CacheAdvice;
 use Azera\Aop\CacheInterceptor;
+use Azera\Aop\Log as LogAdvice;
 use Azera\Aop\LogInterceptor;
+use Azera\Aop\Retry as RetryAdvice;
 use Azera\Aop\RetryInterceptor;
 use Azera\Aop\Transactional;
-use Azera\Aop\Cache as CacheAdvice;
-use Azera\Aop\Log as LogAdvice;
-use Azera\Aop\Retry as RetryAdvice;
-use Psr\Log\LoggerInterface;
-use Psr\EventDispatcher\EventDispatcherInterface;
-use Psr\SimpleCache\CacheInterface;
+use Azera\Aop\TransactionalInterceptor;
+use Azera\AppContext;
+use Azera\Cache\ArrayCache;
+use Azera\Core\Engines\ClarityEngine;
+use Azera\Core\ViewEngine;
+use Azera\Db\Database;
+use Azera\Event\EventDispatcher;
 use Azera\Queue\QueueInterface;
+use Azera\Queue\SyncQueue;
+use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\Log\LoggerInterface;
+use Psr\SimpleCache\CacheInterface;
 
 class Bootstrap
 {
@@ -90,22 +90,25 @@ class Bootstrap
         //Item::setDefaultRole('default');
 
         // --- Views (Clarity) ---
-        // Cache compiled templates in a project-local directory instead of
-        // the shared sys_get_temp_dir()/clarity_cache.  On shared hosts the
-        // webserver may already own /tmp/clarity_cache, which makes the CLI
-        // user's mkdir() fail with "Permission denied".
+        // Register a deferred factory on the container instead of calling
+        // $ctx->view() at boot: boot never renders, so the Clarity class
+        // stack must not be autoloaded here. The engine is built on the
+        // first render (inside dispatch).
         $cacheDir = __DIR__ . '/../../data/cache';
         if (!is_dir($cacheDir)) {
             @mkdir($cacheDir, 0777, true);
         }
-        $ctx->view()
-            ->setExtension('.clarity.html')
-            ->setViewPath(__DIR__ . '/Views')
-            ->setCachePath($cacheDir)
-            ->setVars([
-                'locale'   => 'en_US',
-                'platform' => 'desktop',
-            ]);
+        $viewsPath = __DIR__ . '/Views';
+        // Register the Clarity view engine lazily because not all requests need to render views.
+        $ctx->set(ViewEngine::class, fn() =>
+            (new ClarityEngine())
+                ->setExtension('.clarity.html')
+                ->setViewPath($viewsPath)
+                ->setCachePath($cacheDir)
+                ->setVars([
+                    'locale'   => 'en_US',
+                    'platform' => 'desktop',
+                ]));
 
         // --- Routes ---
         $router = $ctx->router();
@@ -301,21 +304,26 @@ class Bootstrap
         // AOP cache dir for file-based proxy generation.
         $ctx->setAopCacheDir(__DIR__ . '/../../data/aop');
 
+        // Interceptors as FACTORIES: built once, on the first advised-class
+        // construction (proxy build), not at boot. The eager versions pulled
+        // ArrayCache + DatabaseManager + NullLogger + all four interceptor
+        // classes into the cold-boot path; AOP requests resolve them on
+        // first use instead.
         $ctx->registerInterceptor(
             Transactional::class,
-            new TransactionalInterceptor($ctx->dbManager()),
+            fn() => new TransactionalInterceptor($ctx->dbManager()),
         );
         $ctx->registerInterceptor(
             CacheAdvice::class,
-            new CacheInterceptor($ctx->cache()),
+            fn() => new CacheInterceptor($ctx->cache()),
         );
         $ctx->registerInterceptor(
             LogAdvice::class,
-            new LogInterceptor($ctx->logger()),
+            fn() => new LogInterceptor($ctx->logger()),
         );
         $ctx->registerInterceptor(
             RetryAdvice::class,
-            new RetryInterceptor($ctx->logger()),
+            fn() => new RetryInterceptor($ctx->logger()),
         );
     }
 
