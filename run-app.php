@@ -173,10 +173,16 @@ if (count($requests) > 1) {
 
     foreach ($requests as $blockIdx => $request) {
         $label   = "{$request[0]} {$request[1]}";
+        // Memory limit per mode (mirrors run.php's spawn): cold re-boots the
+        // framework per iteration in one process — boot residue accumulates
+        // ~0.3 MB per boot and OOM'd a 512 M child at the 50×30 cap
+        // (2026-09-13) — so cold blocks get 1 G, warm stays at 512 M.
+        $memLimit = $modeName === 'cold' ? '1024M' : '512M';
         $tmpJson = tempnam(sys_get_temp_dir(), 'bench-block-') . '.json';
         $cmd     = sprintf(
-            '%s -d memory_limit=512M %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
+            '%s -d memory_limit=%s %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
             escapeshellarg(PHP_BINARY),
+            $memLimit,
             escapeshellarg(__FILE__),
             escapeshellarg($appKey),
             escapeshellarg($modeName),

@@ -655,11 +655,19 @@ foreach ($apps as $key) {
         // killed the 2026-09-13 run (see the cold-iteration cap above).
         // Iteration count is per mode: warm keeps the full default (1000),
         // cold is capped at 50 (see $coldItersCap above).
+        // Memory limit is per mode TOO: cold mode re-boots the framework
+        // every iteration inside ONE process, and boot residue accumulates
+        // linearly (~0.3 MB per Laravel boot — measured 100 boots ≈ 90 MB,
+        // 500 ≈ 200 MB, and it OOM'd a 512 M child at 1500 boots, 2026-09-13
+        // run 27/30). The 50×30 cap needs ~0.5 GB, so cold children get
+        // 1 G; warm boots once per block and stays at 512 M.
         $itersForMode = $modeIters[$modeName] ?? $itersPerRun;
+        $memLimit     = $modeName === 'cold' ? '1024M' : '512M';
         $tmpJson = tempnam(sys_get_temp_dir(), 'bench-') . '.json';
         $cmd     = sprintf(
-            '%s -d memory_limit=512M %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
+            '%s -d memory_limit=%s %s --app=%s --mode=%s --iterations-per-run=%d --runs=%d --requests=%s --out-json=%s%s',
             escapeshellarg(PHP_BINARY),
+            $memLimit,
             escapeshellarg(__DIR__ . '/run-app.php'),
             escapeshellarg($key),
             escapeshellarg($modeName),
