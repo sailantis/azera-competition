@@ -20,7 +20,9 @@
  * as a pure orchestrator and re-spawns ITSELF once per request — every
  * (app, mode, request) block runs in a fresh PHP process with a clean
  * high-water mark. Only the first block measures boot cost (--skip-boot is
- * passed to the rest); --seed is applied once, before the blocks.
+ * passed to the rest); --seed is applied once, before the blocks. Between
+ * blocks the SQLite WAL is checkpointed (TRUNCATE) so a preceding write block
+ * cannot inflate a later read block — see checkpointWal().
  *
  * Everything after the shared preamble mirrors run.php's per-app loop.
  */
@@ -28,6 +30,43 @@
 $opts = getopt('', ['app::', 'mode::', 'iterations-per-run::', 'runs::', 'requests::', 'seed', 'rows::', 'out-json::', 'skip-boot']);
 
 $appKey = $opts['app'] ?? 'azera';
+
+/**
+ * Drain the SQLite WAL back into the main DB file.
+ *
+ * WHY THIS IS REQUIRED BETWEEN BLOCKS (2026-09-14): every cold iteration runs
+ * in a forked child that is SIGKILLed right after it reports. A killed process
+ * never runs SQLite's post-commit auto-checkpoint, and the harness never has a
+ * quiet moment with zero readers, so the WAL grows without bound across a whole
+ * block: a 50x30 write block (1,500 writes) left a 6.18 MB / 1,501-frame WAL on
+ * disk. The NEXT block's forked children each open a fresh PDO connection and
+ * must recover/scan that WAL, which inflated a following READ block by ~2.7 ms
+ * — measured 5.7 -> 8.4 ms for identical GET /api/items blocks, and the effect
+ * scaled with how much writing happened earlier. Because the request list is
+ * fixed (writes sit at positions 4/5/7, api reads at 8-10), this silently
+ * penalised the api rows of the slowest-writing apps (symfony 13.2 vs items
+ * 6.0, laravel 9.2 vs 7.9) while leaving azera/CI4/cake (which leave ~6 frames)
+ * clean — a block-order artifact, not a framework difference.
+ *
+ * TRUNCATE (not PASSIVE) because we want the WAL file back to zero bytes;
+ * pass/fail is irrelevant to correctness here, only to the measured numbers.
+ */
+function checkpointWal(): void
+{
+    $db = __DIR__ . '/data/bench.sqlite';
+    if (!is_file($db)) {
+        return;
+    }
+    try {
+        $pdo = new PDO('sqlite:' . $db);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        // Journal mode must be WAL for the checkpoint pragma to do anything.
+        $pdo->exec('PRAGMA busy_timeout = 5000');
+        $pdo->query('PRAGMA wal_checkpoint(TRUNCATE)')->fetchAll();
+    } catch (\Throwable $e) {
+        fwrite(STDERR, "  [warn] WAL checkpoint failed: {$e->getMessage()}\n");
+    }
+}
 
 // CI4's global helpers (config(), view(), env(), ...) are function_exists-
 // guarded and collide with Laravel's, which composer's `files` autoload
@@ -173,6 +212,11 @@ if (count($requests) > 1) {
 
     foreach ($requests as $blockIdx => $request) {
         $label = "{$request[0]} {$request[1]}";
+        // Drain the WAL left by the PREVIOUS block before measuring this one,
+        // so no block inherits a multi-MB recovery cost from earlier writes
+        // (see checkpointWal() for the full rationale). The first block runs
+        // right after the seed, whose WAL is tiny — harmless there.
+        checkpointWal();
         // Memory limit per mode (mirrors run.php's spawn): cold re-boots the
         // framework per iteration in one process — boot residue accumulates
         // ~0.3 MB per boot and OOM'd a 512 M child at the 50×30 cap

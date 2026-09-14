@@ -44,15 +44,13 @@ final class ArrayHandler extends BaseHandler
         $this->prefix = $config->prefix ?? '';
     }
 
-    public function initialize(): void
-    {
-    }
+    public function initialize(): void {}
 
     public function get(string $key): mixed
     {
         $key = static::validateKey($key, $this->prefix);
 
-        if (! isset($this->store[$key])) {
+        if (!isset($this->store[$key])) {
             return null;
         }
 
@@ -106,7 +104,7 @@ final class ArrayHandler extends BaseHandler
     {
         $key = static::validateKey($key, $this->prefix);
 
-        if (! isset($this->store[$key]) || ! is_numeric($this->store[$key]['data'])) {
+        if (!isset($this->store[$key]) || !is_numeric($this->store[$key]['data'])) {
             return false;
         }
 
@@ -119,7 +117,7 @@ final class ArrayHandler extends BaseHandler
     {
         $key = static::validateKey($key, $this->prefix);
 
-        if (! isset($this->store[$key]) || ! is_numeric($this->store[$key]['data'])) {
+        if (!isset($this->store[$key]) || !is_numeric($this->store[$key]['data'])) {
             return false;
         }
 
@@ -138,7 +136,8 @@ final class ArrayHandler extends BaseHandler
     public function getCacheInfo(): array|false|object|null
     {
         return array_map(
-            static fn (array $item): array => ['expires' => $item['ttl'] === 0 ? 0 : $item['time'] + $item['ttl']],
+            static fn(array $item): array =>
+                ['expires' => $item['ttl'] === 0 ? 0 : $item['time'] + $item['ttl']],
             $this->store,
         );
     }
@@ -147,7 +146,7 @@ final class ArrayHandler extends BaseHandler
     {
         $key = static::validateKey($key, $this->prefix);
 
-        if (! isset($this->store[$key])) {
+        if (!isset($this->store[$key])) {
             return null;
         }
 

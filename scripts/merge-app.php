@@ -55,7 +55,7 @@ if (!is_array($target) || !isset($target['apps']) || !is_array($source) || !isse
 
 $srcApps = array_values(array_filter(
     $source['apps'],
-    static fn (array $a): bool => ($a['app'] ?? '') === $appKey
+    static fn(array $a): bool => ($a['app'] ?? '') === $appKey
 ));
 if (count($srcApps) !== 1) {
     fwrite(STDERR, "Source must contain exactly one \"{$appKey}\" app block, found " . count($srcApps) . ".\n");
@@ -120,11 +120,11 @@ if (!is_file($targetJson . '.bak')) {
 $target['apps'][$dstIndex] = $srcApp;
 
 // Track provenance: which app was refreshed, from which run.
-$target['env']['app_refresh']           = $target['env']['app_refresh'] ?? [];
-$target['env']['app_refresh'][$appKey]  = [
-    'timestamp'              => $source['env']['timestamp'] ?? date('c'),
-    'azera_framework_ref'    => $source['env']['azera_framework_ref'] ?? null,
-    'source_dataset'         => basename($sourceJson),
+$target['env']['app_refresh'] = $target['env']['app_refresh'] ?? [];
+$target['env']['app_refresh'][$appKey] = [
+    'timestamp'           => $source['env']['timestamp'] ?? date('c'),
+    'azera_framework_ref' => $source['env']['azera_framework_ref'] ?? null,
+    'source_dataset'      => basename($sourceJson),
 ];
 if (isset($source['env']['azera_framework_ref'])) {
     $target['env']['azera_framework_ref'] = $source['env']['azera_framework_ref'];
@@ -133,10 +133,12 @@ if (isset($source['env']['azera_framework_ref'])) {
 file_put_contents($targetJson, json_encode($target, JSON_PRETTY_PRINT));
 echo "Merged {$appKey} block from {$sourceJson} into {$targetJson}\n";
 echo '  modes: ', implode(', ', array_keys($srcApp['modes'])), "\n";
-echo '  requests per mode: ', implode(', ', array_map(
-    static fn (array $m): int => count($m['requests']),
+echo '  requests per mode: ',
+    implode(', ', array_map(
+    static fn(array $m): int => count($m['requests']),
     $srcApp['modes']
-)), "\n";
+)),
+    "\n";
 
 // --- CSV: rebuild in full from the merged JSON (same shape/shape/order as
 // run.php writeResults() emits, so the file looks like a fresh export) ------
