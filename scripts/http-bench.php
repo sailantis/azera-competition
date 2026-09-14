@@ -91,7 +91,7 @@ foreach ($requests as [$method, $uri]) {
             $t = httpTimedRequest($baseUrl, $method, $uri, $connect);
             $times[] = $t;
             $connects[] = $connect;
-            abortIfBroken($server, $appKey, $reqLabel, $t['body']);
+            abortIfBroken($server, $appKey, $reqLabel, $t['body'], $t['status']);
             $times[count($times) - 1] = $t['total_ms'];
         }
 

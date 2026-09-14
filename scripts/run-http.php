@@ -112,6 +112,11 @@ $ports     = [];
 // model — no per-block start/stop needed).
 stampAllDeployConfigs($root, $deployDir, $apps, $fpmPort, $rrPort, $ports, $benchUser);
 
+// A benchmark RoadRunner left behind by an earlier invocation would hold its
+// port, silently absorb the new server's bind failure, and get benchmarked
+// under the wrong app's name (2026-09-14). Clear them before the first block.
+killAllBenchRoadRunners($deployDir);
+
 foreach ($apps as $appKey) {
     $appKey = trim($appKey);
     echo "\n=== App: {$appKey}\n";
@@ -132,8 +137,9 @@ foreach ($apps as $appKey) {
             $proc = ensureFpmRunning($root, $phpFpmBin, $deployDir);
         }
 
+        $failure = null;
         try {
-            waitForServer($baseUrl, $server, $appKey);
+            waitForServer($baseUrl, $server, $appKey, $proc['log'] ?? null);
 
             // http-bench.php aborts (exit 1) on broken bodies — its output is
             // trusted only when the child exits 0.
@@ -142,15 +148,24 @@ foreach ($apps as $appKey) {
 
             $modeData = json_decode((string) file_get_contents($tmpJson), true);
             if (!is_array($modeData) || !isset($modeData['modes'][$modeOf($server)])) {
-                fwrite(STDERR, "[run-http] No results from http-bench for {$server}/{$appKey}, aborting.\n");
-                exit(1);
+                throw new RuntimeException("No results from http-bench for {$server}/{$appKey}.");
             }
             $appResult['modes'] += $modeData['modes'];
             unlink($tmpJson);
+        } catch (RuntimeException $e) {
+            // The finally below tears the server down BEFORE we abort —
+            // aborting inside the try skipped teardown and leaked the RR
+            // worker still holding the port (2026-09-14).
+            $failure = $e;
         } finally {
             if ($server === 'rr') {
                 stopRoadRunner($proc);
             }
+        }
+
+        if ($failure !== null) {
+            fwrite(STDERR, "[run-http] {$server}/{$appKey} failed: {$failure->getMessage()}\n");
+            exit(1);
         }
     }
 

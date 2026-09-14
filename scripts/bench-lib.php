@@ -172,8 +172,13 @@ function httpTimedRequest(string $baseUrl, string $method, string $uri, float &$
  * identical guard to run.php's benchRequest() — "Not Found" bodies or "500 "
  * prefixes abort the whole client with exit 1.
  */
-function abortIfBroken(string $server, string $appKey, string $reqLabel, string $body): void
+function abortIfBroken(string $server, string $appKey, string $reqLabel, string $body, int $status = 200): void
 {
+    if ($status < 200 || $status >= 300) {
+        fwrite(STDERR, "[ABORT] {$server}/{$appKey} {$reqLabel}: HTTP status {$status}\n"
+            . "  body head: " . substr($body, 0, 200) . "\n");
+        exit(1);
+    }
     if ($body === 'Not Found' || str_starts_with($body, '500 ')) {
         fwrite(STDERR, "[ABORT] {$server}/{$appKey} {$reqLabel}: broken response body\n");
         exit(1);

@@ -105,13 +105,96 @@ function seedDatabase(string $root, int $rows): void
 // --- RoadRunner -------------------------------------------------------------------
 
 /**
+ * Pgrep pattern matching a RoadRunner process for one config file.
+ * A trailing `\)` anchors the path so `.rr-azera.yaml` never matches
+ * `.rr-azera-b.yaml`.
+ */
+function rrProcessPattern(string $deployDir, string $appKey): string
+{
+    return 'rr serve -c ' . $deployDir . '/.rr-' . $appKey . '.yaml)';
+}
+
+/**
+ * Kill any RoadRunner process still bound to this app's config (orphans from
+ * an earlier run or a crashed stop). MUST run before startRoadRunner(): an
+ * orphan keeps the port, the new `rr serve` silently fails to bind, and
+ * waitForServer() would then "succeed" against the OLD app's worker — which
+ * is exactly how every RR block after the first got benchmarked against
+ * azera's worker on 2026-09-14.
+ */
+function killOrphanRoadRunners(string $deployDir, string $appKey): void
+{
+    $pat = rrProcessPattern($deployDir, $appKey);
+    exec('pkill -f ' . escapeshellarg($pat) . ' 2>/dev/null', $o1, $rc1);
+    if ($rc1 === 0) {
+        // Give the port a moment to be released before we try to bind it.
+        usleep(300_000);
+        echo "  killed orphaned RoadRunner ({$appKey}) holding the port\n";
+    }
+}
+
+/**
+ * Kill EVERY benchmark RoadRunner (any app) at orchestrator start. A batch
+ * runs one orchestrator per app; without this sweep an orphan left by the
+ * previous invocation keeps its port and the next invocation's first block
+ * cannot bind — the same failure at a coarser granularity.
+ */
+function killAllBenchRoadRunners(string $deployDir): void
+{
+    exec('pkill -f ' . escapeshellarg('rr serve -c ' . $deployDir . '/.rr-') . ' 2>/dev/null', $o, $rc);
+    if ($rc === 0) {
+        usleep(400_000);
+        echo "  killed stale benchmark RoadRunner process(es) before starting\n";
+    }
+}
+
+/**
+ * Block until nothing is listening on 127.0.0.1:$port. Returns false if the
+ * port is still occupied after the timeout (a stale server would silently
+ * serve the benchmark).
+ */
+function waitForPortFree(int $port, float $timeoutSec = 10.0): bool
+{
+    $deadline = microtime(true) + $timeoutSec;
+    while (microtime(true) < $deadline) {
+        $out = [];
+        exec('ss -ltn 2>/dev/null | grep -c ' . escapeshellarg(":{$port} "), $out, $rc);
+        if ((int) ($out[0] ?? 0) === 0) {
+            return true;
+        }
+        usleep(200_000);
+    }
+
+    return false;
+}
+
+/**
  * Start RoadRunner for one app. Config must have been stamped for $appKey.
- * Returns the process handle for stopRoadRunner().
+ *
+ * The returned pid is the REAL RoadRunner process, not a shell wrapper:
+ * prefixing the command with `sh -c` (the pre-2026-09-14 shape) made
+ * proc_open return the wrapper's pid, so stopRoadRunner() SIGTERMed the
+ * wrapper and orphaned the actual `rr` binary — which kept the port and made
+ * the next app's block benchmark the previous app. The command is therefore
+ * chdir'ed into PHP and `exec`'d so the pid we get IS the process holding
+ * the listening socket (exec also puts it in this process's group, so the
+ * group-kill fallback reaches the workers too).
  *
  * @return array{proc: resource, pipes: array}
  */
 function startRoadRunner(string $root, string $deployDir, string $appKey, string $rrBinary, int $port): array
 {
+    if (is_dir($root)) {
+        chdir($root);
+    }
+
+    // An orphan from a previous block would hold the port (see above).
+    killOrphanRoadRunners($deployDir, $appKey);
+    if (!waitForPortFree($port)) {
+        fwrite(STDERR, "[run-http] Port {$port} is still in use before starting RoadRunner ({$appKey}) — refusing to benchmark a stale server.\n");
+        exit(1);
+    }
+
     echo "  starting RoadRunner ({$appKey}, port {$port})...\n";
 
     // NOTE: -d xdebug.mode=off is a PHP flag — the Go binary rejects it
@@ -119,41 +202,55 @@ function startRoadRunner(string $root, string $deployDir, string $appKey, string
     // inherit php.ini (CLI ini already has xdebug disabled on the VM);
     // RR itself needs `-o logs.level=…` style overrides only.
     $cmd = sprintf(
-        'cd %s && %s serve -c %s 2>&1',
-        escapeshellarg($root),
+        'exec %s serve -c %s 2>&1',
         escapeshellarg($rrBinary),
         escapeshellarg("{$deployDir}/.rr-{$appKey}.yaml")
     );
 
     $pipes = [];
-    $proc  = proc_open($cmd, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+    $logPath = "{$deployDir}/rr-{$appKey}.log";
+    $logFp   = fopen($logPath, 'w');
+    $descr   = $logFp === false
+        ? [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']]
+        : [['pipe', 'r'], $logFp, $logFp];
+
+    $proc  = proc_open($cmd, $descr, $pipes);
     if (!is_resource($proc)) {
         fwrite(STDERR, "[run-http] Failed to start RoadRunner for {$appKey}\n");
         exit(1);
     }
 
-    // Let RR relay logs to our stdout (non-blocking read pump happens via
-    // waitForServer polls; RR's own log level is error-only in the config).
-    stream_set_blocking($pipes[1], false);
-    stream_set_blocking($pipes[2], false);
+    if ($logFp === false) {
+        // Fallback: keep the pipes non-blocking so a chatty worker cannot
+        // deadlock the orchestrator on a full pipe buffer.
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+    }
 
-    return ['proc' => $proc, 'pipes' => $pipes];
+    return ['proc' => $proc, 'pipes' => $pipes, 'deployDir' => $deployDir, 'appKey' => $appKey, 'log' => $logPath];
 }
 
 /**
- * Graceful stop: send SIGTERM, wait briefly, SIGKILL as the hammer.
+ * Stop RoadRunner hard: SIGTERM the group, SIGKILL the group, then pkill any
+ * worker still matching this config. The pkill is what makes the stop
+ * trustworthy — without it an orphan can outlive the block and poison the
+ * next one (see killOrphanRoadRunners()).
  */
 function stopRoadRunner(array $procRef): void
 {
     if (!is_resource($procRef['proc'])) {
         return;
     }
+
     $status = proc_get_status($procRef['proc']);
     $pid    = (int) ($status['pid'] ?? 0);
     if ($pid > 0) {
-        // rr serve spawns workers; SIGTERM the whole process group (rr
-        // forwards shutdown to workers itself when it gets the signal).
-        posix_kill($pid, 15);
+        // Negative pid = the whole process group (startRoadRunner exec'd rr
+        // into this group); rr forwards shutdown to its PHP workers itself,
+        // AND the group kill reaches any worker that ignored the forward
+        // (which otherwise lingers holding RR's log fd).
+        @posix_kill(-$pid, 15);
+        @posix_kill($pid, 15);
         for ($i = 0; $i < 30; $i++) {
             $status = proc_get_status($procRef['proc']);
             if (!$status['running']) {
@@ -163,10 +260,19 @@ function stopRoadRunner(array $procRef): void
         }
         $status = proc_get_status($procRef['proc']);
         if ($status['running']) {
-            posix_kill($pid, 9);
+            @posix_kill(-$pid, 9);
+            @posix_kill($pid, 9);
+            usleep(100_000);
         }
     }
     proc_close($procRef['proc']);
+
+    // Hammer any survivor so the port cannot stay bound into the next app's
+    // block (this is the bug the whole hardening exists for).
+    if (isset($procRef['deployDir'], $procRef['appKey'])) {
+        killOrphanRoadRunners($procRef['deployDir'], $procRef['appKey']);
+    }
+
     echo "  RoadRunner stopped.\n";
 }
 
@@ -239,27 +345,95 @@ function removeDeployConfigs(string $deployDir): void
 // --- Readiness + smoke ---------------------------------------------------------------
 
 /**
+ * A substring only the given app's worker can produce (all six apps return a
+ * JSON /features/config payload with an app-specific description). Returned
+ * apostrophe-free on purpose: json_encode() may or may not \u0027-escape the
+ * quote depending on the app's encoder flags.
+ */
+function appFingerprint(string $appKey): ?string
+{
+    return [
+        'azera'       => 'Dot-notation access to a nested configuration',
+        'laravel'     => 'Configuration access through Laravel',
+        'symfony'     => 'Configuration access through Symfony',
+        'spiral'      => 'Configuration access through Spiral',
+        'codeigniter' => 'Configuration access via CodeIgniter',
+        'cakephp'     => 'Configuration access via a plain PHP class',
+    ][$appKey] ?? null;
+}
+
+/**
  * Poll the server's GET / until it answers with a non-broken body (30 s).
  * Uses the shared abort guard semantics via curl.
+ *
+ * When the app has a fingerprint, /features/config MUST contain it: a server
+ * that answers is not proof that the RIGHT app is behind the port. An
+ * orphaned RoadRunner from a previous block answers every request happily,
+ * and treating that as "ready" is exactly how the 2026-09-14 run recorded
+ * azera's worker under five other frameworks' names.
  */
-function waitForServer(string $baseUrl, string $server, string $appKey): void
+function waitForServer(string $baseUrl, string $server, string $appKey, ?string $logPath = null): void
 {
     require_once __DIR__ . '/bench-lib.php';
 
-    $deadline = microtime(true) + 30;
+    $fingerprint = appFingerprint($appKey);
+    $deadline    = microtime(true) + 30;
+    $lastBody    = null;
+
     while (microtime(true) < $deadline) {
         try {
-            $body = httpRequest($baseUrl, 'GET', '/');
-            if ($body !== 'Not Found' && !str_starts_with($body, '500 ')) {
+            $body     = httpRequest($baseUrl, 'GET', '/');
+            $lastBody = $body;
+            $ready    = $body !== 'Not Found' && !str_starts_with($body, '500 ');
+
+            if ($ready && $fingerprint !== null) {
+                $probe = httpRequest($baseUrl, 'GET', '/features/config');
+                if (!str_contains($probe, $fingerprint)) {
+                    throw new RuntimeException(
+                        "WRONG WORKER on {$baseUrl} for {$appKey}: /features/config did not contain the app fingerprint.\n"
+                            . "  expected: {$fingerprint}\n"
+                            . "  body head: " . substr($probe, 0, 200) . "\n"
+                            . "  A stale RoadRunner from a previous block is holding the port.\n"
+                            . workerLogTail($logPath)
+                    );
+                }
+            }
+
+            if ($ready) {
                 echo "  server ready ({$server}/{$appKey})\n";
                 return;
             }
-        } catch (RuntimeException) {}
+        } catch (RuntimeException $e) {
+            // A fingerprint mismatch is fatal (never retry it); a transport
+            // failure just means "not up yet".
+            if (str_contains($e->getMessage(), 'WRONG WORKER')) {
+                throw $e;
+            }
+        }
         usleep(250_000);
     }
 
-    fwrite(STDERR, "[run-http] Server {$server}/{$appKey} did not become ready in 30s, aborting.\n");
-    exit(1);
+    throw new RuntimeException(
+        "Server {$server}/{$appKey} did not become ready in 30s.\n"
+            . ($lastBody !== null ? "  last body head: " . substr($lastBody, 0, 200) . "\n" : '')
+            . workerLogTail($logPath)
+    );
+}
+
+/**
+ * Format the tail of a worker log for an error message ('' when missing).
+ */
+function workerLogTail(?string $logPath, int $lines = 25): string
+{
+    if ($logPath === null || !is_file($logPath)) {
+        return '';
+    }
+    $all = @file($logPath, FILE_IGNORE_NEW_LINES) ?: [];
+    if ($all === []) {
+        return "  worker log {$logPath} is empty\n";
+    }
+
+    return "  worker log tail ({$logPath}):\n    " . implode("\n    ", array_slice($all, -$lines)) . "\n";
 }
 
 // --- http-bench child -------------------------------------------------------------------
@@ -360,14 +534,16 @@ function measureFloors(
 
     // floor-rr: hello-world through RoadRunner (bare worker cost).
     if ($useRr) {
+        // The config file is named .rr-<floorKey>.yaml so startRoadRunner()
+        // (which derives the path AND the orphan-pgrep pattern from the app
+        // key) can manage the floor worker exactly like a real app.
+        $floorKey = 'floor-rr';
         $worker = "{$root}/temp/floor-rr-worker.php";
         file_put_contents($worker, floorRrWorkerSource());
-        // Must live in $deployDir as .rr-<appKey>.yaml — startRoadRunner()
-        // derives the config path from (deployDir, appKey).
-        $cfg = "{$deployDir}/.rr-floor-rr.yaml";
+        $cfg = "{$deployDir}/.rr-{$floorKey}.yaml";
         file_put_contents($cfg, str_replace(
             ['{{APP}}', '{{PORT}}'],
-            ['floor-rr', '9902'],
+            [$floorKey, '9902'],
             <<<YAML
             version: "3"
             server:
@@ -381,9 +557,9 @@ function measureFloors(
             YAML
         ));
 
-        $proc = startRoadRunner($root, $deployDir, 'floor-rr', $rrBinary, 9902);
+        $proc = startRoadRunner($root, $deployDir, $floorKey, $rrBinary, 9902);
         try {
-            waitForServer('http://127.0.0.1:9902', 'rr', 'floor-rr');
+            waitForServer('http://127.0.0.1:9902', 'rr', $floorKey, $proc['log'] ?? null);
             $floors[] = measureFloorApp($root, 'floor-rr', 'roadrunner', 'http://127.0.0.1:9902', $itersPerRun, $runs);
         } finally {
             stopRoadRunner($proc);

@@ -27,19 +27,31 @@ declare(strict_types=1);
  * ServerRequest or null on shutdown; respond() takes a PSR-7 Response).
  */
 
-use Spiral\RoadRunner\Http\PSR7Worker;
-use Spiral\RoadRunner\Worker;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\Response;
+use Spiral\Goridge\Exception\GoridgeException;
+use Spiral\RoadRunner\Exception\RoadRunnerException;
+use Spiral\RoadRunner\Http\PSR7Worker;
+use Spiral\RoadRunner\Worker;
 
-require dirname(__DIR__, 2) . '/vendor/autoload.php';
-require dirname(__DIR__, 2) . '/WebAppAdapter.php';
-require dirname(__DIR__, 2) . '/adapters/BenchmarkAutoloader.php';
 require __DIR__ . '/bootstrap-worker.php';
+
+// BENCH_APP is read with getenv() BEFORE composer loads: defining a helper for
+// it would shadow Laravel's own env() (see the note in bootstrap-worker.php).
+$benchApp  = (string) (getenv('BENCH_APP') ?: '');
+$benchRoot = dirname(__DIR__, 2);
+
+// Framework helpers must win their function_exists race BEFORE composer's
+// `files` autoload pulls Laravel's in (see preloadFrameworkHelpers()).
+preloadFrameworkHelpers($benchApp, $benchRoot);
+
+require $benchRoot . '/vendor/autoload.php';
+require $benchRoot . '/WebAppAdapter.php';
+require $benchRoot . '/adapters/BenchmarkAutoloader.php';
 
 // --- Resolve the app under test ---------------------------------------------
 
-$adapter = createAdapter((string) env('BENCH_APP'));
+$adapter = createAdapter($benchApp);
 
 /**
  * One-time framework boot. In the real warm model this cost is paid once per
@@ -62,12 +74,12 @@ while (true) {
         if ($request === null) {
             break; // RoadRunner signalled shutdown
         }
-    } catch (\Spiral\Goridge\Exception\GoridgeException | \Spiral\RoadRunner\Exception\RoadRunnerException $e) {
+    } catch (GoridgeException | RoadRunnerException $e) {
         // Transport failure (RR gone / pipe closed): exiting is the only sane
         // reaction. An unguarded catch-all here would spin at 100% CPU — a
         // dead transport never starts delivering requests again.
         break;
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         // Malformed request payload must not kill the worker.
         $psr7->respond(new Response(400, [], '400 Bad Request'));
         continue;
@@ -83,7 +95,7 @@ while (true) {
 
         $status = str_starts_with($body, '500 ') ? 500 : 200;
         $psr7->respond(new Response($status, ['Content-Type' => 'text/html; charset=utf-8'], $body));
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         // Send an error response and keep the worker alive.
         $psr7->respond(new Response(500, [], '500 ' . get_class($e) . ': ' . $e->getMessage()));
     }
