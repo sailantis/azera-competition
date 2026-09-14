@@ -23,6 +23,18 @@ final class ResultStore
     /** @var array<string,mixed> */
     private array $env;
 
+    /**
+     * Webserver-overhead pseudo-apps from the real-deployment dataset
+     * (`floors` top-level key: floor-http = static file via nginx, floor-php =
+     * hello-world via a freshly spawned FPM worker, floor-rr = bare resident
+     * RoadRunner worker). These are NOT frameworks and are excluded from
+     * apps(); they exist to make the constant server/spawn cost explicit, so
+     * a real-FPM number can be read as "floor + framework boot".
+     *
+     * @var list<array<string,mixed>>
+     */
+    private array $floors = [];
+
     /** @var array<string,array<string,array<string,array<string,mixed>>>> app => mode => request => row */
     private array $data = [];
 
@@ -59,6 +71,11 @@ final class ResultStore
         $store = new self($raw['env'] ?? []);
         foreach ($raw['apps'] as $app) {
             $store->ingest($app, (string) ($raw['env']['timestamp'] ?? ''));
+        }
+        foreach (($raw['floors'] ?? []) as $floor) {
+            if (is_array($floor) && isset($floor['app'])) {
+                $store->floors[] = $floor;
+            }
         }
         return $store;
     }
@@ -159,6 +176,56 @@ final class ResultStore
     public function coldBootIncluded(): bool
     {
         return (bool) ($this->env['cold_boot_included'] ?? false);
+    }
+
+    /**
+     * Iterations per run recorded on the measured rows. The captions used to
+     * hardcode "1000", which is wrong for the real-deployment dataset (its
+     * client defaults to 1000 too, but per-app runs are commonly smaller) and
+     * for any smoke run. Returns null when the rows disagree or predate the
+     * field, so callers fall back to a budget-free wording.
+     */
+    public function iterationsPerRun(): ?int
+    {
+        $seen = [];
+        foreach ($this->data as $modes) {
+            foreach ($modes as $rows) {
+                foreach ($rows as $row) {
+                    $n = (int) ($row['iterations_per_run'] ?? 0);
+                    if ($n > 0) {
+                        $seen[$n] = true;
+                    }
+                }
+            }
+        }
+        return count($seen) === 1 ? (int) array_key_first($seen) : null;
+    }
+
+    /**
+     * Webserver-overhead probes present in the dataset:
+     * app => ['mode' => .., 'request' => .., 'ms' => float]. Empty for every
+     * dataset produced by the in-process harness.
+     *
+     * @return array<string,array{mode:string,request:string,ms:float}>
+     */
+    public function floors(): array
+    {
+        $out = [];
+        foreach ($this->floors as $floor) {
+            $app = (string) $floor['app'];
+            foreach (($floor['modes'] ?? []) as $mode => $m) {
+                $row = $m['requests'][0] ?? null;
+                if ($row === null) {
+                    continue;
+                }
+                $out[$app] = [
+                    'mode'    => (string) $mode,
+                    'request' => (string) ($row['request'] ?? ''),
+                    'ms'      => (float) ($row['trimmed_mean_ms'] ?? $row['mean_ms'] ?? 0),
+                ];
+            }
+        }
+        return $out;
     }
 
     /**

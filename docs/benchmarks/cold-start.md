@@ -31,7 +31,7 @@ Total time to serve one of each of the 21 endpoints — the sum of the endpoints
 - **Query Builder** (`GET /items-qb`): Azera at 3.14ms median, x 1.4 faster than CodeIgniter.
 - **REST API (JSON)** (`GET /api/items`): Azera at 3.11ms median, x 1.3 faster than CodeIgniter.
 - **AOP (Aspect-Oriented)** (`GET /features/aop`): Azera at 5.22ms median, x 1.2 faster than Symfony.
-- **Cache** (`GET /features/cache`): Azera at 54.6ms median, x 1.0 faster than CodeIgniter.
+- **Cache** (`GET /features/cache`): Azera at 54.6ms median — every framework lands within 5% of it: a shared fixed cost dominates it, so the endpoint does not separate the frameworks.
 - **Database Events** (`GET /features/db-events`): Azera at 3.73ms median, x 1.2 faster than CodeIgniter.
 - **Event Dispatcher** (`GET /features/events`): Azera at 3.68ms median, x 1.1 faster than CakePHP.
 - **Validation** (`GET /features/validation`): Azera at 2.86ms median, x 1.6 faster than CakePHP.

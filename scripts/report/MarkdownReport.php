@@ -70,12 +70,17 @@ final class MarkdownReport
 
         // Shared tables so both outputs agree on the numbers.
         $tables = new Tables($this->store);
+        $realServer = $this->store->floors() !== [];
         $l[] = '## Latency by endpoint';
         $l[] = '';
         $l[] = 'Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. '
             . ($this->store->hasBoot()
                 ? 'Every number is END-TO-END per-request occupancy for the view\'s deployment model: the '
                     . 'framework boot of that model is part of the cell, not parked in a separate chart. '
+                : '')
+            . ($realServer
+                ? 'These are REAL deployments measured over HTTP: every row carries the constant server '
+                    . 'cost, which is why the values cluster — the floor note below states it explicitly. '
                 : '')
             . 'The workload column states what each request reads or writes — the shared SQLite database '
             . 'holds 1,000 item rows (re-seeded per app × mode), every list endpoint serves page 1 of 20, '
@@ -86,7 +91,8 @@ final class MarkdownReport
                     . 'between requests (terminate() finalizers, request-scoped resets); handle is the dispatch '
                     . 'itself; boot is the framework startup that request waits for in this deployment model.'
                 : '')
-            . $this->bootLegend($mode);
+            . $this->bootLegend($mode)
+            . $this->floorNote($mode);
         $l[] = '';
         $l[] = $tables->latencyMarkdown($mode, $apps);
         $l[] = '';
@@ -106,11 +112,16 @@ final class MarkdownReport
     private function envBlock(): string
     {
         $env = $this->store->env();
+        // The measured rows record their budget (http-bench.php writes
+        // iterations_per_run). The in-process harness does not, so fall back to
+        // its documented default rather than inventing a number per view.
+        $iters = $this->store->iterationsPerRun() ?? 1000;
         return sprintf(
-            "**Environment** — PHP %s · %s · OPcache (CLI): %s · 1000 iterations per run over multiple runs, lower is better.\n\n_Measured %s%s_",
+            "**Environment** — PHP %s · %s · OPcache (CLI): %s · %s iterations per run over multiple runs, lower is better.\n\n_Measured %s%s_",
             $env['php_version'] ?? '?',
             $env['os'] ?? '?',
             !empty($env['opcache']) ? 'yes' : 'no',
+            (string) $iters,
             $env['timestamp'] ?? '?',
             isset($env['azera_framework_ref']) ? ' · azera-framework `' . $env['azera_framework_ref'] . '`' : ''
         );
@@ -185,10 +196,85 @@ final class MarkdownReport
     }
 
     /**
+     * True when this dataset measured a REAL server (its rows carry the
+     * floor-* probes). Only then may the prose blame a web server for a flat
+     * ranking — the in-process harness has none.
+     */
+    private function isRealDeployment(): bool
+    {
+        return $this->store->floors() !== [];
+    }
+
+    /**
+     * Closing clause for a set of frameworks that all land within 5% of each
+     * other. The honest reason depends on the dataset: on a real deployment the
+     * constant nginx/FPM/RR cost swamps the framework, while in the in-process
+     * harness a shared fixed cost (e.g. cache round-trips) does. Never blame a
+     * web server that was not measured.
+     */
+    private function withinNoiseReason(): string
+    {
+        return $this->isRealDeployment()
+            ? 'the deployment is server-bound, so the ranking says more about the web server than about the frameworks'
+            : 'a shared fixed cost dominates it, so the endpoint does not separate the frameworks';
+    }
+
+    /**
+     * Real-deployment datasets measure a REAL server, so every headline carries
+     * a constant cost that has nothing to do with the framework — the floor-*
+     * probes in the dataset state it explicitly:
+     *
+     *   FPM  — the pool recycles the worker after EVERY request
+     *          (pm.max_requests=1), so each request pays a fresh worker spawn
+     *          plus the FastCGI handshake. On the benchmark VM that floor
+     *          (~9.3 ms) dwarfs every framework's own boot, which is why a
+     *          real-FPM row reads ~10 ms for every framework alike: subtract
+     *          the floor and what remains is the per-request framework cost.
+     *   RR   — requests cross a socket to a resident worker, so a bare worker
+     *          (floor-rr, ~0.2 ms) is the IPC + server floor.
+     *
+     * Without this line the FPM rows read as if the framework itself cost
+     * 10 ms. Empty for every in-process dataset (no `floors` key).
+     */
+    private function floorNote(string $mode): string
+    {
+        $floors = $this->store->floors();
+        if ($floors === []) {
+            return '';
+        }
+        $ms = static fn(string $key): ?float => $floors[$key]['ms'] ?? null;
+
+        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+            $php  = $ms('floor-php');
+            $http = $ms('floor-http');
+            if ($php === null) {
+                return '';
+            }
+            return "\n\n**Server floor** — measured nginx + PHP-FPM with `pm.max_requests=1`, so the pool spawns a "
+                . 'fresh worker for every request. A hello-world endpoint that boots nothing but PHP costs '
+                . '**' . SvgChart::fmt($php) . ' ms** (`floor-php`), and a static file through nginx '
+                . SvgChart::fmt($http ?? 0.0) . ' ms (`floor-http`). That worker spawn + FastCGI handshake is '
+                . 'the floor every row below stands on — subtract it and the remainder is the framework\'s own '
+                . 'per-request boot. The framework spread on this axis is real but a fraction of a cost all six pay.';
+        }
+
+        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+            $rr = $ms('floor-rr');
+            if ($rr === null) {
+                return '';
+            }
+            return "\n\n**Server floor** — real RoadRunner over loopback: a bare resident worker that renders a "
+                . 'fixed string costs **' . SvgChart::fmt($rr) . ' ms** (`floor-rr`) — the IPC + server floor '
+                . 'every row below also pays. Only differences larger than this floor are framework differences.';
+        }
+
+        return '';
+    }
+
+    /**
      * Per-mode note on where each row's boot comes from, printed under the
      * latency table. Both deployment models now put the boot INTO the row, so
      * a cell is the whole time one request occupies or blocks the worker:
-     *
      *   cold/php-fpm — the boot is already inside the measured request (each
      *     fork-per-iteration child boots in its own request clock), so the
      *     headline is what a user waits for end-to-end.
@@ -538,11 +624,18 @@ final class MarkdownReport
         $worstMs = $medians[$worst];
         $worstTm = $means[$worst] ?? $worstMs;
 
+        // When a real server's constant cost dwarfs the framework, the spread
+        // is noise on the floor — do not phrase it as a framework difference.
+        $floorBound = $bestMs > 0 && ($worstMs / $bestMs) < 1.05;
+        $closing = $floorBound
+            ? '. Every framework lands within 5% of the fastest: ' . $this->withinNoiseReason() . '.'
+            : ' — x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . ' slower.';
+
         return "## Framework startup\n\n"
             . "Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: "
-            . "**{$best}** responds in " . SvgChart::fmt($bestMs) . " ms (median; " . SvgChart::fmt($bestTm) . " ms trimmed mean) "
-            . "against " . SvgChart::fmt($worstMs) . " ms (median) for {$worst} "
-            . '— x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . " slower.\n\n"
+            . "**{$best}** responds in " . SvgChart::fmt($bestMs) . ' ms (median; ' . SvgChart::fmt($bestTm) . " ms trimmed mean) "
+            . 'against ' . SvgChart::fmt($worstMs) . " ms (median) for {$worst}"
+            . $closing . "\n\n"
             . '![Framework startup — GET /](' . $rel . '/' . $file . ')';
     }
 
@@ -614,15 +707,32 @@ final class MarkdownReport
         $file = 'speedup.svg';
         file_put_contents($dir . '/' . $file, $svg);
 
-        // Fastest non-baseline app for the prose, ranked on the same sum of
-        // medians the dot shows.
+        // Fastest/slowest app for the prose, ranked on the same sum of medians
+        // the dot shows. The server-bound wording requires EVERY framework to
+        // be within 5% (worst factor) — checking only the closest app claimed
+        // "within 5%" for datasets whose slowest app needed 2.4x the baseline.
         $totals = array_map(static fn(array $m): float => $m['median'], $metrics);
         asort($totals);
-        unset($totals[$base]);
+        $fastest = array_key_first($totals);
+        $slowest = array_key_last($totals);
+        $maxFactor = $factors[$slowest] ?? 1.0;
         $extra = '';
-        if ($totals !== []) {
-            $closest = array_key_first($totals);
+        if ($maxFactor < 1.05) {
+            $extra = " Every framework lands within 5% of {$base} on the total: " . $this->withinNoiseReason() . '.';
+        } elseif ($fastest === $base) {
+            $rivals = $totals;
+            unset($rivals[$base]);
+            $closest = array_key_first($rivals);
             $extra   = " The closest rival is {$closest}, needing x " . SvgChart::fmtFactor($factors[$closest]) . ' the same total.';
+        } else {
+            $extra = sprintf(
+                ' %s is fastest overall at x %s of %s\'s total; %s is slowest at x %s.',
+                $fastest,
+                SvgChart::fmtFactor($factors[$fastest]),
+                $base,
+                $slowest,
+                SvgChart::fmtFactor($maxFactor)
+            );
         }
 
         return "## Total response times\n\n"
@@ -730,15 +840,25 @@ final class MarkdownReport
                 $pKeys  = array_keys($medians);
                 $winner = $pKeys[0] ?? $race['winner'];
                 $runner = $pKeys[1] ?? null;
+                $winnerMs  = (float) ($medians[$winner] ?? $race['winner_ms']);
+                $runnerMs  = $runner !== null ? (float) $medians[$runner] : null;
+                // Below the server floor's own noise a "x 1.0 faster" claim is
+                // meaningless — say the endpoint is floor-bound instead.
+                $floorBound = $runnerMs !== null && $winnerMs > 0
+                    && ($runnerMs / $winnerMs) < 1.05;
                 $sections[] = sprintf(
                     '- **%s** (`%s`): %s at %sms median%s.',
                     $title,
                     $cats[0],
                     BenchmarkConfig::appLabel($winner),
-                    SvgChart::fmt((float) ($medians[$winner] ?? $race['winner_ms'])),
-                    $runner !== null && ($medians[$winner] ?? 0) > 0
-                        ? ', x ' . SvgChart::fmtFactor($medians[$runner] / $medians[$winner]) . ' faster than ' . BenchmarkConfig::appLabel($runner)
-                        : ''
+                    SvgChart::fmt($winnerMs),
+                    $runner === null
+                        ? ''
+                        : ($winnerMs <= 0
+                            ? ', x ' . SvgChart::fmtFactor($runnerMs / max($winnerMs, 1e-9)) . ' faster than ' . BenchmarkConfig::appLabel($runner)
+                            : ($floorBound
+                                ? ' — every framework lands within 5% of it: ' . $this->withinNoiseReason()
+                                : ', x ' . SvgChart::fmtFactor($runnerMs / $winnerMs) . ' faster than ' . BenchmarkConfig::appLabel($runner)))
                 );
             }
         }
@@ -817,6 +937,52 @@ final class MarkdownReport
     }
 
     /**
+     * How much this dataset separates the frameworks on a given mode: the
+     * MEDIAN across-endpoint relative spread (max/min over the frameworks),
+     * plus how many endpoints keep every framework within 5% of each other.
+     *
+     * This is the honest replacement for an all-or-nothing "is floor bound"
+     * test: on the real nginx/FPM run the per-request worker spawn (~9.3 ms) is
+     * ~93% of a ~10 ms request, so the median endpoint spread is ~3% — smaller
+     * than the run-to-run noise — while a handful of endpoints reach 5-7%.
+     *
+     * @param list<string> $apps
+     * @return array{median_pct:float,within5:int,total:int}|null
+     */
+    private function spreadProfile(string $mode, array $apps): ?array
+    {
+        $common = $this->store->commonRequests($mode, $apps);
+        $spreads = [];
+        $within5 = 0;
+        foreach ($common as $request) {
+            $vals = [];
+            foreach ($apps as $app) {
+                $ms = $this->store->ms($app, $mode, $request);
+                if ($ms !== null && $ms > 0) {
+                    $vals[] = $ms;
+                }
+            }
+            if (count($vals) < 2) {
+                continue;
+            }
+            $ratio = max($vals) / min($vals);
+            $spreads[] = ($ratio - 1.0) * 100.0;
+            if ($ratio < 1.05) {
+                $within5++;
+            }
+        }
+        if ($spreads === []) {
+            return null;
+        }
+        sort($spreads);
+        return [
+            'median_pct' => $spreads[intdiv(count($spreads), 2)],
+            'within5'    => $within5,
+            'total'      => count($spreads),
+        ];
+    }
+
+    /**
      * @param list<string> $apps
      */
     private function wins(array $apps, string $baseline, string $mode): string
@@ -825,8 +991,23 @@ final class MarkdownReport
         if ($table === '') {
             return '';
         }
+        $profile = $this->spreadProfile($mode, $apps);
+        if ($profile !== null && $profile['median_pct'] < 5.0) {
+            return "## Wins per framework\n\n"
+                . 'On this deployment the server floor dominates: the median endpoint puts every framework '
+                . 'within ' . SvgChart::fmt($profile['median_pct']) . '% of the fastest, so the counts below '
+                . 'record measurement noise rather than framework advantages. The honest reading is that the '
+                . 'server, not the framework, decides the response time here.'
+                . "\n\n"
+                . $table;
+        }
         return "## Wins per framework\n\n"
-            . "Number of endpoint races won (lowest boot-inclusive per-request time) per framework.\n\n"
+            . 'Number of endpoint races won (lowest boot-inclusive per-request time) per framework.'
+            . ($this->isRealDeployment()
+                ? ' This is a real server: a race won by less than the server floor and the run-to-run '
+                    . 'jitter is a tie, so read small leads cautiously.'
+                : '')
+            . "\n\n"
             . $table;
     }
 

@@ -132,6 +132,9 @@ HTML;
         $charts       = $view['charts'] ?? [];
         $winsBlock    = in_array('wins', $charts, true) ? $tables->winsHtml($mode, $apps) : '';
         $matrixBlock  = $tables->latencyHtml($mode, $apps);
+        $floorBlock   = $this->floorNote($mode) !== ''
+            ? '<p class="floor">' . $this->floorNote($mode) . '</p>'
+            : '';
         $featureBlock = $featureFigs !== ''
             ? "<h2>Feature benchmarks</h2>\n<section class=\"figures\">\n{$featureFigs}</section>"
             : '';
@@ -149,6 +152,7 @@ HTML;
   {$featureBlock}
   {$winsBlock}
   {$matrixBlock}
+  {$floorBlock}
 </main>
 <footer>
   Generated from <code>results/</code> by <code>scripts/report.php</code>.
@@ -191,6 +195,48 @@ HTML;
                 ? ''
                 : ' — boot included: the worker\'s recycle cost (' . SvgChart::fmt($lo) . '–' . SvgChart::fmt($hi) . ' ms) is added to every request';
         }
+        return '';
+    }
+
+    /**
+     * Real-deployment numbers stand on a constant server cost that has nothing
+     * to do with the framework. State it (from the dataset's floor-* probes) so
+     * the FPM rows are not read as if a framework itself cost ~10 ms. Empty for
+     * every in-process dataset.
+     */
+    private function floorNote(string $mode): string
+    {
+        $floors = $this->store->floors();
+        if ($floors === []) {
+            return '';
+        }
+        $ms = static fn(string $key): ?float => $floors[$key]['ms'] ?? null;
+
+        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+            $php = $ms('floor-php');
+            if ($php === null) {
+                return '';
+            }
+            $http = $ms('floor-http');
+            return '<strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests=1</code>: '
+                . 'the pool spawns a fresh worker for every request, and a hello-world endpoint that boots nothing '
+                . 'but PHP costs <strong>' . self::esc(SvgChart::fmt($php)) . '&nbsp;ms</strong> (<code>floor-php</code>; '
+                . 'a static file through nginx, <code>floor-http</code>, is ' . self::esc(SvgChart::fmt($http ?? 0.0)) . '&nbsp;ms). '
+                . 'That worker spawn + FastCGI handshake is the floor every row stands on — subtract it and the '
+                . 'remainder is the framework\'s own per-request boot.';
+        }
+
+        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+            $rr = $ms('floor-rr');
+            if ($rr === null) {
+                return '';
+            }
+            return '<strong>Server floor</strong> — real RoadRunner over loopback: a bare resident worker that '
+                . 'renders a fixed string costs <strong>' . self::esc(SvgChart::fmt($rr)) . '&nbsp;ms</strong> '
+                . '(<code>floor-rr</code>) — the IPC + server floor every row below also pays. Only differences '
+                . 'larger than this floor are framework differences.';
+        }
+
         return '';
     }
 
@@ -252,6 +298,9 @@ table.matrix td{text-align:right;font-variant-numeric:tabular-nums}
 table.matrix th{text-align:right}
 table.matrix td:first-child,table.matrix th:first-child{text-align:left;font-weight:500}
 td.win{font-weight:700;color:var(--accent);background:rgba(52,89,230,.10)}
+p.floor{margin:0 0 30px;padding:12px 16px;border-left:3px solid var(--accent);background:rgba(52,89,230,.06);font-size:13.5px;line-height:1.6;color:var(--muted);border-radius:0 6px 6px 0}
+p.floor strong{color:var(--ink)}
+p.floor code{font-size:12.5px}
 td.muted{color:var(--muted)}
 .unit{font-weight:400;color:var(--muted);font-size:13px;text-transform:none;letter-spacing:0}
 footer{padding:32px 20px 56px;color:var(--muted);font-size:13px}

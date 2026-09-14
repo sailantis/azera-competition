@@ -108,7 +108,7 @@ return [
         // to disappear into that floor; heavy features stay meaningful.
         'real-roadrunner' => [
             'title'      => 'Framework Competition — Real RoadRunner',
-            'subtitle'   => 'Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.',
+            'subtitle'   => 'Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.',
             'dataset'    => 'real-deployments',
             'baseline'   => 'azera',
             'mode'       => 'roadrunner',
