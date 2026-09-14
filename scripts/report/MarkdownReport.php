@@ -73,19 +73,20 @@ final class MarkdownReport
         $l[] = '## Latency by endpoint';
         $l[] = '';
         $l[] = 'Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. '
+            . ($this->store->hasBoot()
+                ? 'Every number is END-TO-END per-request occupancy for the view\'s deployment model: the '
+                    . 'framework boot of that model is part of the cell, not parked in a separate chart. '
+                : '')
             . 'The workload column states what each request reads or writes — the shared SQLite database '
             . 'holds 1,000 item rows (re-seeded per app × mode), every list endpoint serves page 1 of 20, '
             . 'and every write upserts exactly one sentinel row.'
             . ($this->store->hasCleanupSplit()
-                ? "\n\nEach cell also shows the request's lifecycle split as `total <sub>handle + cleanup</sub>` — "
-                    . 'cleanup is the post-response teardown a long-lived worker performs between requests '
-                    . '(terminate() finalizers, request-scoped resets), which the headline number includes.'
+                ? "\n\nEach cell also shows the request's lifecycle split as `total <sub>boot + handle + cleanup</sub>` — "
+                    . 'the terms sum to the headline. Cleanup is the post-response teardown a worker performs '
+                    . 'between requests (terminate() finalizers, request-scoped resets); handle is the dispatch '
+                    . 'itself; boot is the framework startup that request waits for in this deployment model.'
                 : '')
-            . (in_array($mode, ['cold', 'php-fpm'], true) && $this->store->coldBootIncluded()
-                ? "\n\nThis dataset times cold requests END-TO-END: every iteration pays a fresh framework boot "
-                    . 'inside the request clock, exactly like a real PHP-FPM worker building the app before serving. '
-                    . 'The handle share therefore carries the boot cost; the totals here are the numbers a user waits for.'
-                : '');
+            . $this->bootLegend($mode);
         $l[] = '';
         $l[] = $tables->latencyMarkdown($mode, $apps);
         $l[] = '';
@@ -93,8 +94,8 @@ final class MarkdownReport
         $l[] = '---';
         $l[] = '';
         $l[] = '> **Auto-generated.** This page and its charts are produced by the `azera-competition` repository:';
-        $l[] = '> `php run.php --apps=azera,laravel,symfony,spiral,codeigniter,cakephp --out=results/free-for-all-opcache --report`';
-        $l[] = '> then `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.';
+        $l[] = '> `php run.php --apps=azera,laravel,symfony,spiral,codeigniter,cakephp --warm --cold --seed --out=results/free-for-all-opcache-iso`';
+        $l[] = '> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.';
         $l[] = '';
         $l[] = 'Every chart is a plain SVG generated from the result JSON, so the numbers and the diagrams can never disagree.';
         $l[] = '';
@@ -141,13 +142,98 @@ final class MarkdownReport
      * Caption for the latency charts. The lower bound of the whisker is only
      * labelled "fastest observation" when the dataset actually carries a
      * per-request minimum; otherwise it is honestly called what it is
-     * (median to p95).
+     * (median to p95). Charts plot boot-inclusive occupancy, so the caption
+     * names the boot the mode adds.
      */
-    private function spreadCaption(): string
+    private function spreadCaption(string $mode): string
     {
-        return $this->store->hasMin()
+        $base = $this->store->hasMin()
             ? 'bar = median · dot = median · whisker = fastest observation → p95 (ms)'
             : 'bar = median · dot = median · whisker = median → p95 (ms)';
+        $boot = $this->bootPerPoint($mode);
+        return $boot === '' ? $base : $base . ' · ' . $boot;
+    }
+
+    /**
+     * One-line note on the boot each dot carries, for the mode being drawn:
+     * the FPM rebuild in cold mode (already inside the measured request), the
+     * worker recycle in warm mode (added on top of the measured request).
+     */
+    private function bootPerPoint(string $mode): string
+    {
+        if (!$this->store->hasBoot()) {
+            return '';
+        }
+        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+            return $this->store->coldBootIncluded()
+                ? 'boot included (fresh per-request rebuild)'
+                : '';
+        }
+        $lo = null;
+        $hi = null;
+        foreach ($this->store->apps() as $app) {
+            $boot = $this->store->modeBootMs($app, $mode);
+            if ($boot === null) {
+                continue;
+            }
+            $lo = $lo === null ? $boot : min($lo, $boot);
+            $hi = $hi === null ? $boot : max($hi, $boot);
+        }
+        return $lo === null
+            ? ''
+            : 'boot included (worker recycle ' . SvgChart::fmt($lo) . '–' . SvgChart::fmt($hi) . ' ms)';
+    }
+
+    /**
+     * Per-mode note on where each row's boot comes from, printed under the
+     * latency table. Both deployment models now put the boot INTO the row, so
+     * a cell is the whole time one request occupies or blocks the worker:
+     *
+     *   cold/php-fpm — the boot is already inside the measured request (each
+     *     fork-per-iteration child boots in its own request clock), so the
+     *     headline is what a user waits for end-to-end.
+     *
+     *   warm/roadrunner — the rows measure post-boot work only, so the
+     *     worker's recycle cost is ADDED to every row and to every chart
+     *     point. That is what the deployment pays to bring a worker back
+     *     between requests, and it is the only way a warm cell can answer
+     *     "how long is this worker busy with one request" when a pool is
+     *     recycled or requests queue behind it.
+     */
+    private function bootLegend(string $mode): string
+    {
+        if (!$this->store->hasBoot()) {
+            return '';
+        }
+        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+            if (!$this->store->coldBootIncluded()) {
+                return '';
+            }
+            return "\n\nThis dataset times cold requests END-TO-END: every iteration pays a fresh framework boot "
+                . 'inside the request clock, exactly like a real PHP-FPM worker building the app before serving. '
+                . 'The boot share is therefore inside both the headline and the `boot` term of the sub-line — '
+                . 'the totals here are the numbers a user waits for.';
+        }
+        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+            $values = [];
+            foreach ($this->store->apps() as $app) {
+                $boot = $this->store->modeBootMs($app, $mode);
+                if ($boot !== null) {
+                    $values[] = $boot;
+                }
+            }
+            if ($values === []) {
+                return '';
+            }
+            sort($values);
+            $lo = $values[0];
+            $hi = $values[count($values) - 1];
+            return "\n\nThese rows are end-to-end for a resident worker: every headline and every chart point adds the "
+                . 'worker\'s boot (warm recycle, ' . SvgChart::fmt($lo) . '–' . SvgChart::fmt($hi) . ' ms here) to the '
+                . 'measured request, so a cell is the time one request keeps that worker busy — the number to read '
+                . 'when workers are recycled per request or requests queue behind one pool.';
+        }
+        return '';
     }
 
     /**
@@ -155,11 +241,20 @@ final class MarkdownReport
      */
     /**
      * Framework startup = the framework's real load cost, measured directly
-     * by the harness (run-app.php's measureBoot): a cold boot is the very
-     * first bootstrap() in a fresh PHP process (autoloader, kernel/container
-     * build, routes, DB connect), a warm boot is a re-bootstrap with
-     * classes/opcache already loaded — what a RoadRunner-style worker pays
-     * per recycle.
+     * by the harness (run-app.php's measureBoot), now in THREE bands:
+     *
+     *   1. Cold boot — the very first bootstrap() in a fresh PHP process:
+     *      autoloader + classes/opcache compile + FS cache. What a CLI run,
+     *      CGI request, or freshly spawned FPM worker pays ONCE.
+     *   2. FPM per-request rebuild — the boot share the harness times inside
+     *      every cold request (fork-per-iteration): a genuinely fresh child
+     *      process rebuilding the app (container, routes, DB connect) on top
+     *      of opcache bytecode inherited from the parent via copy-on-write —
+     *      the same inheritance a real FPM master→worker fork gets. The
+     *      "virtual cold boot" a recycled FPM worker pays per request.
+     *   3. Warm recycle — a re-bootstrap with everything already loaded;
+     *      what a RoadRunner-style worker pays per recycle. Guarded no-op
+     *      re-boots (CodeIgniter/CakePHP state resets) read ~0 here.
      *
      * Each band shows boot + the mode's median per-request teardown: both
      * block the worker while no request is being served, so they are the
@@ -181,32 +276,51 @@ final class MarkdownReport
     }
 
     /**
-     * Cold + warm bootstrap cost, one band each, per-band anchored at the
-     * fastest framework on that band. Bands carry boot + median teardown —
-     * both block the worker between requests.
+     * Cold + FPM-rebuild + warm bootstrap cost, one band each, per-band
+     * anchored at the fastest framework on that band. Bands carry boot +
+     * median teardown — both block the worker between requests.
      *
      * @param list<string> $apps
      */
     private function bootChart(string $dir, string $rel, array $apps, bool $logScale, string $mode): string
     {
-        $metrics = [];
-        $colors  = [];
-        $bands   = [
-            'cold' => ['label' => 'Cold boot + teardown — fresh process', 'key' => 'cold_ms'],
-            'warm' => ['label' => 'Warm recycle + teardown — resident worker', 'key' => 'warm_ms'],
+        $metrics  = [];
+        $colors   = [];
+        $coldMode = $this->store->coldModeName() ?? 'cold';
+        $bands    = [
+            'cold' => ['label' => 'Cold boot — real, first boot in a process (CGI/CLI model)', 'key' => 'cold_ms'],
         ];
-        foreach (array_keys($bands) as $band) {
+        // The FPM band only exists when the cold rows carry their per-request
+        // boot share (fork-mode datasets). On the derived deployments file the
+        // cold side is named 'php-fpm'.
+        if ($this->store->fpmBootMedian($apps[0] ?? '') !== null || $this->store->fpmBootMedian($apps[1] ?? '') !== null) {
+            $bands['fpm'] = ['label' => 'FPM rebuild — per-request boot on shared opcache', 'key' => 'fpm_boot'];
+        }
+        $bands['warm'] = ['label' => 'Warm recycle — resident worker (RoadRunner model)', 'key' => 'warm_ms'];
+
+        foreach ($bands as $band => $cfg) {
             foreach ($apps as $app) {
-                $boot = $this->store->boot($app);
-                if ($boot === null) {
-                    continue;
+                // The FPM band reads its per-request boot_ms from the cold
+                // rows; the other bands read measureBoot()'s direct timings.
+                if ($cfg['key'] === 'fpm_boot') {
+                    $fpmBoot = $this->store->fpmBootMedian($app);
+                    if ($fpmBoot === null) {
+                        continue;
+                    }
+                    $bootVal = $fpmBoot;
+                } else {
+                    $boot = $this->store->boot($app);
+                    if ($boot === null) {
+                        continue;
+                    }
+                    $bootVal = $boot[$cfg['key']];
                 }
                 // Boot and teardown are the same kind of time — the worker
                 // cannot serve another request during either — so each band
-                // shows their sum: boot cost + this mode's median per-request
-                // cleanup.
-                $cleanup = $this->store->cleanupMedian($app, $mode) ?? 0.0;
-                $total   = $boot[$bands[$band]['key']] + $cleanup;
+                // shows their sum: boot cost + the cold side's median
+                // per-request cleanup.
+                $cleanup = $this->store->cleanupMedian($app, $coldMode) ?? 0.0;
+                $total   = $bootVal + $cleanup;
                 $label   = BenchmarkConfig::appLabel($app);
                 $metrics[$band][$label] = [
                     'median' => $total,
@@ -280,7 +394,8 @@ final class MarkdownReport
         $file = 'startup.svg';
         file_put_contents($dir . '/' . $file, $svg);
 
-        // Prose: the cold race (first boot is what a deploy/server start pays).
+        // Prose: the cold race (first boot is what a deploy/server start pays),
+        // plus the FPM-rebuild story when that band exists.
         $cold = $metrics['cold'] ?? [];
         asort($cold);
         $keys  = array_keys($cold);
@@ -297,7 +412,28 @@ final class MarkdownReport
         $warmKeys = array_keys($warm);
         $warmBest = $warmKeys[0] ?? null;
 
+        // FPM band prose: who rebuilds least per request, and how it compares
+        // to the real first boot — the gap between the two bands is exactly
+        // the one-time cost (compile + FS cache) shared bytecode eliminates.
+        $fpmSentence = '';
+        $fpm         = $metrics['fpm'] ?? [];
+        if ($fpm !== [] && $cold !== []) {
+            $fpmSorted = $fpm;
+            asort($fpmSorted);
+            $fKeys       = array_keys($fpmSorted);
+            $fBest       = $fKeys[0];
+            $fWorst      = $fKeys[count($fKeys) - 1];
+            $fpmSentence = '**FPM rebuild** — a recycled PHP-FPM worker never pays the first band: sharing opcache bytecode '
+                . 'with the master, it only rebuilds the application (container, routes, DB connect) — '
+                . SvgChart::fmt($fpmSorted[$fBest]['median']) . ' ms for ' . $fBest . ' at the low end, '
+                . SvgChart::fmt($fpmSorted[$fWorst]['median']) . ' ms for ' . $fWorst . ' at the high end. '
+                . 'The gap between the cold and FPM bands is the one-time compile cost shared bytecode removes.';
+        }
+
         // Per-request teardown share, when the dataset carries the split.
+        // Guarded against a collapsed range: with the boot now inside the
+        // total, teardown is a rounding error in most apps, and
+        // "ranges from 0% up to 0%" reads as a bug rather than a finding.
         $cleanupSentence = '';
         if ($this->store->hasCleanupSplit()) {
             $shares = [];
@@ -309,26 +445,33 @@ final class MarkdownReport
             }
             if ($shares !== []) {
                 asort($shares);
-                $cKeys           = array_keys($shares);
-                $cBest           = BenchmarkConfig::appLabel($cKeys[0]);
-                $cWorst          = BenchmarkConfig::appLabel($cKeys[count($cKeys) - 1]);
-                $cleanupSentence = ' The teardown share of a full request ranges from '
-                    . number_format($shares[$cKeys[0]] * 100, 0) . '% (' . $cBest . ') up to '
-                    . number_format($shares[$cKeys[count($cKeys) - 1]] * 100, 0) . '% (' . $cWorst . ').';
+                $cKeys = array_keys($shares);
+                $cLo   = $shares[$cKeys[0]];
+                $cHi   = $shares[$cKeys[count($cKeys) - 1]];
+                if ($cHi - $cLo >= 0.005) {
+                    $cleanupSentence = ' The teardown share of a full request ranges from '
+                        . number_format($cLo * 100, 0) . '% (' . BenchmarkConfig::appLabel($cKeys[0]) . ') up to '
+                        . number_format($cHi * 100, 0) . '% (' . BenchmarkConfig::appLabel($cKeys[count($cKeys) - 1]) . ').';
+                } else {
+                    $cleanupSentence = ' Post-response teardown stays under 1% of a full request for every framework here.';
+                }
             }
         }
 
         return "## Framework startup\n\n"
-            . "The framework's own load cost, timed directly: autoloader + kernel/container build + routes + DB connect, "
-            . "with no request processed — plus the median post-response teardown, because boot and cleanup are the same "
-            . "kind of time: during both, the worker cannot serve another request. **{$best}** pays "
-            . SvgChart::fmt($bestMs) . " ms cold against " . SvgChart::fmt($worstMs) . " ms for {$worst}"
-            . ' — x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . " slower. "
+            . "Three boot models, timed directly by the harness — each band shows boot + median teardown, because "
+            . "during both the worker cannot serve another request:\n\n"
+            . '- **Cold boot** — the very first bootstrap in a fresh PHP process (autoloader + compile + FS cache): '
+            . "what a CLI run, CGI request, or newly spawned worker pays once. **{$best}** pays "
+            . SvgChart::fmt($bestMs) . ' ms against ' . SvgChart::fmt($worstMs) . " ms for {$worst}"
+            . ' — x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . " slower.\n"
+            . ($fpmSentence !== '' ? '- ' . $fpmSentence . "\n" : '')
             . ($warmBest !== null && isset($warm[$warmBest])
-                ? 'A warm recycle (worker restart with opcache warm) is cheaper for everyone: '
+                ? '- **Warm recycle** — worker restart with opcache warm: '
                     . SvgChart::fmt($warm[$warmBest]['median']) . ' ms for ' . $warmBest
-                    . " at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild."
+                    . " at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild.\n"
                 : '')
+            . "\n"
             . $cleanupSentence
             . "\n\n"
             . '![Framework startup — boot + teardown](' . $rel . '/' . $file . ')';
@@ -356,7 +499,7 @@ final class MarkdownReport
             $metrics[$label] = $spread;
             $colors[$label] = BenchmarkConfig::appColor($app);
             $medians[$label] = $spread['median'];
-            $means[$label] = $this->store->ms($app, $mode, $startup) ?? $spread['median'];
+            $means[$label] = $this->store->msWithBoot($app, $mode, $startup) ?? $spread['median'];
         }
         if (count($metrics) < 2) {
             return '';
@@ -379,7 +522,7 @@ final class MarkdownReport
             960,
             0,
             'Framework startup — GET /',
-            $this->spreadCaption(),
+            $this->spreadCaption($mode),
             $factors,
             'x = median ÷ fastest (Azera = 1.0)'
         );
@@ -409,7 +552,8 @@ final class MarkdownReport
      * its per-endpoint spreads over the common endpoints — the dot is the
      * sum of medians, the whisker spans sum-of-fastest → sum-of-p95 — so the
      * chart's numbers decompose into exactly the latencies the table prints
-     * instead of being a second, unverifiable aggregate.
+     * instead of being a second, unverifiable aggregate. Like every latency
+     * chart, the spreads are boot-inclusive per-request occupancy.
      *
      * @param list<string> $apps
      */
@@ -484,7 +628,8 @@ final class MarkdownReport
         return "## Total response times\n\n"
             . 'Total time to serve one of each of the ' . count($requests) . " endpoints — the sum of the endpoints' "
             . "medians, not a single response time — relative to {$base} (1.0 = the baseline's own total, "
-            . "higher = slower).{$extra}\n\n"
+            . "higher = slower). Each endpoint's median is boot-inclusive occupancy for this view's "
+            . "deployment model, so the total is the worker time one pass over every endpoint costs.{$extra}\n\n"
             . '![Total response times](' . $rel . '/' . $file . ')';
     }
 
@@ -562,7 +707,7 @@ final class MarkdownReport
                 960,
                 0,
                 $title,
-                $this->spreadCaption(),
+                $this->spreadCaption($mode),
                 $factors,
                 'x = median ÷ the fastest on that endpoint'
             );
@@ -681,7 +826,7 @@ final class MarkdownReport
             return '';
         }
         return "## Wins per framework\n\n"
-            . "Number of endpoint races won (lowest trimmed mean) per framework.\n\n"
+            . "Number of endpoint races won (lowest boot-inclusive per-request time) per framework.\n\n"
             . $table;
     }
 

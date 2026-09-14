@@ -206,6 +206,168 @@ final class ResultStore
     }
 
     /**
+     * Median per-request framework rebuild in cold mode — the boot share the
+     * harness times inside every cold row (fork-per-iteration: the forked
+     * child calls bootstrap() in a genuinely fresh process that inherited
+     * warm opcache bytecode via copy-on-write, exactly the master→worker
+     * inheritance real PHP-FPM gets). This is the "virtual cold boot": what
+     * a recycled FPM worker rebuilds per request, as opposed to the very
+     * first boot in a process (boot() cold_ms), which additionally pays
+     * one-time compile / FS-cache costs.
+     *
+     * Null when the dataset's cold rows carry no boot_ms (pre-fork datasets).
+     */
+    public function fpmBootMedian(string $app): ?float
+    {
+        $values = [];
+        foreach (['cold', 'php-fpm'] as $mode) {
+            foreach ($this->data[$app][$mode] ?? [] as $row) {
+                if (isset($row['boot_ms'])) {
+                    $values[] = (float) $row['boot_ms'];
+                }
+            }
+            if ($values !== []) {
+                break; // a dataset never carries both names for the same side
+            }
+        }
+        if ($values === []) {
+            return null;
+        }
+        sort($values);
+        return $values[(int) floor((count($values) - 1) / 2)];
+    }
+
+    /**
+     * Per-request framework boot for one app in one mode, in ms — the boot
+     * share a request actually waits for in that deployment model. Null when
+     * the dataset carries no boot measurement for that mode.
+     *
+     * The two modes time their boot in different places, so the two numbers
+     * come from different fields:
+     *
+     *   cold/php-fpm — every iteration runs in a forked child that boots,
+     *     dispatches and cleans up INSIDE the request clock (the FPM story).
+     *     The measured boot is therefore already part of trimmed_mean_ms;
+     *     the row's own boot_ms reports the split, so it is read from there.
+     *
+     *   warm/roadrunner — a resident worker boots ONCE, so the per-request
+     *     rows contain no boot at all (their boot_ms is a guarded no-op
+     *     re-boot, ~0.0002 ms). The recycle a worker pays to come back —
+     *     measureBoot()'s warm_ms — is the boot this mode's requests carry,
+     *     so it is added on top of the measured request time.
+     *
+     * This is what makes a feature row mean "how long the worker is occupied
+     * by one request, boot included" instead of "the request minus the boot".
+     */
+    public function modeBootMs(string $app, string $mode): ?float
+    {
+        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+            $values = [];
+            foreach ($this->data[$app][$mode] ?? [] as $row) {
+                if (isset($row['boot_ms'])) {
+                    $values[] = (float) $row['boot_ms'];
+                }
+            }
+            if ($values === []) {
+                return null;
+            }
+            sort($values);
+            return $values[(int) floor((count($values) - 1) / 2)];
+        }
+        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+            $boot = $this->boot[$app] ?? null;
+            return $boot['warm_ms'] ?? null;
+        }
+        return null;
+    }
+
+    /**
+     * End-to-end per-request latency INCLUDING the mode's boot: the whole
+     * time one request occupies (or blocks) the worker for a given app, in
+     * the given deployment model — boot + handle + cleanup.
+     *
+     * Cold/php-fpm rows already carry their boot inside trimmed_mean_ms
+     * (fork-per-iteration times bootstrap() in the request clock), so this
+     * returns the measured total. Warm/roadrunner rows measure post-boot
+     * work only, so the worker's recycle cost (boot().warm_ms) is added.
+     *
+     * Kept separate from ms() — which is what the charts and every ranking
+     * use — so the boot-inclusive figure can be printed next to the measured
+     * one without silently changing who wins a race.
+     */
+    public function msWithBoot(string $app, string $mode, string $request): ?float
+    {
+        $ms = $this->ms($app, $mode, $request);
+        return $ms === null ? null : $ms + $this->bootAddOn($app, $mode);
+    }
+
+    /**
+     * Boot time to ADD to a mode's measured request times to turn them into
+     * per-request worker occupancy.
+     *
+     *   cold/php-fpm — 0.0: the forked child already times bootstrap() inside
+     *     the request clock, so the measured number IS the occupancy and
+     *     adding anything would double-count the boot.
+     *
+     *   warm/roadrunner — boot().warm_ms: the warm rows measure post-boot
+     *     work only, and this is what the deployment pays to bring the worker
+     *     back between requests. Added to every row so the figure answers
+     *     "how long is this worker busy with one request" — which is what a
+     *     recycled worker or a queuing pool actually experiences.
+     *
+     * 0.0 (never null) when the dataset carries no boot numbers, so callers
+     * can add it unconditionally.
+     */
+    private function bootAddOn(string $app, string $mode): float
+    {
+        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+            return 0.0;
+        }
+        return (float) ($this->modeBootMs($app, $mode) ?? 0.0);
+    }
+
+    /**
+     * The boot term to print for ONE request row of the lifecycle split, so
+     * `boot + handle + cleanup` decomposes the headline exactly rather than
+     * approximately.
+     *
+     * The headline contains this row's OWN boot, not the app-wide median: in
+     * cold mode the row's boot_ms is precisely the share that is inside
+     * trimmed_mean_ms. Printing the median instead (modeBootMs) left the
+     * sub-line off by the median-vs-row difference — up to a few 0.01 ms, i.e.
+     * visible in the printed precision (2026-09-14).
+     *
+     * Warm rows measure no per-request boot, so they use the worker's one-time
+     * recycle cost (modeBootMs -> boot().warm_ms) — the same value the headline
+     * adds. Returns null when the dataset carries no boot for the row.
+     */
+    public function rowBootMs(string $app, string $mode, string $request): ?float
+    {
+        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+            $row = $this->data[$app][$mode][$request] ?? null;
+            return $row !== null && isset($row['boot_ms']) ? (float) $row['boot_ms'] : null;
+        }
+        return $this->modeBootMs($app, $mode);
+    }
+
+    /**
+     * The name the dataset uses for its cold side: 'cold' in raw run files,
+     * 'php-fpm' in derive-fpm.php's relabelled deployments file. Null when
+     * the dataset has no cold-side rows.
+     */
+    public function coldModeName(): ?string
+    {
+        foreach (['cold', 'php-fpm'] as $m) {
+            foreach ($this->data as $modes) {
+                if (($modes[$m] ?? []) !== []) {
+                    return $m;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Whether this dataset carries the handle/cleanup lifecycle split
      * (handle_ms + cleanup_ms per request row, from the adapters'
      * dispatch()/cleanup() separation).
@@ -321,6 +483,12 @@ final class ResultStore
     /**
      * The three numbers a dot-and-range mark needs: typical, best and tail.
      *
+     * These are PER-REQUEST WORKER OCCUPANCY, not bare request time: the
+     * deployment model's boot is added (bootAddOn), so a warm/roadrunner dot
+     * carries the worker's recycle cost exactly like the cold dot carries its
+     * FPM rebuild. Charts and tables therefore agree on what a cell means —
+     * the whole time one request keeps the worker busy.
+     *
      * `min_ms` is only present in datasets produced after it was added to the
      * harness; older files fall back to the median so the whisker degrades to
      * a point rather than to nonsense.
@@ -340,6 +508,10 @@ final class ResultStore
         }
         $high = $this->ms($app, $mode, $request, 'p95_ms') ?? $median;
         $low  = $this->ms($app, $mode, $request, 'min_ms') ?? min($median, $high);
+        $add  = $this->bootAddOn($app, $mode);
+        $low += $add;
+        $median += $add;
+        $high += $add;
         // Guard against an inverted or empty whisker.
         $low  = min($low, $median);
         $high = max($high, $median);
@@ -459,7 +631,9 @@ final class ResultStore
             if (!$this->supports($app, $feature)) {
                 continue;
             }
-            $ms = $this->ms($app, $mode, $request);
+            // Boot-inclusive: a race is decided on full per-request worker
+            // occupancy, matching the table and the charts.
+            $ms = $this->msWithBoot($app, $mode, $request);
             if ($ms !== null) {
                 $out[$app] = $ms;
             }

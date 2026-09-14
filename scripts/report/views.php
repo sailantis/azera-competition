@@ -67,7 +67,7 @@ return [
         // paid once. Published into the framework docs + README.
         'warm-start' => [
             'title'     => 'Framework Competition — Warm Start',
-            'subtitle'  => 'RoadRunner/Octane-style resident worker: the framework boots once, then serves every request. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).',
+            'subtitle'  => 'RoadRunner/Octane-style resident worker: the framework boots once, then serves every request. Each number charges that boot per request, so a cell is the whole time one request keeps a worker busy — what a recycled pool or a queue behind one worker actually experiences. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).',
             'dataset'   => 'free-for-all',
             'baseline'  => 'azera',
             'mode'      => 'warm',

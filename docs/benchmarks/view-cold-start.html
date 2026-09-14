@@ -49,17 +49,17 @@ main{padding-bottom:10px}
 <header>
   <h1>Framework Competition — Cold Start</h1>
   <p class="lead">PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.</p>
-  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-85-generic &middot; php-fpm mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; php-fpm mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
 </header>
 <main>
   <section class="figures">
 <figure>
-  <figcaption>Framework startup — boot + teardown (cold + warm)</figcaption>
-  <img src="svg/cold-start/startup.svg" alt="Framework startup — boot + teardown (cold + warm)" loading="lazy">
+  <figcaption>Framework startup — boot + teardown (cold + warm) — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/startup.svg" alt="Framework startup — boot + teardown (cold + warm) — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Total response times</figcaption>
-  <img src="svg/cold-start/speedup.svg" alt="Total response times" loading="lazy">
+  <figcaption>Total response times — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/speedup.svg" alt="Total response times — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
   <figcaption>Peak memory footprint</figcaption>
@@ -69,52 +69,52 @@ main{padding-bottom:10px}
   <h2>Feature benchmarks</h2>
 <section class="figures">
 <figure>
-  <figcaption>Routing</figcaption>
-  <img src="svg/cold-start/feature-routing.svg" alt="Routing" loading="lazy">
+  <figcaption>Routing — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-routing.svg" alt="Routing — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>ORM / Active Record</figcaption>
-  <img src="svg/cold-start/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
+  <figcaption>ORM / Active Record — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-orm.svg" alt="ORM / Active Record — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Query Builder</figcaption>
-  <img src="svg/cold-start/feature-query-builder.svg" alt="Query Builder" loading="lazy">
+  <figcaption>Query Builder — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-query-builder.svg" alt="Query Builder — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>REST API (JSON)</figcaption>
-  <img src="svg/cold-start/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
+  <figcaption>REST API (JSON) — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-rest-api.svg" alt="REST API (JSON) — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>AOP (Aspect-Oriented)</figcaption>
-  <img src="svg/cold-start/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
+  <figcaption>AOP (Aspect-Oriented) — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-aop.svg" alt="AOP (Aspect-Oriented) — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Cache</figcaption>
-  <img src="svg/cold-start/feature-cache.svg" alt="Cache" loading="lazy">
+  <figcaption>Cache — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-cache.svg" alt="Cache — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Database Events</figcaption>
-  <img src="svg/cold-start/feature-db-events.svg" alt="Database Events" loading="lazy">
+  <figcaption>Database Events — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-db-events.svg" alt="Database Events — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Event Dispatcher</figcaption>
-  <img src="svg/cold-start/feature-events.svg" alt="Event Dispatcher" loading="lazy">
+  <figcaption>Event Dispatcher — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-events.svg" alt="Event Dispatcher — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Validation</figcaption>
-  <img src="svg/cold-start/feature-validation.svg" alt="Validation" loading="lazy">
+  <figcaption>Validation — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-validation.svg" alt="Validation — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Config</figcaption>
-  <img src="svg/cold-start/feature-config.svg" alt="Config" loading="lazy">
+  <figcaption>Config — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-config.svg" alt="Config — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Request-Scoped Services</figcaption>
-  <img src="svg/cold-start/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
+  <figcaption>Request-Scoped Services — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-request-scoped.svg" alt="Request-Scoped Services — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Rate Limiter</figcaption>
-  <img src="svg/cold-start/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
+  <figcaption>Rate Limiter — boot included: a fresh framework rebuild is timed inside every request</figcaption>
+  <img src="svg/cold-start/feature-rate-limiter.svg" alt="Rate Limiter — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
 </figure>
 </section>
   <h2>Wins per framework</h2>
@@ -129,31 +129,31 @@ main{padding-bottom:10px}
 <tr><td>CakePHP</td><td>0</td><td>0%</td></tr>
 </tbody>
 </table>
-  <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span> <span class="unit">(sub-line: handle + post-response cleanup, which sum to the total)</span></h2>
+  <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span> <span class="unit">(sub-line: boot + handle + post-response cleanup, which sum to the total)</span> <span class="unit">— cold rows and charts are end-to-end: each iteration pays a fresh framework boot inside the request clock (FPM story)</span></h2>
 <table class="matrix">
 <thead><tr><th>Request</th><th>Workload</th><th><span class="chip" style="--c:#3459e6">Azera</span></th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th><th><span class="chip" style="--c:#0ca678">Spiral</span></th><th><span class="chip" style="--c:#e8590c">CodeIgniter</span></th><th><span class="chip" style="--c:#d6409f">CakePHP</span></th></tr></thead>
 <tbody>
-<tr><td><code>GET /</code></td><td class="muted">no DB — routing + template only</td><td class="win">0.016 <sub>0.015+0.001</sub></td><td class="">0.212 <sub>0.212+0.000</sub></td><td class="">0.087 <sub>0.085+0.002</sub></td><td class="">0.281 <sub>0.271+0.010</sub></td><td class="">0.472 <sub>0.462+0.009</sub></td><td class="">0.142 <sub>0.141+0.000</sub></td></tr>
-<tr><td><code>GET /items</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">0.137 <sub>0.133+0.003</sub></td><td class="">0.745 <sub>0.744+0.000</sub></td><td class="">0.446 <sub>0.443+0.003</sub></td><td class="">0.531 <sub>0.516+0.016</sub></td><td class="">0.767 <sub>0.755+0.012</sub></td><td class="">0.516 <sub>0.515+0.000</sub></td></tr>
-<tr><td><code>GET /items/1</code></td><td class="muted">1 item by id</td><td class="win">0.052 <sub>0.050+0.002</sub></td><td class="">0.387 <sub>0.386+0.000</sub></td><td class="">0.173 <sub>0.171+0.002</sub></td><td class="">0.384 <sub>0.372+0.013</sub></td><td class="">0.662 <sub>0.650+0.012</sub></td><td class="">0.330 <sub>0.330+0.000</sub></td></tr>
-<tr><td><code>POST /items</code></td><td class="muted">1 row upserted (sentinel #999999)</td><td class="win">0.106 <sub>0.104+0.002</sub></td><td class="">0.416 <sub>0.416+0.000</sub></td><td class="">0.261 <sub>0.258+0.003</sub></td><td class="">0.436 <sub>0.424+0.013</sub></td><td class="">0.749 <sub>0.737+0.012</sub></td><td class="">0.440 <sub>0.439+0.000</sub></td></tr>
-<tr><td><code>GET /items-qb</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">0.093 <sub>0.092+0.001</sub></td><td class="">0.433 <sub>0.432+0.000</sub></td><td class="">0.233 <sub>0.230+0.002</sub></td><td class="">0.381 <sub>0.370+0.011</sub></td><td class="">0.737 <sub>0.725+0.012</sub></td><td class="">0.304 <sub>0.303+0.000</sub></td></tr>
-<tr><td><code>GET /items-qb/1</code></td><td class="muted">1 item by id</td><td class="win">0.051 <sub>0.050+0.001</sub></td><td class="">0.310 <sub>0.310+0.000</sub></td><td class="">0.142 <sub>0.139+0.002</sub></td><td class="">0.337 <sub>0.326+0.011</sub></td><td class="">0.659 <sub>0.647+0.012</sub></td><td class="">0.237 <sub>0.237+0.000</sub></td></tr>
-<tr><td><code>POST /items-qb</code></td><td class="muted">1 row upserted (sentinel #999997)</td><td class="win">0.084 <sub>0.083+0.001</sub></td><td class="">0.404 <sub>0.403+0.000</sub></td><td class="">0.259 <sub>0.257+0.003</sub></td><td class="">0.372 <sub>0.360+0.012</sub></td><td class="">0.852 <sub>0.839+0.013</sub></td><td class="">0.310 <sub>0.310+0.000</sub></td></tr>
-<tr><td><code>GET /api/items</code></td><td class="muted">20 of 1000 items as JSON</td><td class="win">0.041 <sub>0.040+0.001</sub></td><td class="">0.626 <sub>0.626+0.000</sub></td><td class="">0.233 <sub>0.231+0.002</sub></td><td class="">0.429 <sub>0.414+0.015</sub></td><td class="">0.611 <sub>0.601+0.010</sub></td><td class="">0.270 <sub>0.270+0.000</sub></td></tr>
-<tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="win">0.037 <sub>0.035+0.001</sub></td><td class="">0.416 <sub>0.415+0.000</sub></td><td class="">0.152 <sub>0.150+0.002</sub></td><td class="">0.339 <sub>0.327+0.012</sub></td><td class="">0.574 <sub>0.564+0.011</sub></td><td class="">0.244 <sub>0.243+0.000</sub></td></tr>
-<tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="win">0.053 <sub>0.052+0.002</sub></td><td class="">0.346 <sub>0.346+0.000</sub></td><td class="">0.224 <sub>0.221+0.002</sub></td><td class="">0.379 <sub>0.366+0.012</sub></td><td class="">0.647 <sub>0.636+0.011</sub></td><td class="">0.338 <sub>0.337+0.000</sub></td></tr>
-<tr><td><code>GET /features/aop</code></td><td class="muted">no DB — interceptor pipeline</td><td class="win">0.133 <sub>0.132+0.001</sub></td><td class="">0.335 <sub>0.335+0.000</sub></td><td class="">0.204 <sub>0.201+0.002</sub></td><td class="">0.529 <sub>0.516+0.014</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/cache</code></td><td class="muted">no DB — cache round-trips</td><td class="win">0.014 <sub>0.013+0.001</sub></td><td class="">0.297 <sub>0.296+0.000</sub></td><td class="">0.135 <sub>0.133+0.002</sub></td><td class="">0.373 <sub>0.363+0.010</sub></td><td class="">0.432 <sub>0.424+0.008</sub></td><td class="">0.107 <sub>0.107+0.000</sub></td></tr>
-<tr><td><code>GET /features/log</code></td><td class="muted">no DB — buffered log handlers</td><td class="win">0.013 <sub>0.012+0.001</sub></td><td class="">0.220 <sub>0.220+0.000</sub></td><td class="">0.081 <sub>0.079+0.002</sub></td><td class="">0.318 <sub>0.308+0.010</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/retry</code></td><td class="muted">no DB — retry policy</td><td class="win">0.010 <sub>0.009+0.001</sub></td><td class="">0.233 <sub>0.232+0.000</sub></td><td class="">0.086 <sub>0.084+0.002</sub></td><td class="">0.329 <sub>0.318+0.010</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/pipeline</code></td><td class="muted">no DB — middleware pipeline</td><td class="win">0.014 <sub>0.014+0.001</sub></td><td class="">0.224 <sub>0.223+0.000</sub></td><td class="">0.083 <sub>0.081+0.002</sub></td><td class="">0.319 <sub>0.309+0.010</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/db-events</code></td><td class="muted">1 event row INSERTed per request</td><td class="win">0.041 <sub>0.040+0.001</sub></td><td class="">0.396 <sub>0.396+0.000</sub></td><td class="">0.178 <sub>0.176+0.002</sub></td><td class="">0.465 <sub>0.453+0.012</sub></td><td class="">0.744 <sub>0.732+0.012</sub></td><td class="">0.271 <sub>0.271+0.000</sub></td></tr>
-<tr><td><code>GET /features/events</code></td><td class="muted">no DB — in-process listeners</td><td class="win">0.039 <sub>0.038+0.001</sub></td><td class="">0.314 <sub>0.313+0.000</sub></td><td class="">0.115 <sub>0.113+0.002</sub></td><td class="">0.377 <sub>0.366+0.011</sub></td><td class="">0.698 <sub>0.686+0.012</sub></td><td class="">0.155 <sub>0.154+0.000</sub></td></tr>
-<tr><td><code>GET /features/validation</code></td><td class="muted">no DB — validator run</td><td class="win">0.019 <sub>0.018+0.001</sub></td><td class="">0.870 <sub>0.869+0.000</sub></td><td class="">0.195 <sub>0.192+0.002</sub></td><td class="">0.354 <sub>0.344+0.010</sub></td><td class="">0.674 <sub>0.661+0.013</sub></td><td class="">0.201 <sub>0.201+0.000</sub></td></tr>
-<tr><td><code>GET /features/config</code></td><td class="muted">no DB — config lookup</td><td class="win">0.009 <sub>0.009+0.001</sub></td><td class="">0.227 <sub>0.227+0.000</sub></td><td class="">0.082 <sub>0.080+0.002</sub></td><td class="">0.316 <sub>0.306+0.010</sub></td><td class="">0.421 <sub>0.413+0.008</sub></td><td class="">0.098 <sub>0.097+0.000</sub></td></tr>
-<tr><td><code>GET /features/request-scoped</code></td><td class="muted">no DB — scoped service resolve</td><td class="win">0.009 <sub>0.008+0.001</sub></td><td class="">0.224 <sub>0.224+0.000</sub></td><td class="">0.080 <sub>0.078+0.002</sub></td><td class="">0.337 <sub>0.327+0.010</sub></td><td class="">0.400 <sub>0.392+0.008</sub></td><td class="">0.097 <sub>0.097+0.000</sub></td></tr>
-<tr><td><code>GET /features/rate-limit</code></td><td class="muted">no DB — cache-backed limiter</td><td class="win">0.010 <sub>0.009+0.001</sub></td><td class="">0.248 <sub>0.248+0.000</sub></td><td class="">0.090 <sub>0.088+0.002</sub></td><td class="">0.343 <sub>0.333+0.010</sub></td><td class="">0.436 <sub>0.428+0.009</sub></td><td class="">0.109 <sub>0.109+0.000</sub></td></tr>
+<tr><td><code>GET /</code></td><td class="muted">no DB — routing + template only</td><td class="win">2.17 <sub>0.06+2.11+0.00</sub></td><td class="">6.40 <sub>4.01+2.39+0.00</sub></td><td class="">3.72 <sub>1.57+2.15+0.00</sub></td><td class="">21.9 <sub>17.5+4.4+0.0</sub></td><td class="">3.04 <sub>0.02+3.01+0.01</sub></td><td class="">3.22 <sub>0.38+2.84+0.00</sub></td></tr>
+<tr><td><code>GET /items</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">3.37 <sub>0.06+3.30+0.01</sub></td><td class="">7.96 <sub>4.03+3.93+0.00</sub></td><td class="">6.12 <sub>1.56+4.56+0.00</sub></td><td class="">23.2 <sub>17.5+5.7+0.0</sub></td><td class="">4.27 <sub>0.02+4.23+0.02</sub></td><td class="">6.05 <sub>0.38+5.67+0.00</sub></td></tr>
+<tr><td><code>GET /items/1</code></td><td class="muted">1 item by id</td><td class="win">3.13 <sub>0.05+3.07+0.01</sub></td><td class="">7.59 <sub>3.96+3.63+0.00</sub></td><td class="">5.36 <sub>1.60+3.76+0.00</sub></td><td class="">23.0 <sub>17.4+5.6+0.0</sub></td><td class="">4.41 <sub>0.03+4.36+0.02</sub></td><td class="">5.77 <sub>0.37+5.40+0.00</sub></td></tr>
+<tr><td><code>POST /items</code></td><td class="muted">1 row upserted (sentinel #999999)</td><td class="win">3.51 <sub>0.06+3.44+0.01</sub></td><td class="">7.68 <sub>4.00+3.68+0.00</sub></td><td class="">7.04 <sub>1.57+5.47+0.00</sub></td><td class="">23.3 <sub>17.4+5.9+0.0</sub></td><td class="">4.64 <sub>0.03+4.59+0.02</sub></td><td class="">5.94 <sub>0.38+5.56+0.00</sub></td></tr>
+<tr><td><code>GET /items-qb</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">3.17 <sub>0.05+3.12+0.00</sub></td><td class="">7.38 <sub>3.99+3.39+0.00</sub></td><td class="">4.75 <sub>1.56+3.19+0.00</sub></td><td class="">22.5 <sub>17.4+5.1+0.0</sub></td><td class="">4.31 <sub>0.03+4.26+0.02</sub></td><td class="">4.54 <sub>0.39+4.15+0.00</sub></td></tr>
+<tr><td><code>GET /items-qb/1</code></td><td class="muted">1 item by id</td><td class="win">3.13 <sub>0.05+3.08+0.00</sub></td><td class="">7.31 <sub>4.03+3.28+0.00</sub></td><td class="">4.77 <sub>1.57+3.20+0.00</sub></td><td class="">22.3 <sub>17.4+4.9+0.0</sub></td><td class="">4.42 <sub>0.03+4.37+0.02</sub></td><td class="">4.40 <sub>0.38+4.02+0.00</sub></td></tr>
+<tr><td><code>POST /items-qb</code></td><td class="muted">1 row upserted (sentinel #999997)</td><td class="win">3.27 <sub>0.05+3.22+0.00</sub></td><td class="">7.33 <sub>4.01+3.32+0.00</sub></td><td class="">6.24 <sub>1.58+4.66+0.00</sub></td><td class="">22.4 <sub>17.2+5.2+0.0</sub></td><td class="">4.65 <sub>0.03+4.60+0.02</sub></td><td class="">4.55 <sub>0.37+4.18+0.00</sub></td></tr>
+<tr><td><code>GET /api/items</code></td><td class="muted">20 of 1000 items as JSON</td><td class="win">3.14 <sub>0.06+3.08+0.00</sub></td><td class="">9.30 <sub>4.05+5.25+0.00</sub></td><td class="">5.66 <sub>1.59+4.07+0.00</sub></td><td class="">22.5 <sub>17.4+5.1+0.0</sub></td><td class="">4.21 <sub>0.03+4.16+0.02</sub></td><td class="">5.68 <sub>0.38+5.30+0.00</sub></td></tr>
+<tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="win">3.06 <sub>0.05+3.00+0.01</sub></td><td class="">9.05 <sub>4.06+4.99+0.00</sub></td><td class="">5.32 <sub>1.60+3.72+0.00</sub></td><td class="">22.2 <sub>17.3+4.9+0.0</sub></td><td class="">4.43 <sub>0.03+4.38+0.02</sub></td><td class="">5.67 <sub>0.40+5.27+0.00</sub></td></tr>
+<tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="win">3.14 <sub>0.05+3.08+0.01</sub></td><td class="">7.82 <sub>4.04+3.78+0.00</sub></td><td class="">6.90 <sub>1.61+5.29+0.00</sub></td><td class="">22.5 <sub>17.4+5.1+0.0</sub></td><td class="">4.62 <sub>0.03+4.57+0.02</sub></td><td class="">5.86 <sub>0.38+5.48+0.00</sub></td></tr>
+<tr><td><code>GET /features/aop</code></td><td class="muted">no DB — interceptor pipeline</td><td class="win">5.31 <sub>0.06+5.25+0.00</sub></td><td class="">8.98 <sub>4.03+4.95+0.00</sub></td><td class="">6.40 <sub>1.60+4.79+0.01</sub></td><td class="">25.0 <sub>17.5+7.5+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
+<tr><td><code>GET /features/cache</code></td><td class="muted">no DB — cache round-trips</td><td class="win">54.6 <sub>0.1+54.5+0.0</sub></td><td class="">59.7 <sub>4.6+55.1+0.0</sub></td><td class="">57.2 <sub>1.9+55.3+0.0</sub></td><td class="">74.1 <sub>17.6+56.5+0.0</sub></td><td class="">55.2 <sub>0.0+55.2+0.0</sub></td><td class="">56.4 <sub>0.4+56.0+0.0</sub></td></tr>
+<tr><td><code>GET /features/log</code></td><td class="muted">no DB — buffered log handlers</td><td class="win">3.00 <sub>0.05+2.95+0.00</sub></td><td class="">6.83 <sub>3.97+2.86+0.00</sub></td><td class="">4.06 <sub>1.59+2.47+0.00</sub></td><td class="">21.9 <sub>17.4+4.5+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
+<tr><td><code>GET /features/retry</code></td><td class="muted">no DB — retry policy</td><td class="win">3.04 <sub>0.06+2.98+0.00</sub></td><td class="">6.86 <sub>3.98+2.88+0.00</sub></td><td class="">3.94 <sub>1.53+2.41+0.00</sub></td><td class="">21.8 <sub>17.3+4.5+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
+<tr><td><code>GET /features/pipeline</code></td><td class="muted">no DB — middleware pipeline</td><td class="win">2.34 <sub>0.06+2.28+0.00</sub></td><td class="">6.88 <sub>4.00+2.88+0.00</sub></td><td class="">4.03 <sub>1.58+2.45+0.00</sub></td><td class="">21.8 <sub>17.3+4.5+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
+<tr><td><code>GET /features/db-events</code></td><td class="muted">1 event row INSERTed per request</td><td class="win">3.77 <sub>0.06+3.71+0.00</sub></td><td class="">7.99 <sub>4.04+3.95+0.00</sub></td><td class="">5.97 <sub>1.58+4.39+0.00</sub></td><td class="">23.4 <sub>17.4+6.0+0.0</sub></td><td class="">4.52 <sub>0.02+4.48+0.02</sub></td><td class="">5.23 <sub>0.39+4.84+0.00</sub></td></tr>
+<tr><td><code>GET /features/events</code></td><td class="muted">no DB — in-process listeners</td><td class="win">3.72 <sub>0.06+3.66+0.00</sub></td><td class="">7.58 <sub>4.03+3.55+0.00</sub></td><td class="">4.87 <sub>1.59+3.28+0.00</sub></td><td class="">22.9 <sub>17.4+5.5+0.0</sub></td><td class="">4.48 <sub>0.03+4.43+0.02</sub></td><td class="">4.15 <sub>0.39+3.76+0.00</sub></td></tr>
+<tr><td><code>GET /features/validation</code></td><td class="muted">no DB — validator run</td><td class="win">2.87 <sub>0.06+2.81+0.00</sub></td><td class="">8.48 <sub>4.06+4.42+0.00</sub></td><td class="">4.73 <sub>1.59+3.14+0.00</sub></td><td class="">22.2 <sub>17.4+4.8+0.0</sub></td><td class="">4.70 <sub>0.03+4.65+0.02</sub></td><td class="">4.51 <sub>0.38+4.13+0.00</sub></td></tr>
+<tr><td><code>GET /features/config</code></td><td class="muted">no DB — config lookup</td><td class="win">2.24 <sub>0.05+2.19+0.00</sub></td><td class="">6.93 <sub>4.02+2.91+0.00</sub></td><td class="">4.04 <sub>1.59+2.45+0.00</sub></td><td class="">22.1 <sub>17.4+4.7+0.0</sub></td><td class="">3.40 <sub>0.03+3.35+0.02</sub></td><td class="">3.35 <sub>0.38+2.97+0.00</sub></td></tr>
+<tr><td><code>GET /features/request-scoped</code></td><td class="muted">no DB — scoped service resolve</td><td class="win">2.31 <sub>0.06+2.25+0.00</sub></td><td class="">6.90 <sub>3.98+2.92+0.00</sub></td><td class="">3.97 <sub>1.55+2.42+0.00</sub></td><td class="">22.1 <sub>17.5+4.6+0.0</sub></td><td class="">3.32 <sub>0.03+3.28+0.01</sub></td><td class="">3.40 <sub>0.38+3.02+0.00</sub></td></tr>
+<tr><td><code>GET /features/rate-limit</code></td><td class="muted">no DB — cache-backed limiter</td><td class="win">2.39 <sub>0.06+2.33+0.00</sub></td><td class="">7.25 <sub>4.02+3.23+0.00</sub></td><td class="">4.04 <sub>1.57+2.47+0.00</sub></td><td class="">22.1 <sub>17.3+4.8+0.0</sub></td><td class="">3.35 <sub>0.03+3.31+0.01</sub></td><td class="">3.64 <sub>0.38+3.26+0.00</sub></td></tr>
 </tbody>
 </table>
 </main>

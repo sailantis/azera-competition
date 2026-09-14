@@ -45,7 +45,7 @@ Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpo
 ---
 
 > **Auto-generated.** This page and its charts are produced by the `azera-competition` repository:
-> `php run.php --apps=azera,laravel,symfony,spiral,codeigniter,cakephp --out=results/free-for-all-opcache --report`
-> then `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.
+> `php run.php --apps=azera,laravel,symfony,spiral,codeigniter,cakephp --warm --cold --seed --out=results/free-for-all-opcache-iso`
+> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.
 
 Every chart is a plain SVG generated from the result JSON, so the numbers and the diagrams can never disagree.

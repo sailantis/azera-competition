@@ -102,6 +102,9 @@ HTML;
             if (!isset($svgFiles[$key])) {
                 continue;
             }
+            if ($key !== 'memory' && $this->store->hasBoot()) {
+                $caption .= $this->bootBasis($mode);
+            }
             $figures .= sprintf(
                 "<figure>\n  <figcaption>%s</figcaption>\n  <img src=\"%s\" alt=\"%s\" loading=\"lazy\">\n</figure>\n",
                 self::esc($caption),
@@ -116,7 +119,7 @@ HTML;
             if (!isset($svgFiles['feature-' . $feature])) {
                 continue;
             }
-            $label = BenchmarkConfig::featureLabel($feature);
+            $label = BenchmarkConfig::featureLabel($feature) . ($this->store->hasBoot() ? $this->bootBasis($mode) : '');
             $featureFigs .= sprintf(
                 "<figure>\n  <figcaption>%s</figcaption>\n  <img src=\"%s\" alt=\"%s\" loading=\"lazy\">\n</figure>\n",
                 self::esc($label),
@@ -158,6 +161,37 @@ HTML;
     private function yesNo(bool $b): string
     {
         return $b ? 'yes' : 'no';
+    }
+
+    /**
+     * One-line note naming the boot that every chart point and table cell of
+     * this view carries, so a reader never has to guess whether a number is
+     * bare request time or full per-request worker occupancy.
+     */
+    private function bootBasis(string $mode): string
+    {
+        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+            if (!$this->store->coldBootIncluded()) {
+                return '';
+            }
+            return ' — boot included: a fresh framework rebuild is timed inside every request';
+        }
+        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+            $lo = null;
+            $hi = null;
+            foreach ($this->store->apps() as $app) {
+                $boot = $this->store->modeBootMs($app, $mode);
+                if ($boot === null) {
+                    continue;
+                }
+                $lo = $lo === null ? $boot : min($lo, $boot);
+                $hi = $hi === null ? $boot : max($hi, $boot);
+            }
+            return $lo === null
+                ? ''
+                : ' — boot included: the worker\'s recycle cost (' . SvgChart::fmt($lo) . '–' . SvgChart::fmt($hi) . ' ms) is added to every request';
+        }
+        return '';
     }
 
     private function page(string $title, string $body, int $depth): string
