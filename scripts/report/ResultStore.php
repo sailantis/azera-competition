@@ -202,6 +202,30 @@ final class ResultStore
     }
 
     /**
+     * Iterations per run for ONE mode, when every row of that mode agrees.
+     *
+     * A dataset can mix budgets per mode: results/real-deployments.json was
+     * rebuilt with a fresh RoadRunner block (1000x10) while the PHP-FPM block
+     * — valid, expensive to re-measure (~5.3 min/app) — stayed on 300x5. Each
+     * real view prints ONE mode, so the mode-aware number is the honest one;
+     * iterationsPerRun() alone would return null for the mixed dataset and
+     * both views would fall back to a budget-free (or wrong) wording.
+     */
+    public function iterationsPerRunFor(string $mode): ?int
+    {
+        $seen = [];
+        foreach ($this->data as $modes) {
+            foreach (($modes[$mode] ?? []) as $row) {
+                $n = (int) ($row['iterations_per_run'] ?? 0);
+                if ($n > 0) {
+                    $seen[$n] = true;
+                }
+            }
+        }
+        return count($seen) === 1 ? (int) array_key_first($seen) : null;
+    }
+
+    /**
      * Webserver-overhead probes present in the dataset:
      * app => ['mode' => .., 'request' => .., 'ms' => float]. Empty for every
      * dataset produced by the in-process harness.

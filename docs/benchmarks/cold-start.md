@@ -2,7 +2,7 @@
 
 PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.
 
-**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): yes · 1000 iterations per run over multiple runs, lower is better.
+**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): yes · 50 iterations per run over multiple runs, lower is better.
 
 _Measured 2026-09-13T23:14:41+00:00 · azera-framework `6f57113`_
 

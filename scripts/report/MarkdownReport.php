@@ -57,7 +57,7 @@ final class MarkdownReport
         }
         $l[] = $subtitle;
         $l[] = '';
-        $l[] = $this->envBlock();
+        $l[] = $this->envBlock($mode);
         $l[] = '';
 
         foreach ($charts as $chart) {
@@ -69,7 +69,7 @@ final class MarkdownReport
         }
 
         // Shared tables so both outputs agree on the numbers.
-        $tables = new Tables($this->store);
+        $tables     = new Tables($this->store);
         $realServer = $this->store->floors() !== [];
         $l[] = '## Latency by endpoint';
         $l[] = '';
@@ -109,19 +109,27 @@ final class MarkdownReport
         return implode("\n", $l);
     }
 
-    private function envBlock(): string
+    private function envBlock(string $mode): string
     {
         $env = $this->store->env();
         // The measured rows record their budget (http-bench.php writes
-        // iterations_per_run). The in-process harness does not, so fall back to
-        // its documented default rather than inventing a number per view.
-        $iters = $this->store->iterationsPerRun() ?? 1000;
+        // iterations_per_run), and a dataset may mix budgets per mode (the
+        // real-deployments RR refresh is 1000x10 while the FPM block is
+        // 300x5). Each view prints one mode, so prefer that mode's number;
+        // fall back to the global figure (or to a budget-free wording) rather
+        // than inventing a count for rows that disagree.
+        $iters = $this->store->iterationsPerRunFor($mode)
+            ?? $this->store->iterationsPerRun();
+        $budget = $iters !== null
+            ? "{$iters} iterations per run over multiple runs"
+            : 'multiple runs';
+
         return sprintf(
-            "**Environment** — PHP %s · %s · OPcache (CLI): %s · %s iterations per run over multiple runs, lower is better.\n\n_Measured %s%s_",
+            "**Environment** — PHP %s · %s · OPcache (CLI): %s · %s, lower is better.\n\n_Measured %s%s_",
             $env['php_version'] ?? '?',
             $env['os'] ?? '?',
             !empty($env['opcache']) ? 'yes' : 'no',
-            (string) $iters,
+            $budget,
             $env['timestamp'] ?? '?',
             isset($env['azera_framework_ref']) ? ' · azera-framework `' . $env['azera_framework_ref'] . '`' : ''
         );
@@ -627,7 +635,7 @@ final class MarkdownReport
         // When a real server's constant cost dwarfs the framework, the spread
         // is noise on the floor — do not phrase it as a framework difference.
         $floorBound = $bestMs > 0 && ($worstMs / $bestMs) < 1.05;
-        $closing = $floorBound
+        $closing    = $floorBound
             ? '. Every framework lands within 5% of the fastest: ' . $this->withinNoiseReason() . '.'
             : ' — x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . ' slower.';
 
@@ -713,10 +721,10 @@ final class MarkdownReport
         // "within 5%" for datasets whose slowest app needed 2.4x the baseline.
         $totals = array_map(static fn(array $m): float => $m['median'], $metrics);
         asort($totals);
-        $fastest = array_key_first($totals);
-        $slowest = array_key_last($totals);
+        $fastest   = array_key_first($totals);
+        $slowest   = array_key_last($totals);
         $maxFactor = $factors[$slowest] ?? 1.0;
-        $extra = '';
+        $extra     = '';
         if ($maxFactor < 1.05) {
             $extra = " Every framework lands within 5% of {$base} on the total: " . $this->withinNoiseReason() . '.';
         } elseif ($fastest === $base) {
@@ -837,11 +845,11 @@ final class MarkdownReport
                     }
                 }
                 asort($medians);
-                $pKeys  = array_keys($medians);
-                $winner = $pKeys[0] ?? $race['winner'];
-                $runner = $pKeys[1] ?? null;
-                $winnerMs  = (float) ($medians[$winner] ?? $race['winner_ms']);
-                $runnerMs  = $runner !== null ? (float) $medians[$runner] : null;
+                $pKeys    = array_keys($medians);
+                $winner   = $pKeys[0] ?? $race['winner'];
+                $runner   = $pKeys[1] ?? null;
+                $winnerMs = (float) ($medians[$winner] ?? $race['winner_ms']);
+                $runnerMs = $runner !== null ? (float) $medians[$runner] : null;
                 // Below the server floor's own noise a "x 1.0 faster" claim is
                 // meaningless — say the endpoint is floor-bound instead.
                 $floorBound = $runnerMs !== null && $winnerMs > 0
@@ -951,7 +959,7 @@ final class MarkdownReport
      */
     private function spreadProfile(string $mode, array $apps): ?array
     {
-        $common = $this->store->commonRequests($mode, $apps);
+        $common  = $this->store->commonRequests($mode, $apps);
         $spreads = [];
         $within5 = 0;
         foreach ($common as $request) {
