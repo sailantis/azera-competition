@@ -63,8 +63,8 @@ final class EntryScriptTest extends TestCase
         $prefix = self::prefixOf($entry, $relative, $namespaceConstant);
         // Normalise separators once: the repo root comes from __DIR__ (mixed on
         // Windows) while the suffix is built with '/'.
-        $root   = str_replace('\\', '/', dirname(__DIR__) . '/' . $appDir);
-        $repo   = str_replace('\\', '/', dirname(__DIR__));
+        $root = str_replace('\\', '/', dirname(__DIR__) . '/' . $appDir);
+        $repo = str_replace('\\', '/', dirname(__DIR__));
 
         $checked    = 0;
         $mismatched = [];
@@ -97,10 +97,10 @@ final class EntryScriptTest extends TestCase
             }
 
             $checked++;
-            $suffix   = substr($ns, strlen($prefix));           // "Controllers"
+            $suffix   = substr($ns, strlen($prefix)); // "Controllers"
             $expected = rtrim($root . '/' . str_replace('\\', '/', $suffix), '/')
                 . '/' . $file->getFilename();
-            $actual   = str_replace('\\', '/', $file->getPathname());
+            $actual = str_replace('\\', '/', $file->getPathname());
 
             if ($actual !== $expected) {
                 $mismatched[] = sprintf(
@@ -155,7 +155,7 @@ final class EntryScriptTest extends TestCase
     {
         $entry = self::read('public/index-codeigniter.php');
 
-        $helpers = strpos($entry, 'system/Common.php');
+        $helpers  = strpos($entry, 'system/Common.php');
         $composer = strpos($entry, "'/../vendor/autoload.php'");
 
         self::assertNotFalse($helpers, 'the entry script must preload CI4\'s Common.php');
@@ -302,8 +302,10 @@ final class EntryScriptTest extends TestCase
         foreach ($iterator as $file) {
             $relative = str_replace('\\', '/', substr($file->getPathname(), strlen($root) + 1));
             // Only source/config, never the build or scratch areas.
-            if (preg_match('#^(vendor|temp|data|results|writable|runtime|\.git|docs)/#', $relative) === 1
-                || $file->getExtension() !== 'template') {
+            if (
+                preg_match('#^(vendor|temp|data|results|writable|runtime|\.git|docs)/#', $relative) === 1
+                    || $file->getExtension() !== 'template'
+            ) {
                 // The template is the only .template; also scan plain .conf.
                 if ($file->getExtension() !== 'conf' || str_starts_with($relative, 'vendor/')) {
                     continue;

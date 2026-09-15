@@ -21,10 +21,10 @@ final class GatewayErrorTest extends TestCase
     public static function gatewayPages(): array
     {
         return [
-            '502 Bad Gateway'      => ['<html><title>502 Bad Gateway</title></html>'],
+            '502 Bad Gateway'         => ['<html><title>502 Bad Gateway</title></html>'],
             '503 Service Unavailable' => ['<html><h1>503 Service Unavailable</h1></html>'],
-            '504 Gateway Time-out' => ['<html><center><h1>504 Gateway Time-out</h1></center></html>'],
-            'nginx default body'   => ["<html>\r\n<head><title>502 Bad Gateway</title></head>\r\n<body>\r\n<center><h1>502 Bad Gateway</h1></center>\r\n<hr><center>nginx/1.24.0 (Ubuntu)</center>\r\n</body>\r\n</html>"],
+            '504 Gateway Time-out'    => ['<html><center><h1>504 Gateway Time-out</h1></center></html>'],
+            'nginx default body'      => ["<html>\r\n<head><title>502 Bad Gateway</title></head>\r\n<body>\r\n<center><h1>502 Bad Gateway</h1></center>\r\n<hr><center>nginx/1.24.0 (Ubuntu)</center>\r\n</body>\r\n</html>"],
         ];
     }
 
@@ -37,12 +37,12 @@ final class GatewayErrorTest extends TestCase
     public static function appBodies(): array
     {
         return [
-            'served page'     => ['<!doctype html><html><body>items</body></html>'],
-            'not found'       => ['Not Found'],
-            '500 prefix'      => ['500 Internal Server Error'],
-            'empty'           => [''],
-            'fingerprint'     => ['/features/config — Dot-notation access to a nested configuration'],
-            'word in prose'   => ['The gateway timed out earlier in the run, but this page is fine.'],
+            'served page'   => ['<!doctype html><html><body>items</body></html>'],
+            'not found'     => ['Not Found'],
+            '500 prefix'    => ['500 Internal Server Error'],
+            'empty'         => [''],
+            'fingerprint'   => ['/features/config — Dot-notation access to a nested configuration'],
+            'word in prose' => ['The gateway timed out earlier in the run, but this page is fine.'],
         ];
     }
 

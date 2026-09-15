@@ -109,14 +109,16 @@ final class MeasurementBudgetTest extends TestCase
     public function testCollectsBudgetsKeyedByAppAndMode(): void
     {
         $budgets = budgetsByAppMode(self::dataset(
-            [['azera', ['roadrunner' => [1000, 10], 'php-fpm' => [1000, 10]]],
-             ['laravel', ['roadrunner' => [1000, 10]]]],
+            [
+                ['azera', ['roadrunner' => [1000, 10], 'php-fpm' => [1000, 10]]],
+                ['laravel', ['roadrunner' => [1000, 10]]]
+            ],
             [['floor-php', ['php-fpm' => [1000, 10]]]]
         ));
 
         self::assertSame([
-            'azera/roadrunner' => ['iters' => 1000, 'runs' => 10],
-            'azera/php-fpm'    => ['iters' => 1000, 'runs' => 10],
+            'azera/roadrunner'   => ['iters' => 1000, 'runs' => 10],
+            'azera/php-fpm'      => ['iters' => 1000, 'runs' => 10],
             'laravel/roadrunner' => ['iters' => 1000, 'runs' => 10],
             'floor-php/php-fpm'  => ['iters' => 1000, 'runs' => 10],
         ], $budgets, 'floor probes are part of the same invocation and must be checked too');

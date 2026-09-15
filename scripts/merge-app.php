@@ -118,10 +118,10 @@ if ($modeShape($srcApp) !== $modeShape($dstApp)) {
 // refresh at 1000x10 against a 300x5 FPM block) happened, so the refreshed
 // app is checked against every other app before anything is written.
 // See bench-lib.php::assertUniformBudget() for why the sample must be equal.
-$budgets = budgetsByAppMode($source);           // the app(s) being spliced in
+$budgets = budgetsByAppMode($source); // the app(s) being spliced in
 foreach ($target['apps'] as $a) {
     if (($a['app'] ?? '') === $appKey) {
-        continue;   // replaced by the source below; its budget is in $budgets
+        continue; // replaced by the source below; its budget is in $budgets
     }
     foreach (budgetsByAppMode(['apps' => [$a]]) as $key => $b) {
         $budgets[$key] = $b;
@@ -132,7 +132,8 @@ if (!$budget['ok']) {
     fwrite(STDERR, "Budget mismatch — a merge must not mix iterations/runs samples:\n");
     foreach ($budget['byAppMode'] as $label => $value) {
         fprintf(STDERR, "    %-24s %s%s\n", $label, $value,
-            str_starts_with($label, "{$appKey}/") ? '   (refreshing)' : '');
+            str_starts_with($label, "{$appKey}/") ? '   (refreshing)' : ''
+        );
     }
     fwrite(STDERR, "Re-measure the refreshed app with the dataset's budget, or refresh every mode.\n");
     exit(1);

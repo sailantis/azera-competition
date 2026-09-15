@@ -26,6 +26,13 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot   # azera-competition repo root
 $Sailantis = Split-Path -Parent $Root      # parent with sibling repos
 
+# A smoke run must never overwrite the canonical dataset, and its numbers must
+# never be published: -Quick writes results/smoke-<date>.json and the fetch
+# omits --publish. Otherwise a 100x3 sanity check silently becomes the numbers
+# that docs/benchmarks/*.md and the framework repo quote.
+$OutPrefix = if ($Quick) { 'results/smoke-' + (Get-Date -Format 'yyyy-MM-dd') } else { 'results/real-deployments' }
+$OutName   = Split-Path -Leaf $OutPrefix
+
 # Separate args (bsdtar: each --exclude needs to be its own argument).
 $Excludes = @('--exclude=vendor', '--exclude=data', '--exclude=results', '--exclude=writable', '--exclude=temp', '--exclude=.git', '--exclude=docs')
 
@@ -66,10 +73,13 @@ function Invoke-RemoteRun {
     Write-Host "==> fetching RoadRunner binary (rr)..." -ForegroundColor Cyan
     ssh $SshTarget "cd $RemoteDir && test -x vendor/bin/rr || php vendor/spiral/roadrunner-cli/bin/rr get-binary 2>&1 | tail -3"
 
-    $quickFlag = if ($Quick) { '--quick' } else { '' }
+    # The budget is stated, not inherited: the defaults live in run-http.php and
+    # a silent default change must not silently change what a run measured.
+    # -Quick deliberately overrides both (min(iters,100), min(runs,3)).
+    $budgetArgs = if ($Quick) { '--quick' } else { '--iterations-per-run=1000 --runs=10' }
     $log = "$RemoteDir/bench-run.log"
-    Write-Host "==> launching benchmark in tmux (log: bench-run.log)..." -ForegroundColor Cyan
-    ssh $SshTarget "tmux kill-session -t bench 2>/dev/null; tmux new -d -s bench 'cd $RemoteDir && php scripts/run-http.php --apps=$Apps --servers=$Servers $quickFlag --out=results/real-deployments > bench-run.log 2>&1'"
+    Write-Host "==> launching benchmark in tmux (log: bench-run.log, out: ${OutName}.json)..." -ForegroundColor Cyan
+    ssh $SshTarget "tmux kill-session -t bench 2>/dev/null; tmux new -d -s bench 'cd $RemoteDir && php scripts/run-http.php --apps=$Apps --servers=$Servers $budgetArgs --out=$OutPrefix > bench-run.log 2>&1'"
     if ($LASTEXITCODE -ne 0) { throw 'tmux launch failed' }
     Write-Host '==> launched. Watch with: .\scripts\run-remote.ps1 -Status' -ForegroundColor Green
 }
@@ -81,12 +91,19 @@ function Show-Status {
 function Get-Results {
     $local = Join-Path $Root 'results'
     New-Item -ItemType Directory -Force -Path $local | Out-Null
-    Write-Host '==> fetching results/real-deployments.json ...' -ForegroundColor Cyan
-    scp "${SshTarget}:$RemoteDir/results/real-deployments.json" (Join-Path $local 'real-deployments.json')
+    Write-Host "==> fetching $OutPrefix.json ..." -ForegroundColor Cyan
+    scp "${SshTarget}:$RemoteDir/$OutPrefix.json" (Join-Path $local "$OutName.json")
     if ($LASTEXITCODE -ne 0) { throw 'scp failed' }
     Write-Host '==> regenerating report locally...' -ForegroundColor Cyan
     Push-Location $Root
-    php scripts/report.php --publish=framework
+    if ($Quick) {
+        # No --publish (a smoke run is for reading, not for quoting) and a
+        # scratch --out: the default output dir is docs/benchmarks, so a smoke
+        # render would otherwise overwrite the published views with 100x3 data.
+        php scripts/report.php --dataset="results/$OutName.json" --out="results/$OutName-report"
+    } else {
+        php scripts/report.php --dataset="results/$OutName.json" --publish=framework
+    }
     Pop-Location
     Write-Host '==> fetched + report regenerated.' -ForegroundColor Green
 }

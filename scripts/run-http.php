@@ -107,8 +107,8 @@ $results = [
         // The sample BOTH servers were measured with ("1000x10"). Stamped so
         // the report can state the budget from the dataset rather than from a
         // constant, and so a mixed-budget dataset is detectable.
-        'budget'           => $budget,
-        'servers'          => [
+        'budget'  => $budget,
+        'servers' => [
             'roadrunner' => trim((string) shellProcessOutput("{$rrBinary} --version")),
             'nginx'      => trim((string) shellProcessOutput('nginx -v 2>&1')),
             'php_fpm'    => trim((string) shellProcessOutput("{$phpFpmBin} -v")),

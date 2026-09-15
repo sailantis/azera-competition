@@ -36,7 +36,7 @@ final class PortAllocationTest extends TestCase
     {
         // The regression: cakephp alone must land on the SAME port it occupies
         // in a full six-app run, or its stale multi-app stamp collides.
-        $full = ['rr' => [], 'fpm' => []];
+        $full  = ['rr' => [], 'fpm' => []];
         $alone = ['rr' => [], 'fpm' => []];
 
         $expected = null;

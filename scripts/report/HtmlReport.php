@@ -83,9 +83,9 @@ HTML;
         // the dataset (the mode's own stamp when the modes differ). Both
         // deployment models are meant to share one budget; a hardcoded figure
         // is the one thing that can contradict a re-run.
-        $budget   = $this->store->budgetLabelFor($mode)
+        $budget = $this->store->budgetLabelFor($mode)
             ?? $this->store->budgetLabel()
-            ?? 'multiple runs';
+                ?? 'multiple runs';
         // Same flag guard as MarkdownReport: only claim boot inclusion when
         // the dataset was recorded with boot inside the request clock.
         $subtitle = (string) ($view['subtitle'] ?? '');

@@ -121,7 +121,7 @@ final class MarkdownReport
         // mismatch should no longer be reachable.
         $budget = $this->store->budgetLabelFor($mode)
             ?? $this->store->budgetLabel()
-            ?? 'multiple runs';
+                ?? 'multiple runs';
 
         return sprintf(
             "**Environment** — PHP %s · %s · OPcache (CLI): %s · %s, lower is better.\n\n_Measured %s%s_",
