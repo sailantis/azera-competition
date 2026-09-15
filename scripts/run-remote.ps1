@@ -37,17 +37,29 @@ $OutName   = Split-Path -Leaf $OutPrefix
 $Excludes = @('--exclude=vendor', '--exclude=data', '--exclude=results', '--exclude=writable', '--exclude=temp', '--exclude=.git', '--exclude=docs')
 
 function Sync-Source {
-    Write-Host "==> Syncing source to ${SshTarget}:${RemoteDir} (tar over ssh)..." -ForegroundColor Cyan
-    # Windows ships bsdtar; pipe it over ssh. Sibling repos are synced into
-    # the same parent dir so composer's path repositories resolve.
+    Write-Host "==> Syncing source to ${SshTarget}:${RemoteDir} (tar over scp)..." -ForegroundColor Cyan
+    # Windows ships bsdtar, but PowerShell pipes a native command's stdout as
+    # TEXT: encoding + newline translation corrupts the binary tar stream, and
+    # the remote tar dies with "does not look like a tar archive". So the
+    # archive is written to a temp FILE and transferred with scp.
+    # Sibling repos are synced into the same parent dir so composer's path
+    # repositories resolve.
     $parent = Split-Path -Parent $RemoteDir
     ssh $SshTarget "mkdir -p $parent"
+    $tarFile = Join-Path ([System.IO.Path]::GetTempPath()) 'azera-sync.tar'
+    $remoteTar = '/tmp/azera-sync.tar'
     foreach ($repo in @('azera-competition', 'azera-framework', 'clarity-engine')) {
         $src = Join-Path $Sailantis $repo
         if (-not (Test-Path $src)) { Write-Warning "skip $repo (not found)"; continue }
-        tar -C $Sailantis -cf - @Excludes $repo | ssh $SshTarget "tar -xf - -C $parent"
-        if ($LASTEXITCODE -ne 0) { throw "tar sync failed for $repo" }
+        if (Test-Path $tarFile) { Remove-Item $tarFile -Force }
+        tar -C $Sailantis -cf $tarFile @Excludes $repo
+        if ($LASTEXITCODE -ne 0) { throw "tar create failed for $repo" }
+        scp -q $tarFile "${SshTarget}:$remoteTar"
+        if ($LASTEXITCODE -ne 0) { throw "scp failed for $repo" }
+        ssh $SshTarget "tar -xf $remoteTar -C $parent && rm -f $remoteTar"
+        if ($LASTEXITCODE -ne 0) { throw "tar extract failed for $repo" }
     }
+    if (Test-Path $tarFile) { Remove-Item $tarFile -Force }
     Write-Host '==> sync done.' -ForegroundColor Green
 }
 

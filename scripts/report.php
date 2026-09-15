@@ -41,10 +41,11 @@ use AzeraCompetition\Report\ResultStore;
 $root     = dirname(__DIR__);
 $manifest = require __DIR__ . '/report/views.php';
 
-$opts     = getopt('', ['dataset::', 'view::', 'out::', 'publish::', 'list', 'help']);
+$opts     = getopt('', ['dataset::', 'view::', 'out::', 'publish::', 'force-dataset', 'list', 'help']);
 $outDir   = rtrim($opts['out'] ?? $root . '/docs/benchmarks', '/');
 $onlyView = $opts['view'] ?? null;
 $publish  = $opts['publish'] ?? null;
+$forceDataset = isset($opts['force-dataset']);
 
 if (isset($opts['help'])) {
     echo <<<TXT
@@ -52,6 +53,8 @@ azera-competition report generator
 
 Options:
   --dataset=<name|path>  Dataset to render (default: first dataset that exists)
+  --force-dataset        Ignore each view's pinned dataset and render the
+                         --dataset over every view (use for smoke runs)
   --view=<key>           Render only this view (default: all views)
   --out=<dir>            Output directory (default: docs/benchmarks)
   --publish=<target>     Publish views that declare this target (e.g. framework)
@@ -138,7 +141,13 @@ foreach ($views as $key => $view) {
     // deployments relabelling of the canonical run). Resolve it lazily so
     // one generator invocation can mix datasets across views; views without
     // a dataset entry use the CLI/default store selected above.
-    $viewDsKey = $view['dataset'] ?? null;
+    //
+    // --force-dataset overrides that pin: without it, `--dataset=<path>` is
+    // silently ignored by every view that names its own dataset, so a run
+    // against a different dataset (a smoke run, a re-measure) renders the
+    // PUBLISHED numbers while appearing to succeed. Used to preview a
+    // non-canonical dataset across all views.
+    $viewDsKey = ($forceDataset || ($view['dataset'] ?? null) === null) ? null : $view['dataset'];
     if ($viewDsKey !== null && $viewDsKey !== $dsLabel) {
         if (!isset($manifest['datasets'][$viewDsKey])) {
             fwrite(STDERR, "View {$key} declares unknown dataset: {$viewDsKey}\n");
