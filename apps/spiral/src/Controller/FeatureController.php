@@ -109,10 +109,6 @@ class FeatureController
         $start = \microtime(true);
         $count = $cache->get($key);
         if ($count === null) {
-            // Simulate the expensive query parity with azera's #[Cache] demo
-            // (FeatureService::countItems sleeps 50ms on miss so the cache
-            // hit has something to save).
-            \usleep(50_000);
             $count = (new Select($this->orm, Item::class))->count();
             $cache->set($key, $count, 10);
         }
@@ -125,7 +121,7 @@ class FeatureController
 
         return $this->response->json([
             'feature'        => 'Cache',
-            'description'    => 'First call runs the query (~50ms); second call hits the PSR-16 cache (~0ms).',
+            'description'    => 'First call runs the COUNT query (cache miss); second call hits the PSR-16 cache.',
             'item_count'     => $count,
             'first_call_ms'  => $elapsedMs,
             'second_call_ms' => $elapsedMs2,

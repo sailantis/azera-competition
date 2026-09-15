@@ -11,7 +11,7 @@ declare(strict_types=1);
  * tagged `kernel.reset` (method `reset`), so the services_resetter clears it
  * after every request. In a normal PHP-FPM app each request is a fresh process
  * so this is invisible, but in the harness it means the cache never persists —
- * the /features/cache demo would miss on every call (~50ms).
+ * the /features/cache demo would miss on every call.
  *
  * azera and Laravel use a process-lifetime array cache, so for apples-to-apples
  * parity we drop the `kernel.reset` tag from `cache.app` and let it persist

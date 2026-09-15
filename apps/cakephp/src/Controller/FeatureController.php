@@ -91,8 +91,6 @@ final class FeatureController extends AppController
 
     /**
      * GET /features/cache — cached DB count (array pool, 10s TTL).
-     *
-     * Matches the 50ms simulated cold query the azera #[Cache] demo pays.
      */
     public function cache(): \Cake\Http\Response
     {
@@ -103,7 +101,6 @@ final class FeatureController extends AppController
         $start    = microtime(true);
         $firstHit = $count !== null;
         if (!$firstHit) {
-            usleep(50_000); // parity with azera's #[Cache] demo (50ms miss)
             $count = $this->items()->find()->count();
             $pool->set($key, $count, 10);
         }

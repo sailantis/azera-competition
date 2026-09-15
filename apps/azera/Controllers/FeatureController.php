@@ -99,7 +99,7 @@ class FeatureController extends Controller
 
         return Response::json([
             'feature'        => 'AOP #[Cache]',
-            'description'    => 'First call runs the query (~50ms); second call hits the cache (~0ms).',
+            'description'    => 'First call runs the COUNT query (cache miss); second call hits the cache.',
             'item_count'     => $count,
             'first_call_ms'  => $elapsedMs,
             'second_call_ms' => $elapsedMs2,
@@ -256,9 +256,9 @@ class FeatureController extends Controller
         $log->clear();
 
         // Run a couple of queries + a transaction so the Db events fire.
-        // The count deliberately bypasses the #[Cache] demo (countItems())
-        // — a cached hit fires no Db events, and a cold miss would pay the
-        // demo's simulated 50ms query in this benchmark row.
+        // The count deliberately bypasses the #[Cache] demo (countItems()):
+        // a cached hit fires no Db events, so this row must use the plain
+        // query path.
         $service->createItemTransactional('DbEvent Item ' . date('Y-m-d H:i:s'));
         $service->countItemsQuery();
 

@@ -101,8 +101,6 @@ final class Feature extends BaseController
 
     /**
      * GET /features/cache — cached DB count (array handler, 10s TTL).
-     *
-     * Matches the 50ms simulated cold query the azera #[Cache] demo pays.
      */
     public function cache(): \CodeIgniter\HTTP\ResponseInterface|string
     {
@@ -112,7 +110,6 @@ final class Feature extends BaseController
 
         $start = microtime(true);
         if ($count === null) {
-            usleep(50_000); // parity with azera's #[Cache] demo (50ms miss)
             $count = (new \Ci4App\Models\Item())->countAll();
             $cache->save($key, $count, 10);
         }

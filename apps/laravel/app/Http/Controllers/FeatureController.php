@@ -100,10 +100,6 @@ class FeatureController
         $count    = Cache::get($key);
         $firstHit = $count !== null;
         if (!$firstHit) {
-            // Simulate the expensive query parity with azera's #[Cache] demo
-            // (FeatureService::countItems sleeps 50ms on miss so the cache
-            // hit has something to save).
-            \usleep(50_000);
             $count = Item::query()->count();
             Cache::put($key, $count, 10);
         }
@@ -116,7 +112,7 @@ class FeatureController
 
         return response()->json([
             'feature'        => 'Cache',
-            'description'    => 'First call runs the query (~50ms); second call hits the cache (~0ms).',
+            'description'    => 'First call runs the COUNT query (cache miss); second call hits the cache.',
             'item_count'     => $count,
             'first_call_ms'  => $elapsedMs,
             'second_call_ms' => $elapsedMs2,

@@ -65,13 +65,20 @@ class FeatureService
      * The #[Cache] interceptor checks the cache before invoking the
      * method; on a miss it calls the method and stores the result.
      * The key is interpolated from the {segment} argument.
+     *
+     * The body is a real aggregate query and nothing else. An artificial
+     * delay here (this used to usleep 50ms) is not a framework cost: it is
+     * added to every app's cache-MISS row, and the deployment models differ
+     * in whether they miss. php-fpm rebuilds the app context per request, so
+     * every app always missed and paid it on every request, while a resident
+     * RoadRunner worker hit and paid nothing — the delay measured the harness,
+     * not the cache. On php-fpm it was 67% of azera's total-response-time
+     * metric and it flattened the spread between frameworks from 15.3x to
+     * 6.0x.
      */
     #[Cache(ttl: 10, key: 'item_count')]
     public function countItems(): int
     {
-        // Simulate an expensive query
-        usleep(50_000);
-
         $row = $this->ctx->dbManager()
             ->getOrDefault('default')
             ->selectRow('SELECT COUNT(*) AS c FROM items', null, \PDO::FETCH_ASSOC);
@@ -84,8 +91,7 @@ class FeatureService
      *
      * Used by the Db Events demo, which must exercise a real query (and its
      * QueryExecuted / StatementPrepared events) on EVERY request instead of
-     * a cache hit; routing it through countItems() would (a) pay the 50ms
-     * simulated cold query on every fresh boot and (b) turn most calls into
+     * a cache hit: routing it through countItems() would turn most calls into
      * no-op cache reads that fire no Db events.
      */
     public function countItemsQuery(): int

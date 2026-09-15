@@ -188,7 +188,7 @@ final class BenchmarkConfig
             'GET /api/items/1'             => '1 item by id as JSON',
             'POST /api/items'              => '1 row upserted (sentinel #999998)',
             'GET /features/aop'            => 'no DB — interceptor pipeline',
-            'GET /features/cache'          => 'no DB — cache round-trips',
+            'GET /features/cache'          => 'COUNT(*) of 1000 rows, cached 10s (miss = query)',
             'GET /features/log'            => 'no DB — buffered log handlers',
             'GET /features/retry'          => 'no DB — retry policy',
             'GET /features/pipeline'       => 'no DB — middleware pipeline',
