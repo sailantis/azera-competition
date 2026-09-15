@@ -58,10 +58,9 @@ return [
     // than Symfony's 0.166???0.241 ms (1.4x) ??? even though Symfony's spread is
     // 3.4x larger in absolute milliseconds. Log made the fastest framework
     // look like the most volatile one. Linear keeps drawn width proportional
-    // to real spread. (Peak memory is linear too — but only in WARM mode:
-    // cold blocks re-boot the framework 50x30 times in one process, so cold
-    // peak_mem measures harness boot residue, not the framework footprint;
-    // the cold-start view omits the memory chart.)
+    // to real spread. (Peak memory is linear too. The cold-start view omits
+    // the memory chart — see the note on that view for why, including the
+    // stale "boot ratchet" rationale it used to carry.)
     'views' => [
         // The headline comparison, ROADRUNNER story: resident worker, boot
         // paid once. Published into the framework docs + README.
@@ -90,13 +89,30 @@ return [
             'mode'      => 'php-fpm',
             'log_scale' => false,
             'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            // No 'memory' chart in cold mode: cold blocks re-boot the
-            // framework 50x30 times in ONE process, and boot residue
-            // accumulates ~0.3 MB per boot — reported peak_mem there
-            // (~500 MB for Laravel) is a harness artifact, not a real FPM
-            // per-request footprint (real FPM kills the worker after every
-            // request, so memory never accumulates). Timing is unaffected
-            // (residue is unreachable; boot_ms and run means stay flat).
+            // No 'memory' chart here, for two reasons that outlive the
+            // original one:
+            //
+            //  1. The historical justification ("cold peak_mem is a boot
+            //     ratchet") described the IN-PROCESS cold loop, which re-boots
+            //     the framework 50x30 times in one process and ratchets ~0.3 MB
+            //     per boot. Fork-per-iteration (7bf5189) removed that ratchet
+            //     an hour after this chart was dropped (384f236) — and a later
+            //     fix (77ae7a5) had to make the forked child actually REPORT
+            //     its peak, which it had never done. So for a while cold
+            //     peak_mem was neither a ratchet nor a measurement: it was the
+            //     PARENT's priming-boot high-water mark, identical on every
+            //     endpoint. Now it is real, but it is still a 2 MiB-quantised
+            //     allocator mark whose meaningful content is "one boot + one
+            //     request", which the startup chart already states directly in
+            //     milliseconds.
+            //
+            //  2. This deployment model recycles the worker after every
+            //     request, so there is no resident state to report. Resident
+            //     memory — the question a memory chart answers — belongs to
+            //     the roadrunner views.
+            //
+            // Timing is unaffected by any of this (residue is unreachable;
+            // boot_ms and run means stay flat).
             'charts'     => ['hero', 'speedup', 'features', 'wins'],
             'publish'    => ['framework'],
             'publish_md' => '19-BENCHMARKS-FPM.md',
