@@ -11,7 +11,7 @@ _Measured 2026-09-14T21:26:25+00:00 · azera-framework `6f57113`_
 Three boot models, timed directly by the harness — each band shows boot + median teardown, because during both the worker cannot serve another request:
 
 - **Cold boot** — the very first bootstrap in a fresh PHP process (autoloader + compile + FS cache): what a CLI run, CGI request, or newly spawned worker pays once. **Azera** pays 6.78 ms against 155 ms for Laravel — x 22.8 slower.
-- **FPM rebuild** — a recycled PHP-FPM worker never pays the first band: sharing opcache bytecode with the master, it only rebuilds the application (container, routes, DB connect) — 0.045 ms for CodeIgniter at the low end, 17.5 ms for Spiral at the high end. The gap between the cold and FPM bands is the one-time compile cost shared bytecode removes.
+- **FPM rebuild** — a recycled PHP-FPM worker never pays the first band: sharing opcache bytecode with the master, it only rebuilds the application (container, routes, DB connect) — 0.046 ms for CodeIgniter at the low end, 17.5 ms for Spiral at the high end. The gap between the cold and FPM bands is the one-time compile cost shared bytecode removes.
 - **Warm recycle** — worker restart with opcache warm: 0.004 ms for Azera at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild.
 
  The teardown share of a full request ranges from 0% (Laravel) up to 3% (Spiral).
