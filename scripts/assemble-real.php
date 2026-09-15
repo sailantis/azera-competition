@@ -100,8 +100,6 @@ foreach ($args as $path) {
         'source_file' => basename($path),
     ];
 }
-
-// Canonical order (matches the report's BenchmarkConfig order); unknown apps last.
 $order = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'];
 $keys  = array_keys($apps);
 usort($keys, static function (string $a, string $b) use ($order): int {
@@ -134,9 +132,71 @@ if ($stamps !== []) {
     }
 }
 
+// --- Budget: both deployment models must share one sample -------------------
+// roadrunner and php-fpm are two ways of running the SAME request; comparing
+// them is only meaningful when both were measured with the same sample. The
+// historical dataset broke this (RR 1000x10 vs FPM 300x5) and every caption
+// had to branch around the mismatch. Refuse to assemble a mixed-budget
+// dataset, so the asymmetry cannot come back through a single-app refresh.
+//
+// http-bench.php records the budget at mode level AND on every row; the mode
+// value is read first and the first row is the fallback for datasets written
+// before the mode-level fields existed.
+$budgets = [];
+$budgetOf = static function (array $mode): ?array {
+    $iters = (int) ($mode['iterations_per_run'] ?? 0);
+    $runs  = (int) ($mode['runs'] ?? 0);
+    if ($iters === 0) {
+        $row = $mode['requests'][0] ?? null;
+        if (!is_array($row)) {
+            return null;
+        }
+        $iters = (int) ($row['iterations_per_run'] ?? 0);
+        $runs  = (int) ($row['runs'] ?? 0);
+    }
+
+    return $iters === 0 ? null : ['iters' => $iters, 'runs' => $runs];
+};
+
+foreach ($combined['apps'] as $app) {
+    foreach ($app['modes'] as $mode => $m) {
+        $b = $budgetOf($m);
+        if ($b !== null) {
+            $budgets["{$app['app']}/{$mode}"] = $b;
+        }
+    }
+}
+
+// The floor probes were measured by the same orchestrator invocation, so they
+// must agree with the modes they were measured alongside.
+foreach ($combined['floors'] ?? [] as $floor) {
+    foreach ($floor['modes'] ?? [] as $mode => $m) {
+        $b = $budgetOf($m);
+        if ($b !== null) {
+            $budgets["{$floor['app']}/{$mode}"] = $b;
+        }
+    }
+}
+
+$distinct = array_values(array_unique(array_map(
+    static fn(array $b): string => "{$b['iters']}x{$b['runs']}",
+    $budgets
+)));
+if (count($distinct) > 1) {
+    fwrite(STDERR, "Budget mismatch — every mode must share one iterations/runs sample:\n");
+    foreach ($budgets as $label => $b) {
+        fwrite(STDERR, sprintf("    %-24s %dx%d\n", $label, $b['iters'], $b['runs']));
+    }
+    fwrite(STDERR, "Re-measure the odd rows with the same budget (http-bench.php --iterations-per-run/--runs).\n");
+    exit(1);
+}
+
+$combined['env']['budget'] = $distinct[0] ?? null;
+
 file_put_contents($outPath, json_encode($combined, JSON_PRETTY_PRINT) . "\n");
 
 echo "Wrote {$outPath}\n";
+echo '  budget: ', ($combined['env']['budget'] ?? '?'), "\n";
 echo '  apps: ', implode(', ', $keys), "\n";
 foreach ($combined['env']['app_refresh'] as $k => $p) {
     printf("    %-12s %s\n", $k, $p['timestamp'] ?? '?');

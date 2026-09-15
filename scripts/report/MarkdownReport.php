@@ -112,17 +112,16 @@ final class MarkdownReport
     private function envBlock(string $mode): string
     {
         $env = $this->store->env();
-        // The measured rows record their budget (http-bench.php writes
-        // iterations_per_run), and a dataset may mix budgets per mode (the
-        // real-deployments RR refresh is 1000x10 while the FPM block is
-        // 300x5). Each view prints one mode, so prefer that mode's number;
-        // fall back to the global figure (or to a budget-free wording) rather
-        // than inventing a count for rows that disagree.
-        $iters = $this->store->iterationsPerRunFor($mode)
-            ?? $this->store->iterationsPerRun();
-        $budget = $iters !== null
-            ? "{$iters} iterations per run over multiple runs"
-            : 'multiple runs';
+        // The measured rows record their own budget (http-bench.php writes
+        // iterations_per_run/runs), so every caption states what the rows
+        // behind THIS chart actually used — a constant is the one value that
+        // can contradict a re-run with a different budget. Both servers are
+        // measured at the same sample; assemble-real.php and merge-app.php
+        // both refuse a dataset where they disagree, so a mode-specific
+        // mismatch should no longer be reachable.
+        $budget = $this->store->budgetLabelFor($mode)
+            ?? $this->store->budgetLabel()
+            ?? 'multiple runs';
 
         return sprintf(
             "**Environment** — PHP %s · %s · OPcache (CLI): %s · %s, lower is better.\n\n_Measured %s%s_",

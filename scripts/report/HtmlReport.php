@@ -79,6 +79,13 @@ HTML;
         $baseline = (string) ($view['baseline'] ?? ($apps[0] ?? ''));
         $mode     = (string) ($view['mode'] ?? 'warm');
         $env      = $this->store->env();
+        // State the budget the rows behind THIS page actually used, read from
+        // the dataset (the mode's own stamp when the modes differ). Both
+        // deployment models are meant to share one budget; a hardcoded figure
+        // is the one thing that can contradict a re-run.
+        $budget   = $this->store->budgetLabelFor($mode)
+            ?? $this->store->budgetLabel()
+            ?? 'multiple runs';
         // Same flag guard as MarkdownReport: only claim boot inclusion when
         // the dataset was recorded with boot inside the request clock.
         $subtitle = (string) ($view['subtitle'] ?? '');
@@ -145,7 +152,7 @@ HTML;
 <header>
   <h1>{$this->esc($title)}</h1>
   <p class="lead">{$this->esc((string)($view['subtitle'] ?? ''))}</p>
-  <p class="env">PHP {$env['php_version']} &middot; {$env['os']} &middot; {$mode} mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">PHP {$env['php_version']} &middot; {$env['os']} &middot; {$mode} mode &middot; {$budget} &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
 </header>
 <main>
   <section class="figures">

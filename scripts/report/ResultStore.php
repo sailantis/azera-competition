@@ -187,41 +187,69 @@ final class ResultStore
      */
     public function iterationsPerRun(): ?int
     {
+        return $this->intFieldWhenUniform(null, 'iterations_per_run');
+    }
+
+    /**
+     * The budget caption for the whole dataset — "1000 iterations per run over
+     * 10 runs", or null when the dataset does not say.
+     */
+    public function budgetLabel(): ?string
+    {
+        return $this->budgetLabelFor(null);
+    }
+
+    /**
+     * The budget caption for ONE view, or null when the dataset does not say.
+     *
+     * A view prints one mode, so a dataset-wide figure could silently describe
+     * the OTHER mode's sample. `env.budget` is stamped by the orchestrator only
+     * when both servers shared one sample (assemble-real.php refuses to build a
+     * dataset where they disagree), so it is authoritative when present. Older
+     * datasets predate it and fall back to the mode's own rows, then to the
+     * dataset-wide rows — and to a budget-free wording when the rows disagree.
+     */
+    public function budgetLabelFor(?string $mode): ?string
+    {
+        $stamped = $this->env['budget'] ?? null;
+        if (is_string($stamped) && preg_match('/^(\d+)x(\d+)$/', $stamped, $m) === 1) {
+            return "{$m[1]} iterations per run over {$m[2]} runs";
+        }
+
+        $iters = $this->intFieldWhenUniform($mode, 'iterations_per_run');
+        if ($iters === null) {
+            return null;
+        }
+        $runs = $this->intFieldWhenUniform($mode, 'runs');
+
+        return $runs === null
+            ? "{$iters} iterations per run over multiple runs"
+            : "{$iters} iterations per run over {$runs} runs";
+    }
+
+    /**
+     * The single value a recorded integer field takes across the selected
+     * rows, or null when the rows disagree, predate the field, or (for a
+     * dataset-wide query) the modes disagree with each other.
+     *
+     * @param string|null $mode null = every mode, but only when they all agree
+     */
+    private function intFieldWhenUniform(?string $mode, string $field): ?int
+    {
         $seen = [];
-        foreach ($this->data as $modes) {
+        foreach ($this->data as $appModes) {
+            // null = every mode; a named mode = only that mode's rows.
+            $modes = $mode === null ? $appModes : [$mode => ($appModes[$mode] ?? [])];
             foreach ($modes as $rows) {
                 foreach ($rows as $row) {
-                    $n = (int) ($row['iterations_per_run'] ?? 0);
+                    $n = (int) ($row[$field] ?? 0);
                     if ($n > 0) {
                         $seen[$n] = true;
                     }
                 }
             }
         }
-        return count($seen) === 1 ? (int) array_key_first($seen) : null;
-    }
 
-    /**
-     * Iterations per run for ONE mode, when every row of that mode agrees.
-     *
-     * A dataset can mix budgets per mode: results/real-deployments.json was
-     * rebuilt with a fresh RoadRunner block (1000x10) while the PHP-FPM block
-     * — valid, expensive to re-measure (~5.3 min/app) — stayed on 300x5. Each
-     * real view prints ONE mode, so the mode-aware number is the honest one;
-     * iterationsPerRun() alone would return null for the mixed dataset and
-     * both views would fall back to a budget-free (or wrong) wording.
-     */
-    public function iterationsPerRunFor(string $mode): ?int
-    {
-        $seen = [];
-        foreach ($this->data as $modes) {
-            foreach (($modes[$mode] ?? []) as $row) {
-                $n = (int) ($row['iterations_per_run'] ?? 0);
-                if ($n > 0) {
-                    $seen[$n] = true;
-                }
-            }
-        }
         return count($seen) === 1 ? (int) array_key_first($seen) : null;
     }
 

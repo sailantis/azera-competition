@@ -68,6 +68,15 @@ if ($quick) {
     $runs        = min($runs, 3);
 }
 
+// ONE budget for every server. RoadRunner and FPM are two ways of running the
+// same request, so the only meaningful comparison measures both with the same
+// sample; an asymmetry (the historical RR 1000x10 vs FPM 300x5) makes every
+// cross-model caption branch on the mismatch and leaves the reader comparing
+// rows with different confidence. There is deliberately no per-server
+// override: a budget knob that only one server honours is the bug, not the
+// feature. assemble-real.php re-checks this across per-app invocations.
+$budget = "{$itersPerRun}x{$runs}";
+
 require_once __DIR__ . '/deploy-lib.php';
 
 $root = dirname(__DIR__);
@@ -77,6 +86,7 @@ echo "Root: {$root}\n";
 echo "Apps: " . implode(', ', $apps) . "\n";
 echo "Servers: " . implode(', ', array_keys(array_filter(['rr' => $useRr, 'fpm' => $useFpm]))) . "\n";
 echo "Iterations/run: {$itersPerRun}, Runs: {$runs}\n";
+echo "Budget (all servers): {$budget}\n";
 echo "Bench user (FPM pool owner): {$benchUser}\n\n";
 
 // Mode name per server — must match the report views' mode filters.
@@ -94,6 +104,10 @@ $results = [
         // The FPM deployment model as actually configured. The report reads
         // this to describe what it measured instead of assuming a value.
         'fpm_max_requests' => fpmMaxRequestsFromTemplate($root),
+        // The sample BOTH servers were measured with ("1000x10"). Stamped so
+        // the report can state the budget from the dataset rather than from a
+        // constant, and so a mixed-budget dataset is detectable.
+        'budget'           => $budget,
         'servers'          => [
             'roadrunner' => trim((string) shellProcessOutput("{$rrBinary} --version")),
             'nginx'      => trim((string) shellProcessOutput('nginx -v 2>&1')),
