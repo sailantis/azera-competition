@@ -16,147 +16,147 @@
 <text x="864" y="658" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">2 ms</text>
 <line x1="218" y1="108" x2="218" y2="636" stroke="#cbd5e1" stroke-width="1"/>
 <text x="218" y="122" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="start">GET /items-qb</text>
-<rect x="218" y="134" width="137.91" height="14" fill="#3459e6" fill-opacity="0.12"/>
-<line x1="310.67" y1="141" x2="401.26" y2="141" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="310.67" y1="134" x2="310.67" y2="148" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="401.26" y1="134" x2="401.26" y2="148" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="355.91" cy="141" r="5.6" fill="#3459e6" stroke="#ffffff" stroke-width="2"/>
+<rect x="218" y="134" width="133.34" height="14" fill="#3459e6" fill-opacity="0.12"/>
+<line x1="311.77" y1="141" x2="402.71" y2="141" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="311.77" y1="134" x2="311.77" y2="148" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="402.71" y1="134" x2="402.71" y2="148" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="351.34" cy="141" r="5.6" fill="#3459e6" stroke="#ffffff" stroke-width="2"/>
 <text x="112" y="145.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#3459e6" text-anchor="end">Azera</text>
-<text x="206" y="145.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.427 ms</text>
-<rect x="218" y="160" width="203.38" height="14" fill="#7048e8" fill-opacity="0.12"/>
-<line x1="363.8" y1="167" x2="473.67" y2="167" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="363.8" y1="160" x2="363.8" y2="174" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="473.67" y1="160" x2="473.67" y2="174" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="421.38" cy="167" r="5.6" fill="#7048e8" stroke="#ffffff" stroke-width="2"/>
-<text x="482.67" y="171.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.5</text>
+<text x="206" y="145.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.413 ms</text>
+<rect x="218" y="160" width="207.88" height="14" fill="#7048e8" fill-opacity="0.12"/>
+<line x1="365.7" y1="167" x2="481.63" y2="167" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="365.7" y1="160" x2="365.7" y2="174" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="481.63" y1="160" x2="481.63" y2="174" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="425.88" cy="167" r="5.6" fill="#7048e8" stroke="#ffffff" stroke-width="2"/>
+<text x="490.63" y="171.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.6</text>
 <text x="112" y="171.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#7048e8" text-anchor="end">Symfony</text>
-<text x="206" y="171.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.630 ms</text>
-<rect x="218" y="186" width="231.58" height="14" fill="#d6409f" fill-opacity="0.12"/>
-<line x1="388.43" y1="193" x2="509.24" y2="193" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="388.43" y1="186" x2="388.43" y2="200" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="509.24" y1="186" x2="509.24" y2="200" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="449.58" cy="193" r="5.6" fill="#d6409f" stroke="#ffffff" stroke-width="2"/>
-<text x="518.24" y="197.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.7</text>
+<text x="206" y="171.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.644 ms</text>
+<rect x="218" y="186" width="231.75" height="14" fill="#d6409f" fill-opacity="0.12"/>
+<line x1="389.23" y1="193" x2="516.17" y2="193" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="389.23" y1="186" x2="389.23" y2="200" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="516.17" y1="186" x2="516.17" y2="200" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="449.75" cy="193" r="5.6" fill="#d6409f" stroke="#ffffff" stroke-width="2"/>
+<text x="525.17" y="197.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.7</text>
 <text x="112" y="197.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#d6409f" text-anchor="end">CakePHP</text>
 <text x="206" y="197.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.717 ms</text>
-<rect x="218" y="212" width="250.81" height="14" fill="#0ca678" fill-opacity="0.12"/>
-<line x1="407.52" y1="219" x2="531.72" y2="219" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="407.52" y1="212" x2="407.52" y2="226" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="531.72" y1="212" x2="531.72" y2="226" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="468.81" cy="219" r="5.6" fill="#0ca678" stroke="#ffffff" stroke-width="2"/>
-<text x="540.72" y="223.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.8</text>
+<rect x="218" y="212" width="252.85" height="14" fill="#0ca678" fill-opacity="0.12"/>
+<line x1="408.75" y1="219" x2="535.45" y2="219" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="408.75" y1="212" x2="408.75" y2="226" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="535.45" y1="212" x2="535.45" y2="226" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="470.85" cy="219" r="5.6" fill="#0ca678" stroke="#ffffff" stroke-width="2"/>
+<text x="544.45" y="223.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.9</text>
 <text x="112" y="223.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0ca678" text-anchor="end">Spiral</text>
-<text x="206" y="223.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.776 ms</text>
-<rect x="218" y="238" width="286.68" height="14" fill="#e5484d" fill-opacity="0.12"/>
-<line x1="439.71" y1="245" x2="568.55" y2="245" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="439.71" y1="238" x2="439.71" y2="252" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="568.55" y1="238" x2="568.55" y2="252" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="504.68" cy="245" r="5.6" fill="#e5484d" stroke="#ffffff" stroke-width="2"/>
-<text x="577.55" y="249.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.1</text>
+<text x="206" y="223.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.783 ms</text>
+<rect x="218" y="238" width="290.22" height="14" fill="#e5484d" fill-opacity="0.12"/>
+<line x1="442.08" y1="245" x2="575.16" y2="245" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="442.08" y1="238" x2="442.08" y2="252" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="575.16" y1="238" x2="575.16" y2="252" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="508.22" cy="245" r="5.6" fill="#e5484d" stroke="#ffffff" stroke-width="2"/>
+<text x="584.16" y="249.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.2</text>
 <text x="112" y="249.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#e5484d" text-anchor="end">Laravel</text>
-<text x="206" y="249.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.888 ms</text>
-<rect x="218" y="264" width="387.5" height="14" fill="#e8590c" fill-opacity="0.12"/>
-<line x1="538.2" y1="271" x2="693.32" y2="271" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="538.2" y1="264" x2="538.2" y2="278" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="693.32" y1="264" x2="693.32" y2="278" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="605.5" cy="271" r="5.6" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
-<text x="702.32" y="275.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.8</text>
+<text x="206" y="249.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.899 ms</text>
+<rect x="218" y="264" width="385.29" height="14" fill="#e8590c" fill-opacity="0.12"/>
+<line x1="541.63" y1="271" x2="673.47" y2="271" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="541.63" y1="264" x2="541.63" y2="278" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="673.47" y1="264" x2="673.47" y2="278" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="603.29" cy="271" r="5.6" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<text x="682.47" y="275.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.9</text>
 <text x="112" y="275.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#e8590c" text-anchor="end">CodeIgniter</text>
-<text x="206" y="275.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">1.20 ms</text>
+<text x="206" y="275.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">1.19 ms</text>
 <text x="218" y="298" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="start">GET /items-qb/1</text>
-<rect x="218" y="310" width="112.01" height="14" fill="#3459e6" fill-opacity="0.12"/>
-<line x1="290.63" y1="317" x2="372.52" y2="317" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="290.63" y1="310" x2="290.63" y2="324" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="372.52" y1="310" x2="372.52" y2="324" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="330.01" cy="317" r="5.6" fill="#3459e6" stroke="#ffffff" stroke-width="2"/>
+<rect x="218" y="310" width="110.92" height="14" fill="#3459e6" fill-opacity="0.12"/>
+<line x1="290.13" y1="317" x2="376.41" y2="317" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="290.13" y1="310" x2="290.13" y2="324" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="376.41" y1="310" x2="376.41" y2="324" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="328.92" cy="317" r="5.6" fill="#3459e6" stroke="#ffffff" stroke-width="2"/>
 <text x="112" y="321.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#3459e6" text-anchor="end">Azera</text>
-<text x="206" y="321.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.347 ms</text>
-<rect x="218" y="336" width="163.37" height="14" fill="#7048e8" fill-opacity="0.12"/>
-<line x1="325.81" y1="343" x2="430.27" y2="343" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="325.81" y1="336" x2="325.81" y2="350" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="430.27" y1="336" x2="430.27" y2="350" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="381.37" cy="343" r="5.6" fill="#7048e8" stroke="#ffffff" stroke-width="2"/>
-<text x="439.27" y="347.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.5</text>
+<text x="206" y="321.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.343 ms</text>
+<rect x="218" y="336" width="165.05" height="14" fill="#7048e8" fill-opacity="0.12"/>
+<line x1="323.43" y1="343" x2="430.67" y2="343" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="323.43" y1="336" x2="323.43" y2="350" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="430.67" y1="336" x2="430.67" y2="350" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="383.05" cy="343" r="5.6" fill="#7048e8" stroke="#ffffff" stroke-width="2"/>
+<text x="439.67" y="347.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.5</text>
 <text x="112" y="347.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#7048e8" text-anchor="end">Symfony</text>
-<text x="206" y="347.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.506 ms</text>
-<rect x="218" y="362" width="207.03" height="14" fill="#d6409f" fill-opacity="0.12"/>
-<line x1="362.99" y1="369" x2="476.86" y2="369" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="362.99" y1="362" x2="362.99" y2="376" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="476.86" y1="362" x2="476.86" y2="376" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="425.03" cy="369" r="5.6" fill="#d6409f" stroke="#ffffff" stroke-width="2"/>
-<text x="485.86" y="373.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.8</text>
+<text x="206" y="347.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.511 ms</text>
+<rect x="218" y="362" width="208.26" height="14" fill="#d6409f" fill-opacity="0.12"/>
+<line x1="367.09" y1="369" x2="484.13" y2="369" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="367.09" y1="362" x2="367.09" y2="376" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="484.13" y1="362" x2="484.13" y2="376" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="426.26" cy="369" r="5.6" fill="#d6409f" stroke="#ffffff" stroke-width="2"/>
+<text x="493.13" y="373.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.9</text>
 <text x="112" y="373.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#d6409f" text-anchor="end">CakePHP</text>
-<text x="206" y="373.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.641 ms</text>
-<rect x="218" y="388" width="232.49" height="14" fill="#0ca678" fill-opacity="0.12"/>
-<line x1="390.68" y1="395" x2="515.42" y2="395" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="390.68" y1="388" x2="390.68" y2="402" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="515.42" y1="388" x2="515.42" y2="402" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="450.49" cy="395" r="5.6" fill="#0ca678" stroke="#ffffff" stroke-width="2"/>
-<text x="524.42" y="399.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.1</text>
+<text x="206" y="373.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.645 ms</text>
+<rect x="218" y="388" width="232.27" height="14" fill="#0ca678" fill-opacity="0.12"/>
+<line x1="384.49" y1="395" x2="516.89" y2="395" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="384.49" y1="388" x2="384.49" y2="402" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="516.89" y1="388" x2="516.89" y2="402" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="450.27" cy="395" r="5.6" fill="#0ca678" stroke="#ffffff" stroke-width="2"/>
+<text x="525.89" y="399.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.1</text>
 <text x="112" y="399.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0ca678" text-anchor="end">Spiral</text>
-<text x="206" y="399.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.720 ms</text>
-<rect x="218" y="414" width="238.45" height="14" fill="#e5484d" fill-opacity="0.12"/>
-<line x1="392.87" y1="421" x2="513.43" y2="421" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="392.87" y1="414" x2="392.87" y2="428" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="513.43" y1="414" x2="513.43" y2="428" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="456.45" cy="421" r="5.6" fill="#e5484d" stroke="#ffffff" stroke-width="2"/>
-<text x="522.43" y="425.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.1</text>
+<text x="206" y="399.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.719 ms</text>
+<rect x="218" y="414" width="243.42" height="14" fill="#e5484d" fill-opacity="0.12"/>
+<line x1="394.99" y1="421" x2="517.91" y2="421" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="394.99" y1="414" x2="394.99" y2="428" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="517.91" y1="414" x2="517.91" y2="428" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="461.42" cy="421" r="5.6" fill="#e5484d" stroke="#ffffff" stroke-width="2"/>
+<text x="526.91" y="425.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.2</text>
 <text x="112" y="425.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#e5484d" text-anchor="end">Laravel</text>
-<text x="206" y="425.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.738 ms</text>
-<rect x="218" y="440" width="357.19" height="14" fill="#e8590c" fill-opacity="0.12"/>
-<line x1="505.26" y1="447" x2="644.68" y2="447" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="505.26" y1="440" x2="505.26" y2="454" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="644.68" y1="440" x2="644.68" y2="454" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="575.19" cy="447" r="5.6" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
-<text x="653.68" y="451.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 3.2</text>
+<text x="206" y="425.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.754 ms</text>
+<rect x="218" y="440" width="350" height="14" fill="#e8590c" fill-opacity="0.12"/>
+<line x1="504.61" y1="447" x2="653.79" y2="447" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="504.61" y1="440" x2="504.61" y2="454" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="653.79" y1="440" x2="653.79" y2="454" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="568" cy="447" r="5.6" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<text x="662.79" y="451.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 3.2</text>
 <text x="112" y="451.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#e8590c" text-anchor="end">CodeIgniter</text>
-<text x="206" y="451.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">1.11 ms</text>
+<text x="206" y="451.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">1.08 ms</text>
 <text x="218" y="474" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="start">POST /items-qb</text>
-<rect x="218" y="486" width="129.71" height="14" fill="#3459e6" fill-opacity="0.12"/>
-<line x1="304.67" y1="493" x2="394.45" y2="493" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="304.67" y1="486" x2="304.67" y2="500" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="394.45" y1="486" x2="394.45" y2="500" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="347.71" cy="493" r="5.6" fill="#3459e6" stroke="#ffffff" stroke-width="2"/>
+<rect x="218" y="486" width="115.12" height="14" fill="#3459e6" fill-opacity="0.12"/>
+<line x1="302.17" y1="493" x2="385.08" y2="493" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="302.17" y1="486" x2="302.17" y2="500" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="385.08" y1="486" x2="385.08" y2="500" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="333.12" cy="493" r="5.6" fill="#3459e6" stroke="#ffffff" stroke-width="2"/>
 <text x="112" y="497.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#3459e6" text-anchor="end">Azera</text>
-<text x="206" y="497.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.402 ms</text>
-<rect x="218" y="512" width="212.27" height="14" fill="#7048e8" fill-opacity="0.12"/>
-<line x1="374.86" y1="519" x2="483.03" y2="519" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="374.86" y1="512" x2="374.86" y2="526" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="483.03" y1="512" x2="483.03" y2="526" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="430.27" cy="519" r="5.6" fill="#7048e8" stroke="#ffffff" stroke-width="2"/>
-<text x="492.03" y="523.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.6</text>
+<text x="206" y="497.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.356 ms</text>
+<rect x="218" y="512" width="217.3" height="14" fill="#7048e8" fill-opacity="0.12"/>
+<line x1="371.38" y1="519" x2="488.12" y2="519" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="371.38" y1="512" x2="371.38" y2="526" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="488.12" y1="512" x2="488.12" y2="526" stroke="#7048e8" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="435.3" cy="519" r="5.6" fill="#7048e8" stroke="#ffffff" stroke-width="2"/>
+<text x="497.12" y="523.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.9</text>
 <text x="112" y="523.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#7048e8" text-anchor="end">Symfony</text>
-<text x="206" y="523.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.657 ms</text>
-<rect x="218" y="538" width="236.48" height="14" fill="#d6409f" fill-opacity="0.12"/>
-<line x1="390.64" y1="545" x2="508.64" y2="545" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="390.64" y1="538" x2="390.64" y2="552" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="508.64" y1="538" x2="508.64" y2="552" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="454.48" cy="545" r="5.6" fill="#d6409f" stroke="#ffffff" stroke-width="2"/>
-<text x="517.64" y="549.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.8</text>
+<text x="206" y="523.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.673 ms</text>
+<rect x="218" y="538" width="238.73" height="14" fill="#d6409f" fill-opacity="0.12"/>
+<line x1="389.74" y1="545" x2="514.56" y2="545" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="389.74" y1="538" x2="389.74" y2="552" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="514.56" y1="538" x2="514.56" y2="552" stroke="#d6409f" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="456.73" cy="545" r="5.6" fill="#d6409f" stroke="#ffffff" stroke-width="2"/>
+<text x="523.56" y="549.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.1</text>
 <text x="112" y="549.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#d6409f" text-anchor="end">CakePHP</text>
-<text x="206" y="549.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.732 ms</text>
-<rect x="218" y="564" width="248.73" height="14" fill="#0ca678" fill-opacity="0.12"/>
-<line x1="400.93" y1="571" x2="528.22" y2="571" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="400.93" y1="564" x2="400.93" y2="578" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="528.22" y1="564" x2="528.22" y2="578" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="466.73" cy="571" r="5.6" fill="#0ca678" stroke="#ffffff" stroke-width="2"/>
-<text x="537.22" y="575.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 1.9</text>
+<text x="206" y="549.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.739 ms</text>
+<rect x="218" y="564" width="251.37" height="14" fill="#0ca678" fill-opacity="0.12"/>
+<line x1="401.97" y1="571" x2="534.1" y2="571" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="401.97" y1="564" x2="401.97" y2="578" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="534.1" y1="564" x2="534.1" y2="578" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="469.37" cy="571" r="5.6" fill="#0ca678" stroke="#ffffff" stroke-width="2"/>
+<text x="543.1" y="575.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.2</text>
 <text x="112" y="575.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0ca678" text-anchor="end">Spiral</text>
-<text x="206" y="575.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.770 ms</text>
-<rect x="218" y="590" width="270.94" height="14" fill="#e5484d" fill-opacity="0.12"/>
-<line x1="425.13" y1="597" x2="548.55" y2="597" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="425.13" y1="590" x2="425.13" y2="604" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="548.55" y1="590" x2="548.55" y2="604" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="488.94" cy="597" r="5.6" fill="#e5484d" stroke="#ffffff" stroke-width="2"/>
-<text x="557.55" y="601.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.1</text>
+<text x="206" y="575.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.778 ms</text>
+<rect x="218" y="590" width="275.55" height="14" fill="#e5484d" fill-opacity="0.12"/>
+<line x1="420.19" y1="597" x2="550.79" y2="597" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="420.19" y1="590" x2="420.19" y2="604" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="550.79" y1="590" x2="550.79" y2="604" stroke="#e5484d" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="493.55" cy="597" r="5.6" fill="#e5484d" stroke="#ffffff" stroke-width="2"/>
+<text x="559.79" y="601.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 2.4</text>
 <text x="112" y="601.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#e5484d" text-anchor="end">Laravel</text>
-<text x="206" y="601.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.839 ms</text>
-<rect x="218" y="616" width="418.81" height="14" fill="#e8590c" fill-opacity="0.12"/>
-<line x1="574.57" y1="623" x2="729.45" y2="623" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-<line x1="574.57" y1="616" x2="574.57" y2="630" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
-<line x1="729.45" y1="616" x2="729.45" y2="630" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
-<circle cx="636.81" cy="623" r="5.6" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
-<text x="738.45" y="627.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 3.2</text>
+<text x="206" y="601.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.853 ms</text>
+<rect x="218" y="616" width="413.97" height="14" fill="#e8590c" fill-opacity="0.12"/>
+<line x1="575.17" y1="623" x2="712.09" y2="623" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="575.17" y1="616" x2="575.17" y2="630" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="712.09" y1="616" x2="712.09" y2="630" stroke="#e8590c" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="631.97" cy="623" r="5.6" fill="#e8590c" stroke="#ffffff" stroke-width="2"/>
+<text x="721.09" y="627.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 3.6</text>
 <text x="112" y="627.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#e8590c" text-anchor="end">CodeIgniter</text>
-<text x="206" y="627.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">1.30 ms</text>
+<text x="206" y="627.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">1.28 ms</text>
 </svg>

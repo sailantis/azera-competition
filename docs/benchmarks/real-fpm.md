@@ -4,7 +4,7 @@ Real nginx + PHP-FPM, worker recycled after every request (pm.max_requests=1): a
 
 **Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): no · 300 iterations per run over multiple runs, lower is better.
 
-_Measured 2026-09-14T14:59:24+00:00_
+_Measured 2026-09-14T21:22:18+00:00_
 
 ## Framework startup
 
