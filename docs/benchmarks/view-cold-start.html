@@ -51,7 +51,7 @@ main{padding-bottom:10px}
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
   <h1>Framework Competition — Cold Start</h1>
-  <p class="lead">PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.</p>
+  <p class="lead">PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM&#039;s own worker management is not simulated — real FPM keeps its worker alive and adds nginx + FastCGI overhead on top of this boot, so these are lower bounds for real FPM latency (see the real-fpm view for the measured version).</p>
   <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; php-fpm mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
 </header>
 <main>

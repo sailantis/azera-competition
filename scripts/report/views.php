@@ -41,7 +41,7 @@ return [
 
         // REAL deployment measurements (scripts/run-http.php on the benchmark
         // VM): RoadRunner resident worker (mode roadrunner) and nginx +
-        // php-fpm with pm.max_requests=1 (mode php-fpm) — the real servers,
+        // php-fpm with pm.max_requests=0 (mode php-fpm) — the real servers,
         // not the harness simulation. End-to-end HTTP over loopback, so the
         // constant webserver overhead is INCLUDED in every number; the
         // floor-* pseudo-apps in the dataset expose that overhead explicitly.
@@ -83,7 +83,7 @@ return [
         // deployment; the two views never blend modes.
         'cold-start' => [
             'title'     => 'Framework Competition — Cold Start',
-            'subtitle'  => 'PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM worker management itself is not simulated — these are lower bounds for real FPM latency.',
+            'subtitle'  => 'PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM\'s own worker management is not simulated — real FPM keeps its worker alive and adds nginx + FastCGI overhead on top of this boot, so these are lower bounds for real FPM latency (see the real-fpm view for the measured version).',
             'dataset'   => 'deployments',
             'baseline'  => 'azera',
             'mode'      => 'php-fpm',
@@ -106,10 +106,11 @@ return [
             //     request", which the startup chart already states directly in
             //     milliseconds.
             //
-            //  2. This deployment model recycles the worker after every
-            //     request, so there is no resident state to report. Resident
-            //     memory — the question a memory chart answers — belongs to
-            //     the roadrunner views.
+            //  2. This deployment model has no resident state to report: the
+            //     in-process cold mode forks a child per iteration, and real
+            //     FPM (pm.max_requests=0) runs the entry script per request.
+            //     Resident memory — the question a memory chart answers —
+            //     belongs to the roadrunner views.
             //
             // Timing is unaffected by any of this (residue is unreachable;
             // boot_ms and run means stay flat).
@@ -123,13 +124,13 @@ return [
         // webserver/IPC overhead — sub-0.1 ms framework features are expected
         // to disappear into that floor; heavy features stay meaningful.
         'real-roadrunner' => [
-            'title'      => 'Framework Competition — Real RoadRunner',
-            'subtitle'   => 'Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.',
-            'dataset'    => 'real-deployments',
-            'baseline'   => 'azera',
-            'mode'       => 'roadrunner',
-            'log_scale'  => false,
-            'apps'       => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'title'     => 'Framework Competition — Real RoadRunner',
+            'subtitle'  => 'Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.',
+            'dataset'   => 'real-deployments',
+            'baseline'  => 'azera',
+            'mode'      => 'roadrunner',
+            'log_scale' => false,
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
             // 'resident-memory' rather than 'memory': these rows DO carry the
             // probe (mem_boot_heap/mem_heap), and a resident worker's retained
             // heap is the memory question this deployment model actually
@@ -140,13 +141,16 @@ return [
             'publish_md' => '19-BENCHMARKS-REAL.md',
         ],
 
-        // REAL PHP-FPM + nginx: the pool recycles the worker after every
-        // request (pm.max_requests=1) — a real fresh boot per request with
-        // opcache retained. The honest real-world counterpart of the
-        // simulated cold-start view.
+        // REAL PHP-FPM + nginx: FPM runs the app's entry script for every
+        // request, so the framework's boot stays inside the request clock —
+        // the honest real-world counterpart of the simulated cold-start view.
+        // Whether the pool also tears down its worker per request is a pool
+        // setting, not a property of FPM, so the subtitle deliberately does
+        // not assert it: floorNote() reads `env.fpm_max_requests` and states
+        // the model that was actually measured.
         'real-fpm' => [
             'title'      => 'Framework Competition — Real PHP-FPM',
-            'subtitle'   => 'Real nginx + PHP-FPM, worker recycled after every request (pm.max_requests=1): a genuine fresh boot per request with opcache retained. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.',
+            'subtitle'   => 'Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool\'s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.',
             'dataset'    => 'real-deployments',
             'baseline'   => 'azera',
             'mode'       => 'php-fpm',

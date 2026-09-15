@@ -51,7 +51,7 @@ main{padding-bottom:10px}
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
   <h1>Framework Competition — Real PHP-FPM</h1>
-  <p class="lead">Real nginx + PHP-FPM, worker recycled after every request (pm.max_requests=1): a genuine fresh boot per request with opcache retained. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.</p>
+  <p class="lead">Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool&#039;s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.</p>
   <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; php-fpm mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
 </header>
 <main>
@@ -155,7 +155,7 @@ main{padding-bottom:10px}
 <tr><td><code>GET /features/rate-limit</code></td><td class="muted">no DB — cache-backed limiter</td><td class="">10.1</td><td class="">10.0</td><td class="win">10.0</td><td class="">10.1</td><td class="">10.0</td><td class="">10.5</td></tr>
 </tbody>
 </table>
-  <p class="floor"><strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests=1</code>: the pool spawns a fresh worker for every request, and a hello-world endpoint that boots nothing but PHP costs <strong>9.23&nbsp;ms</strong> (<code>floor-php</code>; a static file through nginx, <code>floor-http</code>, is 0.073&nbsp;ms). That worker spawn + FastCGI handshake is the floor every row stands on — subtract it and the remainder is the framework's own per-request boot.</p>
+  <p class="floor"><strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests=?</code>: this dataset does not record whether the pool recycled its worker, so the per-request process-spawn share of this floor is unknown. A hello-world endpoint that boots nothing but PHP costs <strong>9.23&nbsp;ms</strong> (<code>floor-php</code>; a static file through nginx, <code>floor-http</code>, is 0.073&nbsp;ms). Subtracting it leaves the framework's own per-request boot, but how much of this floor is a process spawn cannot be recovered from the dataset.</p>
 </main>
 <footer>
   Generated from <code>results/</code> by <code>scripts/report.php</code>.

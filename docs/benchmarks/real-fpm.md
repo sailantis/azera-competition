@@ -1,6 +1,6 @@
 # Framework Competition — Real PHP-FPM
 
-Real nginx + PHP-FPM, worker recycled after every request (pm.max_requests=1): a genuine fresh boot per request with opcache retained. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.
+Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool's worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.
 
 **Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): no · 300 iterations per run over multiple runs, lower is better.
 
@@ -98,7 +98,7 @@ On this deployment the server floor dominates: the median endpoint puts every fr
 
 Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. These are REAL deployments measured over HTTP: every row carries the constant server cost, which is why the values cluster — the floor note below states it explicitly. The workload column states what each request reads or writes — the shared SQLite database holds 1,000 item rows (re-seeded per app × mode), every list endpoint serves page 1 of 20, and every write upserts exactly one sentinel row.
 
-**Server floor** — measured nginx + PHP-FPM with `pm.max_requests=1`, so the pool spawns a fresh worker for every request. A hello-world endpoint that boots nothing but PHP costs **9.23 ms** (`floor-php`), and a static file through nginx 0.073 ms (`floor-http`). That worker spawn + FastCGI handshake is the floor every row below stands on — subtract it and the remainder is the framework's own per-request boot. The framework spread on this axis is real but a fraction of a cost all six pay.
+**Server floor** — measured nginx + PHP-FPM with `pm.max_requests=?`: this dataset does not record whether the pool recycled its worker, so the per-request process-spawn share of this floor is unknown. A hello-world endpoint that boots nothing but PHP costs **9.23 ms** (`floor-php`), and a static file through nginx 0.073 ms (`floor-http`). Subtracting it leaves the framework's own per-request boot, but how much of this floor is a process spawn cannot be recovered from the dataset.
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|

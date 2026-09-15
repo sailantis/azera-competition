@@ -207,14 +207,14 @@ function startRoadRunner(string $root, string $deployDir, string $appKey, string
         escapeshellarg("{$deployDir}/.rr-{$appKey}.yaml")
     );
 
-    $pipes = [];
+    $pipes   = [];
     $logPath = "{$deployDir}/rr-{$appKey}.log";
     $logFp   = fopen($logPath, 'w');
     $descr   = $logFp === false
         ? [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']]
         : [['pipe', 'r'], $logFp, $logFp];
 
-    $proc  = proc_open($cmd, $descr, $pipes);
+    $proc = proc_open($cmd, $descr, $pipes);
     if (!is_resource($proc)) {
         fwrite(STDERR, "[run-http] Failed to start RoadRunner for {$appKey}\n");
         exit(1);
@@ -279,10 +279,36 @@ function stopRoadRunner(array $procRef): void
 // --- FPM + nginx (system services, root assumed) ------------------------------------
 
 /**
+ * The pm.max_requests the stamped pools carry, read from the template that is
+ * the single source of truth. Recorded in the dataset so the report can
+ * describe the deployment model it ACTUALLY measured: the same real-FPM view
+ * means something different at 0 (worker persists, app boots per request —
+ * what production does) than at 1 (worker destroyed per request — CGI
+ * behaviour, and a process spawn on every row, ~9 ms on the bench VM).
+ *
+ * Without this stamp the two configurations produce datasets that are
+ * indistinguishable on disk, and a config change silently re-labels
+ * already-published numbers.
+ */
+function fpmMaxRequestsFromTemplate(string $root): ?int
+{
+    $tpl = @file_get_contents("{$root}/deploy/fpm/pool.conf.template");
+    if ($tpl === false) {
+        return null;
+    }
+    return preg_match('/^\s*pm\.max_requests\s*=\s*(\d+)/m', $tpl, $m) ? (int) $m[1] : null;
+}
+
+/**
  * Install + start the stamped FPM pool and nginx vhost for all benchmark
- * apps (idempotent: overwrites configs, then reloads services). With
- * pm.max_requests=1 the running pool IS the cold model, so this runs once
- * per orchestrator invocation, not per block.
+ * apps (idempotent: overwrites configs, then reloads services).
+ *
+ * The pools never recycle (pm.max_requests=0), so no per-block start/stop is
+ * needed — ONE reload per orchestrator invocation is enough, and that reload
+ * is what makes a template edit take effect. systemctl reload sends SIGUSR2
+ * to the master, which re-reads pool.d and gracefully replaces the workers
+ * WITHOUT changing ActiveEnterTimestamp — so a stale master looks perfectly
+ * healthy to systemctl while still running the old max_requests.
  */
 function ensureFpmRunning(string $root, string $phpFpmBin, string $deployDir): array
 {
@@ -538,7 +564,7 @@ function measureFloors(
         // (which derives the path AND the orphan-pgrep pattern from the app
         // key) can manage the floor worker exactly like a real app.
         $floorKey = 'floor-rr';
-        $worker = "{$root}/temp/floor-rr-worker.php";
+        $worker   = "{$root}/temp/floor-rr-worker.php";
         file_put_contents($worker, floorRrWorkerSource());
         $cfg = "{$deployDir}/.rr-{$floorKey}.yaml";
         file_put_contents($cfg, str_replace(

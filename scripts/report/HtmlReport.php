@@ -92,7 +92,7 @@ HTML;
 
         $figures = '';
         $order   = [
-            'startup'         => $this->store->hasBoot()
+            'startup' => $this->store->hasBoot()
                 ? 'Framework startup — boot + teardown (cold + warm)'
                 : 'Framework startup (GET /)',
             'speedup'         => 'Total response times',
@@ -219,12 +219,34 @@ HTML;
                 return '';
             }
             $http = $ms('floor-http');
-            return '<strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests=1</code>: '
-                . 'the pool spawns a fresh worker for every request, and a hello-world endpoint that boots nothing '
-                . 'but PHP costs <strong>' . self::esc(SvgChart::fmt($php)) . '&nbsp;ms</strong> (<code>floor-php</code>; '
+            // Branch on the stamped setting — a recycled pool's floor contains
+            // a per-request process spawn, a persistent pool's does not.
+            // See MarkdownReport::floorNote() for the full rationale.
+            $maxReqs = $this->store->fpmMaxRequests();
+            $model   = match (true) {
+                $maxReqs === 1 => 'the pool destroys the worker after every request, so each row '
+                    . 'includes a fresh process spawn plus the FastCGI handshake',
+                $maxReqs === 0 => 'the pool never recycles its worker, so no process is spawned '
+                    . 'per request — what remains is the FastCGI handshake plus a minimal script',
+                default => 'this dataset does not record whether the pool recycled its worker, so the '
+                    . 'per-request process-spawn share of this floor is unknown',
+            };
+            $advice = match ($maxReqs) {
+                1 => 'That worker spawn + FastCGI handshake is the floor every row stands on — subtract it and the '
+                    . 'remainder is the framework\'s own per-request boot.',
+                0 => 'That FastCGI handshake + minimal-script cost is the floor every row stands on — subtract it and '
+                    . 'the remainder is the framework\'s own per-request boot, which FPM still pays for every '
+                    . 'request even though its worker survives.',
+                default => 'Subtracting it leaves the framework\'s own per-request boot, but how much of this '
+                    . 'floor is a process spawn cannot be recovered from the dataset.',
+            };
+
+            return '<strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests='
+                . ($maxReqs ?? '?') . '</code>: ' . $model
+                . '. A hello-world endpoint that boots nothing but PHP costs <strong>'
+                . self::esc(SvgChart::fmt($php)) . '&nbsp;ms</strong> (<code>floor-php</code>; '
                 . 'a static file through nginx, <code>floor-http</code>, is ' . self::esc(SvgChart::fmt($http ?? 0.0)) . '&nbsp;ms). '
-                . 'That worker spawn + FastCGI handshake is the floor every row stands on — subtract it and the '
-                . 'remainder is the framework\'s own per-request boot.';
+                . $advice;
         }
 
         if (in_array($mode, ['warm', 'roadrunner'], true)) {

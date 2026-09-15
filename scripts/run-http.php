@@ -9,8 +9,9 @@ declare(strict_types=1);
  *
  *   server rr  → RoadRunner resident worker (deploy/rr/worker.php,
  *                BENCH_APP=<app>, config stamped from deploy/rr/) → warm model
- *   server fpm → nginx vhost + php-fpm pool (pm.max_requests=1, i.e. the
- *                worker is recycled after every request) → cold model
+ *   server fpm → nginx vhost + php-fpm pool (pm.max_requests=0, i.e. the
+ *                worker is NOT recycled; the app's entry script still runs
+ *                per request, so its boot stays inside the clock)
  *
  * Per block: seed SQLite → stamp configs → start server → readiness poll →
  * run scripts/http-bench.php → stop server. Floor pseudo-apps (static file
@@ -90,6 +91,9 @@ $results = [
         'sapi'        => PHP_SAPI,
         'timestamp'   => date('c'),
         'deployment'  => 'real',
+        // The FPM deployment model as actually configured. The report reads
+        // this to describe what it measured instead of assuming a value.
+        'fpm_max_requests' => fpmMaxRequestsFromTemplate($root),
         'servers'     => [
             'roadrunner' => trim((string) shellProcessOutput("{$rrBinary} --version")),
             'nginx'      => trim((string) shellProcessOutput('nginx -v 2>&1')),
@@ -107,9 +111,9 @@ $deployDir = "{$root}/temp/deploy";
 $ports     = [];
 
 // FPM pools + nginx vhosts are stamped ONCE per app up front and kept
-// running; per-block the orchestrator only starts/stops RoadRunner and, for
-// FPM, relies on pm.max_requests=1 recycling (a running pool IS the cold
-// model — no per-block start/stop needed).
+// running; per-block the orchestrator only starts/stops RoadRunner. The
+// pools never recycle (pm.max_requests=0), so one long-lived pool serves the
+// whole run — no per-block start/stop is needed or wanted.
 stampAllDeployConfigs($root, $deployDir, $apps, $fpmPort, $rrPort, $ports, $benchUser);
 
 // A benchmark RoadRunner left behind by an earlier invocation would hold its

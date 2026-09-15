@@ -148,13 +148,13 @@ final class MarkdownReport
         bool $logScale
     ): ?string {
         return match ($chart) {
-            'hero'             => $this->hero($svgDir, $rel, $apps, $mode, $logScale),
-            'speedup'          => $this->speedup($svgDir, $rel, $apps, $baseline, $mode),
-            'features'         => $this->features($svgDir, $rel, $apps, $mode, $logScale),
-            'memory'           => $this->memory($svgDir, $rel, $apps, $mode),
-            'resident-memory'  => $this->residentMemory($svgDir, $rel, $apps, $mode),
-            'wins'             => $this->wins($apps, $baseline, $mode),
-            default            => null
+            'hero'            => $this->hero($svgDir, $rel, $apps, $mode, $logScale),
+            'speedup'         => $this->speedup($svgDir, $rel, $apps, $baseline, $mode),
+            'features'        => $this->features($svgDir, $rel, $apps, $mode, $logScale),
+            'memory'          => $this->memory($svgDir, $rel, $apps, $mode),
+            'resident-memory' => $this->residentMemory($svgDir, $rel, $apps, $mode),
+            'wins'            => $this->wins($apps, $baseline, $mode),
+            default           => null
         };
     }
 
@@ -233,12 +233,12 @@ final class MarkdownReport
      * a constant cost that has nothing to do with the framework — the floor-*
      * probes in the dataset state it explicitly:
      *
-     *   FPM  — the pool recycles the worker after EVERY request
-     *          (pm.max_requests=1), so each request pays a fresh worker spawn
-     *          plus the FastCGI handshake. On the benchmark VM that floor
-     *          (~9.3 ms) dwarfs every framework's own boot, which is why a
-     *          real-FPM row reads ~10 ms for every framework alike: subtract
-     *          the floor and what remains is the per-request framework cost.
+     *   FPM  — the pool does NOT recycle its worker (pm.max_requests=0), so
+     *          no process is spawned per request; what remains is the FastCGI
+     *          handshake plus running a minimal script. Because that floor no
+     *          longer includes a worker spawn, the framework's own per-request
+     *          boot is the visible signal on this axis: a real-FPM row is the
+     *          framework building itself again for every request.
      *   RR   — requests cross a socket to a resident worker, so a bare worker
      *          (floor-rr, ~0.2 ms) is the IPC + server floor.
      *
@@ -259,12 +259,37 @@ final class MarkdownReport
             if ($php === null) {
                 return '';
             }
-            return "\n\n**Server floor** — measured nginx + PHP-FPM with `pm.max_requests=1`, so the pool spawns a "
-                . 'fresh worker for every request. A hello-world endpoint that boots nothing but PHP costs '
+            // Describe the deployment model that was ACTUALLY measured. A
+            // dataset from a recycled pool (max_requests=1) has a per-request
+            // process spawn inside its floor; a persistent pool
+            // (max_requests=0) does not. Claiming the wrong one misattributes
+            // ~9 ms per row, so branch on the stamp.
+            $maxReqs = $this->store->fpmMaxRequests();
+            $model   = match (true) {
+                $maxReqs === 1 => 'the pool destroys the worker after every request, so each row '
+                    . 'includes a fresh process spawn plus the FastCGI handshake',
+                $maxReqs === 0 => 'the pool never recycles its worker, so no process is spawned '
+                    . 'per request — what remains is the FastCGI handshake plus a minimal script',
+                default => 'this dataset does not record whether the pool recycled its worker, so the '
+                    . 'per-request process-spawn share of this floor is unknown',
+            };
+            // Only a known-recycled pool lets us subtract a spawn; the other
+            // two cases must not imply we know where the floor comes from.
+            $advice = match ($maxReqs) {
+                1 => 'That worker spawn + FastCGI handshake is the floor every row below stands on — '
+                    . 'subtract it and the remainder is the framework\'s own per-request boot.',
+                0 => 'That FastCGI handshake + minimal-script cost is the floor every row below stands on — '
+                    . 'subtract it and the remainder is the framework\'s own per-request boot, which FPM '
+                    . 'still pays for every request even though its worker survives.',
+                default => 'Subtracting it leaves the framework\'s own per-request boot, but how much of '
+                    . 'this floor is a process spawn cannot be recovered from the dataset.',
+            };
+
+            return "\n\n**Server floor** — measured nginx + PHP-FPM with `pm.max_requests="
+                . ($maxReqs ?? '?') . "`: " . $model
+                . '. A hello-world endpoint that boots nothing but PHP costs '
                 . '**' . SvgChart::fmt($php) . ' ms** (`floor-php`), and a static file through nginx '
-                . SvgChart::fmt($http ?? 0.0) . ' ms (`floor-http`). That worker spawn + FastCGI handshake is '
-                . 'the floor every row below stands on — subtract it and the remainder is the framework\'s own '
-                . 'per-request boot. The framework spread on this axis is real but a fraction of a cost all six pay.';
+                . SvgChart::fmt($http ?? 0.0) . ' ms (`floor-http`). ' . $advice;
         }
 
         if (in_array($mode, ['warm', 'roadrunner'], true)) {
@@ -1008,18 +1033,18 @@ final class MarkdownReport
         // and therefore legitimately rankable.
         $byBoot = $rows;
         uasort($byBoot, static fn(array $a, array $b): int => $a['boot'] <=> $b['boot']);
-        $keys  = array_keys($byBoot);
-        $light = $keys[0];
-        $heavy = $keys[count($keys) - 1];
+        $keys    = array_keys($byBoot);
+        $light   = $keys[0];
+        $heavy   = $keys[count($keys) - 1];
         $lightMb = $byBoot[$light]['boot'] / 1048576;
         $heavyMb = $byBoot[$heavy]['boot'] / 1048576;
 
         // Name the largest accumulator, if any framework actually accumulates.
         $byGrowth = $rows;
         uasort($byGrowth, static fn(array $a, array $b): int => $b['growth'] <=> $a['growth']);
-        $gKeys   = array_keys($byGrowth);
-        $gTop    = $gKeys[0];
-        $gTopMb  = $byGrowth[$gTop]['growth'] / 1048576;
+        $gKeys  = array_keys($byGrowth);
+        $gTop   = $gKeys[0];
+        $gTopMb = $byGrowth[$gTop]['growth'] / 1048576;
 
         $growthSentence = $gTopMb < 0.5
             ? 'No framework retains more than half a megabyte across the full endpoint suite — '

@@ -226,6 +226,21 @@ final class ResultStore
     }
 
     /**
+     * The pm.max_requests the measured FPM pool ran with, or null when the
+     * dataset does not say (every dataset written before this was stamped).
+     *
+     * The real-FPM view must branch on this: at 0 the worker persists and the
+     * app boots per request; at 1 the worker is destroyed per request, which
+     * adds a process spawn to every row. Same view name, different physics —
+     * so prose that assumes a value is prose that can contradict the data.
+     */
+    public function fpmMaxRequests(): ?int
+    {
+        $v = $this->env()['fpm_max_requests'] ?? null;
+        return $v === null ? null : (int) $v;
+    }
+
+    /**
      * Webserver-overhead probes present in the dataset:
      * app => ['mode' => .., 'request' => .., 'ms' => float]. Empty for every
      * dataset produced by the in-process harness.

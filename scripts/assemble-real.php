@@ -7,9 +7,9 @@ declare(strict_types=1);
  * outputs — the counterpart of merge-app.php for building a dataset from
  * scratch instead of replacing one app's block in an existing one.
  *
- * Why this exists: the real-deployment run is slow (nginx+FPM recycles the
- * worker after every request, ~10 ms/request), so apps are measured one at a
- * time. Each run writes a single-app dataset (temp/real-<app>.json) whose
+ * Why this exists: the real-deployment run is slow (nginx+FPM runs the app's
+ * entry script per request, and each row includes that boot), so apps are
+ * measured one at a time. Each run writes a single-app dataset (temp/real-<app>.json) whose
  * `floors` block holds the one-time webserver-overhead probes. This script
  * concatenates the app blocks in canonical order and keeps the floor probes
  * from the FIRST run (they are per server, not per app).
@@ -94,8 +94,8 @@ foreach ($args as $path) {
         exit(1);
     }
 
-    $apps[$key]            = $app;
-    $provenance[$key]      = [
+    $apps[$key] = $app;
+    $provenance[$key] = [
         'timestamp'   => $raw['env']['timestamp'] ?? null,
         'source_file' => basename($path),
     ];
@@ -144,6 +144,9 @@ foreach ($combined['env']['app_refresh'] as $k => $p) {
 $floors = array_map(static fn(array $f): string => (string) $f['app'], $combined['floors'] ?? []);
 echo '  floors: ', implode(', ', $floors), "\n";
 if (isset($combined['env']['measured_window'])) {
-    echo '  measured: ', $combined['env']['measured_window']['first'], ' → '
-        , $combined['env']['measured_window']['last'], "\n";
+    echo '  measured: ',
+        $combined['env']['measured_window']['first'],
+        ' → ',
+        $combined['env']['measured_window']['last'],
+        "\n";
 }

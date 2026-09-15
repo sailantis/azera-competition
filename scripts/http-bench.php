@@ -6,7 +6,7 @@ declare(strict_types=1);
  * HTTP latency benchmark client (curl_multi over loopback).
  *
  * Measures REAL deployed endpoints (RoadRunner resident worker = mode
- * "roadrunner"; nginx + php-fpm with pm.max_requests=1 = mode "php-fpm")
+ * "roadrunner"; nginx + php-fpm with pm.max_requests=0 = mode "php-fpm")
  * with the same stats machinery and JSON field names as run.php's
  * benchRequest(), so the real-deployment dataset drops straight into the
  * existing report generator.
@@ -143,7 +143,8 @@ foreach ($requests as [$method, $uri]) {
         'connect_ms'         => $connectAvg,
         // Resident-worker memory. heap = PHP heap (framework comparison);
         // rss/hwm = process total incl. the shared PHP + opcache floor.
-        // All zero unless server === 'rr' (php-fpm recycles its worker).
+        // All zero unless server === 'rr' (a php-fpm worker is per-request
+        // by model, so there is no resident heap to report).
         'mem_boot_heap' => $mem['boot'],
         'mem_heap'      => $mem['heap'],
         'mem_rss'       => $mem['rss'],
