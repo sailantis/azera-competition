@@ -87,6 +87,19 @@ Run `php run.php --help` for all options.
 
 Results JSON includes the PHP version, OS, and (for Azera) the git ref of the local `azera-framework` path repo, since Azera is not yet published. Pin to a specific git ref for reproducible comparisons.
 
+Both deployment models are always measured with **one budget** (currently `1000x10`). RoadRunner and PHP-FPM are two ways of running the same request, so comparing them is only meaningful when both were sampled equally — the assembler and the single-app splice both refuse to write a dataset where they disagree.
+
+## Tests
+
+```bash
+composer install      # installs PHPUnit (dev)
+composer test         # or: vendor/bin/phpunit
+```
+
+The suite covers the harness's **decisions**, not its timings: budget detection and enforcement (`MeasurementBudgetTest`), port allocation (`PortAllocationTest`), readiness classification of nginx gateway pages (`GatewayErrorTest`), and the invariants of the code that runs *inside* the measured server (`EntryScriptTest` — the FPM entry scripts' autoload prefix and helper load order, the CI4 connection shutdown hook, the Spiral finalizer, and `pm.max_requests`).
+
+Timing is deliberately untested: no assertion can say whether 1000×10 samples are enough, only that the harness refuses to compare samples that are not equal.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
