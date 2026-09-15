@@ -403,9 +403,8 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
         $bootTimes    = [];
 
         for ($i = 0; $i < $itersPerRun; $i++) {
-            // socketpair: the child writes [boot_ms, handle_ms, cleanup_ms,
-            // peak_mem_bytes] as a 4x8-byte little-endian payload + one
-            // status byte (0 = ok, 1 = error body).
+            // socketpair: the child reports [boot_ms, handle_ms, cleanup_ms,
+            // peak_mem_bytes] as a header + 25-byte body (see below).
             $socks = [];
             if (!@socket_create_pair(AF_UNIX, SOCK_STREAM, 0, $socks)) {
                 fwrite(STDERR, "\n[ABORT] socket_create_pair failed: " . socket_strerror(socket_last_error()) . "\n");
@@ -423,11 +422,17 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
             if ($pid === 0) {
                 // ---- child: one fresh request lifecycle, then die -------
                 socket_close($pairParent);
+                // A forked child inherits the parent's allocator, whose
+                // peak high-water mark already covers the priming boot. Reset
+                // it so memory_get_peak_usage() below measures THIS child's
+                // boot + request only — that is the honest per-request FPM
+                // footprint (one boot, one request, then the process dies).
                 memory_reset_peak_usage();
                 $cb     = [];
                 $ch     = [];
                 $cc     = [];
                 $status = 0;
+                $peakBytes = 0;
                 try {
                     $tb0 = hrtime(true);
                     $adapter->bootstrap();
@@ -442,11 +447,19 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
                     $cb[] = ($tb1 - $tb0) / 1e6;
                     $ch[] = ($tb2 - $tb1) / 1e6;
                     $cc[] = ($tb3 - $tb2) / 1e6;
+                    // Read the peak BEFORE exiting. The (true) form quantises
+                    // to 2 MiB allocator chunks — coarse, but it is the same
+                    // unit the in-process loop and the warm path report, so
+                    // the two modes stay comparable.
+                    $peakBytes = memory_get_peak_usage(true);
                 } catch (\Throwable $e) {
                     $status = 1;
                 }
-                // 4 float64 + 1 byte = 33 bytes, one write, then exit.
-                @socket_write($pairChild, pack('E3C', $cb[0] ?? 0, $ch[0] ?? 0, $cc[0] ?? 0, $status), 25);
+                // Header + body in ONE write so the parent can never read a
+                // partial payload: "PM" + version byte, then 3 float64 +
+                // 1 uint64 + status byte = 33 bytes.
+                @socket_write($pairChild, 'PM1', 3);
+                @socket_write($pairChild, pack('E3PC', $cb[0] ?? 0, $ch[0] ?? 0, $cc[0] ?? 0, $peakBytes, $status), 33);
                 socket_close($pairChild);
                 // A clean exit releases EVERYTHING this iteration touched:
                 // memory, fds, the framework instance. exit() inside the
@@ -466,11 +479,11 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
             socket_close($pairParent);
             $t3 = hrtime(true);
 
-            if (strlen($raw) !== 25 || exitcode($status) !== 0) {
+            if (strlen($raw) !== 36 || substr($raw, 0, 3) !== 'PM1' || exitcode($status) !== 0) {
                 fwrite(STDERR, "\n[ABORT] {$reqLabel} fork child failed (exit " . pcntl_wexitstatus($status) . ", raw " . strlen($raw) . " bytes)\n");
                 exit(1);
             }
-            $msg = unpack('Eboot/Ehandle/Ecleanup/Cstatus', $raw);
+            $msg = unpack('Eboot/Ehandle/Ecleanup/Ppeak/Cstatus', substr($raw, 3));
             if ($msg['status'] === 1) {
                 fwrite(STDERR, "\n[ABORT] {$reqLabel} returned an error response (fork child reported status 1)\n");
                 exit(1);
@@ -480,7 +493,10 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
             $handleTimes[] = $msg['handle'] + (($t3 - $t0) / 1e6 - $msg['boot'] - $msg['handle'] - $msg['cleanup']);
             $cleanupTimes[] = $msg['cleanup'];
             $times[] = ($t3 - $t0) / 1e6;
-            $peakMem = max($peakMem, memory_get_peak_usage(true));
+            // The CHILD's peak, not the parent's: the parent's high-water mark
+            // was set by the priming boot and is identical for every endpoint,
+            // which made cold peak_mem a constant rather than a measurement.
+            $peakMem = max($peakMem, (int) $msg['peak']);
         }
 
         $s = stats($times);
