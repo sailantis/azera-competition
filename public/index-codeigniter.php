@@ -78,6 +78,20 @@ if (getcwd() . DIRECTORY_SEPARATOR !== FCPATH) {
 // Heavy parity with the in-process adapter's bootFramework(): the constants
 // must exist before Config\* classes (which reference APPPATH/WRITEPATH in
 // constant expressions) are autoloaded.
+//
+// CI4's global helpers MUST win the function_exists race against Laravel's:
+// composer's `files` autoload eagerly includes Laravel's helpers (config(),
+// app(), env(), e()...) on vendor/autoload.php, and CI4's are all
+// function_exists-guarded, so loading composer first silently leaves CI4
+// calling Laravel's — `config('Config\Exceptions')` then resolves through
+// Laravel's container ("Target class [config] does not exist") and every FPM
+// request 500s with an empty body. The RR worker (deploy/rr/worker.php) and
+// run-app.php both pre-load Common.php for exactly this reason; this entry
+// script did not, so codeigniter only ever worked under the in-process
+// harness and RoadRunner (2026-09-15). Common.php is pure function
+// definitions with no top-level side effects, so an early include is safe.
+require_once __DIR__ . '/../vendor/codeigniter4/framework/system/Common.php';
+
 require __DIR__ . '/../vendor/autoload.php';
 
 $root     = dirname(__DIR__) . DIRECTORY_SEPARATOR;
@@ -126,5 +140,44 @@ require_once SYSTEMPATH . '..' . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARAT
 require_once APPPATH . 'Config' . DIRECTORY_SEPARATOR . 'Paths.php';
 
 $paths = new Paths();
+
+// --- RELEASE THE DB CONNECTION BEFORE THE WORKER LOOPS ----------------------
+// FPM re-runs this script per request but keeps the WORKER process, and this
+// app runs its pool with pm.max_requests = 0, so nothing here is freed by
+// process exit any more.
+//
+// Why CI4 leaks the handle: Config\Database::connect() caches a connection in
+// `static::$instances`. Re-running this script re-initialises that static (a
+// fresh value of zero connections at the START of every request, measured), so
+// the connection built during request N is unreachable from the cache during
+// request N+1 — but it is still referenced by the model/controller that CI4
+// kept alive, so PHP never refcounts it to zero and never closes the native
+// SQLite3 handle. GET /items-qb makes it worse because `clone $builder`
+// produces a builder whose connID is false, which defeats the cache lookup on
+// the next connect() and builds a second connection.
+//
+// Measured cost: exactly 2 fds per request (bench.sqlite + bench.sqlite-wal),
+// unbounded — 4007 fds at 2000 requests against the worker's 1024 soft limit.
+// At that point every request returns an empty 500; the real error
+// ("Too many open files" from include(.../Debug/ExceptionHandler.php)) appears
+// only in the GLOBAL FPM log, not the pool's.
+//
+// PHP itself is not at fault: it closes a handle as soon as the last reference
+// is dropped, which 20 open+unset cycles demonstrate (fd count stays flat).
+// CI4 just never reaches zero references. pm.max_requests = 1 hid this
+// completely by destroying the worker after every request.
+//
+// The close must be registered as a SHUTDOWN handler, not run inline: at this
+// point in the script the cache is still empty (CI4 connects during the
+// request), so closing here would be a no-op. Boot::bootWeb() runs the
+// request and its own exit; the shutdown hook then still sees the live
+// connection and can release it.
+register_shutdown_function(static function (): void {
+    foreach (\CodeIgniter\Database\Config::getConnections() as $connection) {
+        try {
+            $connection->close();
+        } catch (\Throwable $e) {}
+    }
+});
 
 exit(Boot::bootWeb($paths));

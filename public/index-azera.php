@@ -19,9 +19,14 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
-// PSR-4 autoloader for the App namespace (same as the adapter)
+// PSR-4 autoloader for the App\Azera namespace (same mapping the adapter
+// registers via BenchmarkAutoloader). The prefix MUST be the full namespace
+// root the app declares: apps/azera/Bootstrap.php is `namespace App\Azera`,
+// so stripping only 'App\' resolved App\Azera\Bootstrap to
+// apps/azera/Azera/Bootstrap.php — a path that does not exist. FPM served a
+// 500 on every request.
 spl_autoload_register(function (string $class): void {
-    $prefix = 'App\\';
+    $prefix = 'App\\Azera\\';
     if (!str_starts_with($class, $prefix)) {
         return;
     }

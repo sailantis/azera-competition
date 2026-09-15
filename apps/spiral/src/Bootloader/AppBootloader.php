@@ -49,17 +49,29 @@ final class AppBootloader extends Bootloader
         // Cycle DBAL writes query/transaction log lines into the driver's
         // PSR-3 channel; Spiral's LogFactory turns them into LogEvents and
         // hands them to all registered listeners (bound by CoreBootloader).
+        $dbEventLog = $container->get(DbEventLog::class);
         $container
             ->get(\Spiral\Logger\ListenerRegistryInterface::class)
-            ->addListener($container->get(DbEventLog::class));
+            ->addListener($dbEventLog);
 
         // The log records one entry per query into a container SINGLETON. In a
         // resident worker that grows without bound (measured +~750 B per
         // query-request over 5,000 requests, 2026-09-14), so wipe it after
         // every request — the same FinalizerInterface hook CycleOrmBootloader
         // uses to clean the ORM heap.
-        $finalizer->addFinalizer(static function () use ($container): void {
-            $container->get(DbEventLog::class)->clear();
+        //
+        // Resolve the service NOW and close over the instance rather than the
+        // container. Spiral runs finalizers from AbstractKernel::__destruct(),
+        // which under per-request boot fires when the container is already torn
+        // down; calling $container->get() there throws
+        // "Typed property Spiral\Core\Container::$container must not be
+        // accessed before initialization" (Container::__destruct() has emptied
+        // it) and, because it happens during destructor processing, the fatal
+        // is unrecoverable and the request 500s. Under RoadRunner the kernel
+        // lives for the whole block so the container is intact and the bug
+        // never showed (spiral, 2026-09-15).
+        $finalizer->addFinalizer(static function () use ($dbEventLog): void {
+            $dbEventLog->clear();
         });
     }
 
