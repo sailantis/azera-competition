@@ -212,8 +212,11 @@ final class ResultStore
     public function budgetLabelFor(?string $mode): ?string
     {
         $stamped = $this->env['budget'] ?? null;
-        if (is_string($stamped) && preg_match('/^(\d+)x(\d+)$/', $stamped, $m) === 1) {
-            return "{$m[1]} iterations per run over {$m[2]} runs";
+        if (is_string($stamped)) {
+            $fromStamp = self::budgetLabelFromStamp($stamped);
+            if ($fromStamp !== null) {
+                return $fromStamp;
+            }
         }
 
         $iters = $this->intFieldWhenUniform($mode, 'iterations_per_run');
@@ -225,6 +228,22 @@ final class ResultStore
         return $runs === null
             ? "{$iters} iterations per run over multiple runs"
             : "{$iters} iterations per run over {$runs} runs";
+    }
+
+    /**
+     * Format an "iters x runs" stamp as a caption, or null when it is not one.
+     *
+     * The guards (assertUniformBudget()) produce the stamp and the report
+     * consumes it, so the one place that knows the format is here — a stamp the
+     * report cannot parse yields NO caption rather than a half-read number.
+     */
+    public static function budgetLabelFromStamp(string $stamp): ?string
+    {
+        if (preg_match('/^(\d+)x(\d+)$/', $stamp, $m) !== 1) {
+            return null;
+        }
+
+        return "{$m[1]} iterations per run over {$m[2]} runs";
     }
 
     /**

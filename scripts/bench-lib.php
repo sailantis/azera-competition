@@ -39,6 +39,84 @@ function trimmedMean(array $values): float
     return array_sum($kept) / count($kept);
 }
 
+// --- Measurement budget ------------------------------------------------------
+
+/**
+ * The sample one measured mode was taken with: ['iters' => N, 'runs' => N], or
+ * null when the mode does not record one.
+ *
+ * A mode carries the values at mode level (http-bench.php writes them) AND on
+ * every request row; the row is the fallback for datasets written before the
+ * mode-level fields existed.
+ */
+function budgetOfMode(array $mode): ?array
+{
+    $iters = (int) ($mode['iterations_per_run'] ?? 0);
+    $runs  = (int) ($mode['runs'] ?? 0);
+    if ($iters === 0) {
+        $row = $mode['requests'][0] ?? null;
+        if (!is_array($row)) {
+            return null;
+        }
+        $iters = (int) ($row['iterations_per_run'] ?? 0);
+        $runs  = (int) ($row['runs'] ?? 0);
+    }
+
+    return $iters === 0 ? null : ['iters' => $iters, 'runs' => $runs];
+}
+
+/** The same, keyed by "<app>/<mode>", across the apps and floor probes of a dataset. */
+function budgetsByAppMode(array $dataset): array
+{
+    $out = [];
+    foreach (array_merge($dataset['apps'] ?? [], $dataset['floors'] ?? []) as $app) {
+        foreach (($app['modes'] ?? []) as $mode => $m) {
+            if (!is_array($m)) {
+                continue;
+            }
+            $b = budgetOfMode($m);
+            if ($b !== null) {
+                $out["{$app['app']}/{$mode}"] = $b;
+            }
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * Enforce ONE measurement budget across every mode of a dataset.
+ *
+ * RoadRunner and PHP-FPM are two ways of running the SAME request, so the
+ * comparison between them is only meaningful when both were measured with the
+ * same sample. The published dataset broke that (a single-app RoadRunner
+ * refresh at 1000x10 while the FPM block stayed at 300x5, because the FPM rows
+ * are expensive to re-measure), which left every cross-model caption branching
+ * on the mismatch. Both the assembler and the single-app splice therefore
+ * refuse to write an asymmetric dataset.
+ *
+ * Modes that record no budget (older datasets, the in-process harness) are
+ * ignored rather than treated as a mismatch — "unknown" is not "different".
+ *
+ * @param array<string,array{iters:int,runs:int}> $budgets "<app>/<mode>" => budget
+ * @return array{ok:bool, budget:?string, byAppMode:array<string,string>}
+ */
+function assertUniformBudget(array $budgets): array
+{
+    $labels = [];
+    foreach ($budgets as $key => $b) {
+        $labels[$key] = "{$b['iters']}x{$b['runs']}";
+    }
+
+    $distinct = array_values(array_unique(array_values($labels)));
+
+    return [
+        'ok'        => count($distinct) <= 1,
+        'budget'    => $distinct[0] ?? null,
+        'byAppMode' => $labels,
+    ];
+}
+
 // --- Request parsing ----------------------------------------------------------
 
 /**

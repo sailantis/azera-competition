@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Test suite for the benchmark HARNESS (not the benchmarked apps).
+
+    Only the parts of the harness that make decisions belong here — budget
+    enforcement, port allocation, gateway-error classification, budget caption
+    selection. Timing code is validated by measurement, not by assertions: a
+    unit test cannot tell whether 1000x10 samples are enough, only that the
+    harness refuses to compare samples that are not equal.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         failOnWarning="true"
+         failOnRisky="true">
+    <testsuites>
+        <testsuite name="Azera Competition Harness Test Suite">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>scripts</directory>
+        </include>
+    </source>
+</phpunit>

@@ -25,6 +25,8 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/report/BenchmarkConfig.php';
+// budgetsByAppMode()/assertUniformBudget() — see bench-lib.php.
+require_once __DIR__ . '/bench-lib.php';
 
 if ($argc < 4) {
     fwrite(STDERR, "Usage: php scripts/merge-app.php <target-prefix> <source-prefix> <app-key>\n");
@@ -112,59 +114,25 @@ if ($modeShape($srcApp) !== $modeShape($dstApp)) {
     exit(1);
 }
 
-// Budget: roadrunner and php-fpm are two ways of running the SAME request, so
-// the sample must be equal or the cross-model comparison is meaningless. This
-// splice is exactly how the historical asymmetry (RR 1000x10 vs FPM 300x5)
-// happened: a single-app RR refresh replaced one app's rows with a finer
-// sample while the FPM rows kept the old one, and every caption downstream had
-// to branch around the mismatch. Refuse it here instead.
-$budgetOf = static function (array $app, string $mode): ?string {
-    $m = $app['modes'][$mode] ?? null;
-    if (!is_array($m)) {
-        return null;
-    }
-    $iters = (int) ($m['iterations_per_run'] ?? 0);
-    $runs  = (int) ($m['runs'] ?? 0);
-    if ($iters === 0) {
-        $row = $m['requests'][0] ?? null;
-        if (!is_array($row)) {
-            return null;
-        }
-        $iters = (int) ($row['iterations_per_run'] ?? 0);
-        $runs  = (int) ($row['runs'] ?? 0);
-    }
-
-    return $iters === 0 ? null : "{$iters}x{$runs}";
-};
-// Compare the refreshed app's budget against every OTHER app's, both modes.
-$srcBudgets = [];
-foreach (array_keys($srcApp['modes']) as $mode) {
-    $b = $budgetOf($srcApp, $mode);
-    if ($b !== null) {
-        $srcBudgets[$mode] = $b;
-    }
-}
-$targetBudgets = [];
+// Budget: this splice is exactly how the historical asymmetry (an RR-only
+// refresh at 1000x10 against a 300x5 FPM block) happened, so the refreshed
+// app is checked against every other app before anything is written.
+// See bench-lib.php::assertUniformBudget() for why the sample must be equal.
+$budgets = budgetsByAppMode($source);           // the app(s) being spliced in
 foreach ($target['apps'] as $a) {
     if (($a['app'] ?? '') === $appKey) {
-        continue;   // replaced by $srcApp; its own budget is in $srcBudgets
+        continue;   // replaced by the source below; its budget is in $budgets
     }
-    foreach (array_keys($a['modes']) as $mode) {
-        $b = $budgetOf($a, $mode);
-        if ($b !== null) {
-            $targetBudgets["{$a['app']}/{$mode}"] = $b;
-        }
+    foreach (budgetsByAppMode(['apps' => [$a]]) as $key => $b) {
+        $budgets[$key] = $b;
     }
 }
-$all = $srcBudgets + $targetBudgets;
-$distinct = array_values(array_unique(array_values($all)));
-if (count($distinct) > 1) {
+$budget = assertUniformBudget($budgets);
+if (!$budget['ok']) {
     fwrite(STDERR, "Budget mismatch — a merge must not mix iterations/runs samples:\n");
-    foreach ($srcBudgets as $mode => $b) {
-        fwrite(STDERR, sprintf("    %-24s %s   (refreshing)\n", "{$appKey}/{$mode}", $b));
-    }
-    foreach ($targetBudgets as $label => $b) {
-        fwrite(STDERR, sprintf("    %-24s %s\n", $label, $b));
+    foreach ($budget['byAppMode'] as $label => $value) {
+        fprintf(STDERR, "    %-24s %s%s\n", $label, $value,
+            str_starts_with($label, "{$appKey}/") ? '   (refreshing)' : '');
     }
     fwrite(STDERR, "Re-measure the refreshed app with the dataset's budget, or refresh every mode.\n");
     exit(1);
