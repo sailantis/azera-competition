@@ -115,6 +115,21 @@ foreach ($requests as [$method, $uri]) {
 
     $sAll = stats($allTimes);
 
+    // --- Memory probe (RoadRunner only) --------------------------------------
+    // One extra request AFTER the timed loop answers "after N requests the
+    // resident worker holds X". Kept off the hot path so latency stays
+    // comparable (see deploy/rr/worker.php for what each field means).
+    $mem = ['boot' => 0, 'heap' => 0, 'rss' => 0, 'hwm' => 0];
+    if ($server === 'rr') {
+        $probe = httpProbeRequest($baseUrl, $method, $uri);
+        $mem   = [
+            'boot' => (int) ($probe['x-bench-boot'] ?? 0),
+            'heap' => (int) ($probe['x-bench-heap'] ?? 0),
+            'rss'  => (int) ($probe['x-bench-rss'] ?? 0),
+            'hwm'  => (int) ($probe['x-bench-hwm'] ?? 0),
+        ];
+    }
+
     $measured[$reqLabel] = [
         'request'            => $reqLabel,
         'iterations_per_run' => $itersPerRun,
@@ -126,6 +141,13 @@ foreach ($requests as [$method, $uri]) {
         'p95_ms'             => $sAll['p95'],
         'peak_mem'           => $peakMem,
         'connect_ms'         => $connectAvg,
+        // Resident-worker memory. heap = PHP heap (framework comparison);
+        // rss/hwm = process total incl. the shared PHP + opcache floor.
+        // All zero unless server === 'rr' (php-fpm recycles its worker).
+        'mem_boot_heap' => $mem['boot'],
+        'mem_heap'      => $mem['heap'],
+        'mem_rss'       => $mem['rss'],
+        'mem_hwm'       => $mem['hwm'],
     ];
 
     // Reset peak mem tracking per label is not possible in PHP; the value is

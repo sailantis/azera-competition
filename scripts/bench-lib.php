@@ -165,6 +165,41 @@ function httpTimedRequest(string $baseUrl, string $method, string $uri, float &$
     ];
 }
 
+/**
+ * ONE untimed probe request carrying X-Mem-Probe: 1, returning the response
+ * headers lower-cased. Used once per endpoint AFTER the timed loop, so memory
+ * accounting never touches the latency path.
+ *
+ * @return array<string,string>
+ */
+function httpProbeRequest(string $baseUrl, string $method, string $uri): array
+{
+    $ch      = curl_init();
+    $headers = [];
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $baseUrl . $uri,
+        CURLOPT_CUSTOMREQUEST  => $method,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_HTTPHEADER     => ['X-Mem-Probe: 1'],
+        CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$headers): int {
+            $pos = strpos($line, ':');
+            if ($pos !== false) {
+                $headers[strtolower(trim(substr($line, 0, $pos)))] = trim(substr($line, $pos + 1));
+            }
+            return strlen($line);
+        },
+    ]);
+    $body = curl_exec($ch);
+    curl_close($ch);
+    if ($body === false) {
+        return [];
+    }
+    return $headers;
+}
+
 // --- Abort guard (mirrors benchRequest) ----------------------------------------
 
 /**

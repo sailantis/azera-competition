@@ -59,6 +59,31 @@ $adapter = createAdapter($benchApp);
  */
 $adapter->bootstrap();
 
+// --- Memory probe ------------------------------------------------------------
+// The worker is only instrumented when the client asks for it: nothing on the
+// hot path pays for memory accounting. scripts/http-bench.php sets
+// X-Mem-Probe: 1 on ONE extra request per endpoint AFTER its timed loop, so
+// the numbers describe the RETAINED state of the resident worker.
+//   heap = exact PHP heap (memory_get_usage(false); the (true) form quantizes
+//          to 2 MiB allocator chunks) — this is the framework comparison.
+//   rss  = process total from /proc/self/status (PHP binary + extensions +
+//          opcache SHM). Mostly SHARED between workers, so it is a host
+//          capacity figure, NOT a framework comparison.
+//   hwm  = lifetime peak RSS. Monotonic, never resets — context only.
+function readProcMem(): array
+{
+    $s = @file_get_contents('/proc/self/status');
+    if ($s === false) {
+        return [0, 0]; // non-Linux: probe reports 0, timing is unaffected
+    }
+    $rss = preg_match('/^VmRSS:\s+(\d+) kB/m', $s, $m) ? (int) $m[1] * 1024 : 0;
+    $hwm = preg_match('/^VmHWM:\s+(\d+) kB/m', $s, $m) ? (int) $m[1] * 1024 : 0;
+    return [$rss, $hwm];
+}
+
+$bootHeap = memory_get_usage(false);
+[$bootRss] = readProcMem();
+
 // --- Resident request loop ---------------------------------------------------
 
 $psr7 = new PSR7Worker(
@@ -93,8 +118,23 @@ while (true) {
         $body = $adapter->dispatch($method, $uri);
         $adapter->cleanup();
 
-        $status = str_starts_with($body, '500 ') ? 500 : 200;
-        $psr7->respond(new Response($status, ['Content-Type' => 'text/html; charset=utf-8'], $body));
+        $status  = str_starts_with($body, '500 ') ? 500 : 200;
+        $headers = ['Content-Type' => 'text/html; charset=utf-8'];
+
+        // Opt-in probe (see the memory-probe block above the loop). Read AFTER
+        // cleanup() so the heap reflects what the request RETAINED, not its
+        // transient working set.
+        if ($request->getHeaderLine('X-Mem-Probe') === '1') {
+            [$rss, $hwm] = readProcMem();
+            $headers += [
+                'X-Bench-Boot' => (string) $bootHeap,
+                'X-Bench-Heap' => (string) memory_get_usage(false),
+                'X-Bench-Rss'  => (string) $rss,
+                'X-Bench-Hwm'  => (string) $hwm,
+            ];
+        }
+
+        $psr7->respond(new Response($status, $headers, $body));
     } catch (Throwable $e) {
         // Send an error response and keep the worker alive.
         $psr7->respond(new Response(500, [], '500 ' . get_class($e) . ': ' . $e->getMessage()));
