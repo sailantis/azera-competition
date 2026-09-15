@@ -38,6 +38,7 @@ $opts = getopt(
         'seed::',
         'rows::',
         'report',
+        'export::',
     ]
 );
 
@@ -58,7 +59,7 @@ Options:
   --clear-cache           Clear template caches before running
   --requests=<csv>        Comma-separated "METHOD URI" requests to benchmark
                           (default: all benchmark + REST API + feature routes;
-                           see the $requests array in run.php)
+                           see the \$requests array in run.php)
   --seed                  Reset & reseed the SQLite DB before running (prevents
                           POST /items from accumulating rows across runs)
   --rows=N                Row count when --seed is used (default: 1000)
@@ -66,6 +67,12 @@ Options:
                           HTML dashboard + SVG charts + Markdown fragment.
                           The dataset is passed through, so the report always
                           matches the run you just made.
+  --export=<prefix>       Do not measure anything: re-emit the .csv + .md
+                          companions of an EXISTING dataset (prefix, with or
+                          without .json). The .json is left untouched. Use
+                          after a dataset is edited in place (scripts/
+                          merge-app.php, a splice) so the sibling exports do
+                          not silently keep the old numbers.
 
 Examples:
   php -d opcache.enable_cli=1 run.php --apps=azera --warm --iterations-per-run=1000 --runs=10
@@ -81,6 +88,7 @@ $runs        = isset($opts['runs']) ? (int) $opts['runs'] : 30;
 $doWarm      = isset($opts['warm']) || (!isset($opts['cold']));
 $doCold      = isset($opts['cold']);
 $outPrefix   = $opts['out'] ?? null;
+$exportPrefix = $opts['export'] ?? null;
 $clearCache  = isset($opts['clear-cache']);
 $doSeed      = isset($opts['seed']);
 $seedRows    = isset($opts['rows']) ? (int) $opts['rows'] : 1000;
@@ -156,6 +164,38 @@ $requests = array_map(function (string $r): array {
 // report generator share a single source of truth and cannot drift apart.
 $featureMap      = \AzeraCompetition\Report\BenchmarkConfig::featureMap();
 $adapterFeatures = \AzeraCompetition\Report\BenchmarkConfig::adapterFeatures();
+
+// --- Export-only mode ------------------------------------------------------
+// An in-place dataset edit (merge-app.php, a splice) rewrites the .json but
+// not its .csv/.md companions, which then silently keep the superseded
+// numbers. This mode re-emits both from the dataset on disk via the SAME
+// writers the harness uses, and measures nothing.
+if ($exportPrefix !== null) {
+    $exportJson = preg_replace('/\.json$/', '', $exportPrefix) . '.json';
+    if (!is_file($exportJson)) {
+        fwrite(STDERR, "Export: no dataset at {$exportJson}\n");
+        exit(1);
+    }
+    $exportData = json_decode((string) file_get_contents($exportJson), true);
+    if (!is_array($exportData) || !isset($exportData['apps'])) {
+        fwrite(STDERR, "Export: {$exportJson} is not a benchmark dataset\n");
+        exit(1);
+    }
+
+    $exportPrefixClean = preg_replace('/\.json$/', '', $exportPrefix);
+    writeCsv($exportPrefixClean . '.csv', $exportData);
+    writeReport($exportPrefixClean, $exportData, $featureMap, $adapterFeatures);
+
+    $rows = 0;
+    foreach ($exportData['apps'] as $app) {
+        foreach ($app['modes'] as $mode) {
+            $rows += count($mode['requests']);
+        }
+    }
+    echo "Exported {$rows} rows from {$exportJson}\n";
+    echo "Wrote: {$exportPrefixClean}.csv, {$exportPrefixClean}.md (the .json was left untouched)\n";
+    exit(0);
+}
 
 // --- Adapter registry ------------------------------------------------------
 
@@ -255,8 +295,21 @@ function writeResults(string $prefix, array $results): void
     }
 
     file_put_contents($prefix . '.json', json_encode($results, JSON_PRETTY_PRINT));
+    writeCsv($prefix . '.csv', $results);
+}
 
-    $fp = fopen($prefix . '.csv', 'w');
+/**
+ * Emit the CSV companion of a dataset.
+ *
+ * Split out of writeResults() (which also owns the JSON) so that --export can
+ * re-emit the CSV for a dataset it did NOT just measure. The JSON is the file
+ * the report tooling reads, but the CSV/MD sit next to it in the repo and go
+ * stale the moment a dataset is edited in place — which is exactly what
+ * scripts/merge-app.php and the temp/ splices do.
+ */
+function writeCsv(string $csvFile, array $results): void
+{
+    $fp = fopen($csvFile, 'w');
     fputcsv($fp, [
         'app',
         'mode',

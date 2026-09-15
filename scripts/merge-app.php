@@ -18,8 +18,9 @@ declare(strict_types=1);
  *   php scripts/merge-app.php <target-prefix> <source-prefix> <app-key>
  *   e.g. php scripts/merge-app.php results/free-for-all-opcache-iso temp/azera-refresh azera
  *
- * Writes <target-prefix>.json + .csv in place (the .md is NOT regenerated —
- * the CSV/JSON are what the report tooling consumes; regenerate reports via
+ * Writes <target-prefix>.json in place, then re-emits its .csv + .md companions
+ * by delegating to `run.php --export` (which uses the harness' own writers, so
+ * the three stay in step). Regenerate the published views via
  * scripts/report.php afterwards). A .bak of the original JSON is kept.
  */
 
@@ -140,52 +141,22 @@ echo '  requests per mode: ',
 )),
     "\n";
 
-// --- CSV: rebuild in full from the merged JSON (same shape/shape/order as
-// run.php writeResults() emits, so the file looks like a fresh export) ------
+// --- CSV + MD: hand off to the harness' own writers -------------------------
+// run.php --export re-emits the .csv/.md companions from the dataset on disk
+// using the SAME code that produced them, so the trio cannot drift apart. This
+// script used to carry a copy of run.php's CSV writer — and never refreshed
+// the .md at all, which is how free-for-all-opcache-iso.md came to sit a day
+// behind its .json.
 
-$csvPath = $targetPrefix . '.csv';
-if (!is_file($csvPath)) {
-    echo "  (no CSV at {$csvPath} — skipped)\n";
-    exit(0);
-}
+exportCompanions($targetPrefix);
 
-$fp = fopen($csvPath, 'w');
-fputcsv($fp, [
-    'app',
-    'mode',
-    'request',
-    'iterations_per_run',
-    'runs',
-    'trimmed_mean_ms',
-    'handle_ms',
-    'cleanup_ms',
-    'min_ms',
-    'mean_ms',
-    'median_ms',
-    'p95_ms',
-    'peak_mem',
-]);
-foreach ($target['apps'] as $app) {
-    foreach ($app['modes'] as $modeName => $mode) {
-        foreach ($mode['requests'] as $req) {
-            fputcsv($fp, [
-                $app['app'],
-                $modeName,
-                $req['request'],
-                $req['iterations_per_run'],
-                $req['runs'],
-                $req['trimmed_mean_ms'],
-                $req['handle_ms'] ?? '',
-                $req['cleanup_ms'] ?? '',
-                $req['min_ms'],
-                $req['mean_ms'],
-                $req['median_ms'],
-                $req['p95_ms'],
-                $req['peak_mem'],
-            ]);
-        }
+function exportCompanions(string $prefix): void
+{
+    $cmd = escapeshellarg(PHP_BINARY) . ' '
+        . escapeshellarg(__DIR__ . '/../run.php')
+        . ' --export=' . escapeshellarg($prefix);
+    passthru($cmd, $code);
+    if ($code !== 0) {
+        fwrite(STDERR, "  ! companion export failed (exit {$code}); .csv/.md may be stale\n");
     }
 }
-fclose($fp);
-
-echo "  CSV rebuilt from merged JSON ({$csvPath})\n";
