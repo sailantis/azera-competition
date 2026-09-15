@@ -41,8 +41,8 @@ class AppServiceProvider extends ServiceProvider
         });
         $events = $this->app->make(\Illuminate\Contracts\Events\Dispatcher::class);
         foreach ([
-            \Illuminate\Database\Events\TransactionBeginning::class => 'TransactionStarted',
-            \Illuminate\Database\Events\TransactionCommitted::class => 'TransactionCommitted',
+            \Illuminate\Database\Events\TransactionBeginning::class  => 'TransactionStarted',
+            \Illuminate\Database\Events\TransactionCommitted::class  => 'TransactionCommitted',
             \Illuminate\Database\Events\TransactionRolledBack::class => 'TransactionRolledBack',
         ] as $eventClass => $type) {
             $events->listen($eventClass, function () use ($log, $type): void {
@@ -79,6 +79,15 @@ class AppServiceProvider extends ServiceProvider
         $events->listen(\Illuminate\Foundation\Http\Events\RequestHandled::class, function (\Illuminate\Foundation\Http\Events\RequestHandled $event): void {
             $this->app->forgetScopedInstances();
             $event->request->route()?->flushController();
+
+            // The DB event log records one entry per executed query into a
+            // PROCESS-LIFETIME singleton (see register()). In a resident
+            // worker that grows without bound — measured +~850 B per
+            // query-request over 5,000 requests (2026-09-14) — so it must be
+            // wiped per request exactly like Laravel's scoped services.
+            // Without this, the db-events demo turns the benchmark's own
+            // instrumentation into a false "framework leaks" signal.
+            $this->app->make(DbEventLog::class)->clear();
         });
     }
 }

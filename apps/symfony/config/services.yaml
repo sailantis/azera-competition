@@ -25,8 +25,15 @@ services:
         tags:
             - { name: kernel.reset, method: resetState }
 
-    # DB event log lives for the process (query log accumulates there).
-    App\Symfony\Service\DbEventLog: ~
+    # DB event log: one entry per executed query. It records into
+    # PROCESS-lifetime service state, so in a resident worker it grows without
+    # bound (measured +~1.1 KB per query-request over 5,000 requests,
+    # 2026-09-14) unless cleared per request — hence the same kernel.reset
+    # hook the other request-scoped services carry (services_resetter is fired
+    # by Kernel::terminate, which SymfonyAdapter::cleanup() calls).
+    App\Symfony\Service\DbEventLog:
+        tags:
+            - { name: kernel.reset, method: clear }
 
     # DBAL driver middleware — records query + transaction activity into
     # DbEventLog (the db-events feature race).

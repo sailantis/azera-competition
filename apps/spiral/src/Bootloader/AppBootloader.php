@@ -11,6 +11,7 @@ namespace App\Spiral\Bootloader;
 
 use App\Spiral\Service\DbEventLog;
 use Spiral\Boot\Bootloader\Bootloader;
+use Spiral\Boot\FinalizerInterface;
 use Spiral\Config\ConfiguratorInterface;
 use Spiral\Core\Container;
 
@@ -36,7 +37,7 @@ final class AppBootloader extends Bootloader
         private readonly ConfiguratorInterface $config,
     ) {}
 
-    public function init(Container $container): void
+    public function init(Container $container, FinalizerInterface $finalizer): void
     {
         // PSR-14 listener for ItemCreated is registered declaratively in
         // config/events.php (picked up by EventsBootloader's ConfigProcessor);
@@ -51,6 +52,15 @@ final class AppBootloader extends Bootloader
         $container
             ->get(\Spiral\Logger\ListenerRegistryInterface::class)
             ->addListener($container->get(DbEventLog::class));
+
+        // The log records one entry per query into a container SINGLETON. In a
+        // resident worker that grows without bound (measured +~750 B per
+        // query-request over 5,000 requests, 2026-09-14), so wipe it after
+        // every request — the same FinalizerInterface hook CycleOrmBootloader
+        // uses to clean the ORM heap.
+        $finalizer->addFinalizer(static function () use ($container): void {
+            $container->get(DbEventLog::class)->clear();
+        });
     }
 
     public static function initDbEventLog(): DbEventLog
