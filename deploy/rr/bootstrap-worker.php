@@ -67,7 +67,7 @@ function assertNoLeadingBytes(string $file): void
     if ($pos !== 0) {
         throw new RuntimeException(sprintf(
             'Worker bootstrap file %s does not start with <?php (first 16 bytes: %s) — '
-            . 'it would emit raw output and corrupt the RoadRunner goridge protocol.',
+                . 'it would emit raw output and corrupt the RoadRunner goridge protocol.',
             $file,
             bin2hex($head)
         ));

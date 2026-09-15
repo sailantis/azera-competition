@@ -428,10 +428,10 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
                 // boot + request only — that is the honest per-request FPM
                 // footprint (one boot, one request, then the process dies).
                 memory_reset_peak_usage();
-                $cb     = [];
-                $ch     = [];
-                $cc     = [];
-                $status = 0;
+                $cb        = [];
+                $ch        = [];
+                $cc        = [];
+                $status    = 0;
                 $peakBytes = 0;
                 try {
                     $tb0 = hrtime(true);

@@ -728,6 +728,48 @@ final class ResultStore
     }
 
     /**
+     * Largest PHP heap reached at ANY probed endpoint, in bytes — the
+     * high-water mark of the resident run. Unlike residentHeap()'s end state
+     * this is order-independent, so it is a legitimate "worst it got" number.
+     * Null when the probe is absent.
+     */
+    public function residentPeakHeap(string $app, string $mode): ?int
+    {
+        $peak = null;
+        foreach (BenchmarkConfig::requestOrder() as $req) {
+            $row = $this->data[$app][$mode][$req] ?? null;
+            $v   = (int) ($row['mem_heap'] ?? 0);
+            if ($row !== null && $v > 0 && ($peak === null || $v > $peak)) {
+                $peak = $v;
+            }
+        }
+        return $peak;
+    }
+
+    /**
+     * The raw per-endpoint resident reading, kept SEPARATE from the chart
+     * accessors above because this is a trajectory and they are summary
+     * scalars. Order is the harness's own (the probe fires once per endpoint,
+     * in request order), which is the only order in which the cumulative heap
+     * is meaningful — sorting or ranking these rows would produce a series the
+     * probe never measured.
+     *
+     * @return list<array{request:string,heap:int}>
+     */
+    public function residentTrajectory(string $app, string $mode): array
+    {
+        $out = [];
+        foreach (BenchmarkConfig::requestOrder() as $req) {
+            $row = $this->data[$app][$mode][$req] ?? null;
+            $v   = (int) ($row['mem_heap'] ?? 0);
+            if ($row !== null && $v > 0) {
+                $out[] = ['request' => $req, 'heap' => $v];
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Retained heap growth across the probed endpoints, in bytes:
      * residentHeap() minus residentBootHeap(). Same caveat as residentHeap()
      * — endpoint-order dependent. Null when the probe is absent or the heap

@@ -83,11 +83,11 @@ Total time to serve one of each of the 21 endpoints — the sum of the endpoints
 
 ## Resident worker memory
 
-Read from inside the live RoadRunner worker after each endpoint, on an extra untimed request that never touches the latency numbers. Left panel: the PHP heap with the application booted and **no request served** — the framework's own data structures, with opcache bytecode excluded because it lives in shared memory. Right panel: how much of the heap is still held after every endpoint has run.
+Read from inside the live RoadRunner worker after each endpoint, on an extra untimed request that never touches the latency numbers. All six frameworks are drawn on one shared MB axis. The **left cap** is the PHP heap with the application booted and **no request served** — the framework's own data structures, with opcache bytecode excluded because it lives in shared memory. The **dot** is the heap after the last endpoint, and the **right cap** is the largest heap any endpoint reached. A narrow-left range that reaches far right is the shape worth watching: cheap to exist, expensive at its worst.
 
-**CakePHP** needs 0.850 MB to exist, against 7.08 MB for Spiral (x 8.3 more). **CakePHP** is the exception: it holds on to 39.7 MB by the end of the suite, so its cost grows with the number of distinct endpoints served rather than with request count.
+**CakePHP** needs 0.850 MB to exist, against 7.08 MB for Spiral (x 8.3 more). **CakePHP** is the exception: it reaches 40.6 MB against 0.850 MB at boot (x 47.7 more), and its heap is still higher than at the previous endpoint on 15 of the 20 steps through the suite — its cost grows with the number of distinct endpoints served, not with the request count.
 
-Growth is endpoint-order dependent — the probe reads the whole heap once per endpoint — so the right panel is a movement, not a per-request footprint.
+Only the left cap ranks frameworks: it is a property of the worker, identical on every endpoint. The dot and the right cap are both endpoint-order dependent — the probe reads the whole heap once per endpoint, so it cannot say what one request costs on its own — which is why they are drawn as a range and the dot marks the end of the run rather than a lighter reading.
 
 ![Resident worker memory](svg/real-roadrunner/resident-memory.svg)
 

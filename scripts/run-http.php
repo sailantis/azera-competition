@@ -94,7 +94,7 @@ $results = [
         // The FPM deployment model as actually configured. The report reads
         // this to describe what it measured instead of assuming a value.
         'fpm_max_requests' => fpmMaxRequestsFromTemplate($root),
-        'servers'     => [
+        'servers'          => [
             'roadrunner' => trim((string) shellProcessOutput("{$rrBinary} --version")),
             'nginx'      => trim((string) shellProcessOutput('nginx -v 2>&1')),
             'php_fpm'    => trim((string) shellProcessOutput("{$phpFpmBin} -v")),

@@ -271,7 +271,7 @@ final class MarkdownReport
                 $maxReqs === 0 => 'the pool never recycles its worker, so no process is spawned '
                     . 'per request — what remains is the FastCGI handshake plus a minimal script',
                 default => 'this dataset does not record whether the pool recycled its worker, so the '
-                    . 'per-request process-spawn share of this floor is unknown',
+                    . 'per-request process-spawn share of this floor is unknown'
             };
             // Only a known-recycled pool lets us subtract a spawn; the other
             // two cases must not imply we know where the floor comes from.
@@ -282,7 +282,7 @@ final class MarkdownReport
                     . 'subtract it and the remainder is the framework\'s own per-request boot, which FPM '
                     . 'still pays for every request even though its worker survives.',
                 default => 'Subtracting it leaves the framework\'s own per-request boot, but how much of '
-                    . 'this floor is a process spawn cannot be recovered from the dataset.',
+                    . 'this floor is a process spawn cannot be recovered from the dataset.'
             };
 
             return "\n\n**Server floor** — measured nginx + PHP-FPM with `pm.max_requests="
@@ -986,11 +986,20 @@ final class MarkdownReport
      *                    is the only number that says what a long-lived
      *                    process still holds.
      *
-     * Two panels, because one bar conflates two different questions: what the
-     * framework holds to exist, and what it accumulates while serving. The
-     * second is endpoint-ORDER dependent (the probe fires once per endpoint
-     * and reads the whole heap), so it is presented as growth, never as a
-     * footprint. Ranking it would be a lie.
+     * ONE axis, each framework drawn as a range whose two ends answer the two
+     * questions a single bar would conflate: the left cap is the heap with the
+     * app booted and no request served (a footprint — endpoint-independent, so
+     * legitimately rankable), the dot is the heap once the last endpoint has
+     * been served, and the right cap is the largest heap any endpoint reached.
+     * The dot is always BETWEEN the caps because the end state is bounded by
+     * them — it marks where the run stopped, and it is not a free third
+     * position.
+     *
+     * The end state and the peak are endpoint-ORDER dependent (the probe fires
+     * once per endpoint and reads the whole heap), so neither is a per-request
+     * cost; only the left cap ranks frameworks. That distinction is why the
+     * chart carries a dot and a right cap instead of collapsing the run to one
+     * number.
      *
      * @param list<string> $apps
      */
@@ -1007,30 +1016,42 @@ final class MarkdownReport
             if ($boot === null) {
                 continue;
             }
-            $label  = BenchmarkConfig::appLabel($app);
-            $growth = (int) ($this->store->residentGrowth($app, $mode) ?? 0);
+            $last  = (int) ($this->store->residentHeap($app, $mode) ?? $boot);
+            $peak  = (int) ($this->store->residentPeakHeap($app, $mode) ?? $boot);
+            $traj  = $this->store->residentTrajectory($app, $mode);
+            $label = BenchmarkConfig::appLabel($app);
             $series[$label] = [
-                'label'  => $label,
-                'color'  => BenchmarkConfig::appColor($app),
-                'boot'   => $boot / 1048576,
-                'growth' => $growth / 1048576,
+                'color' => BenchmarkConfig::appColor($app),
+                'boot'  => $boot / 1048576,
+                'last'  => $last / 1048576,
+                'peak'  => $peak / 1048576,
             ];
-            $rows[$label] = ['boot' => $boot, 'growth' => $growth];
+            $rows[$label] = ['boot' => $boot, 'last' => $last, 'peak' => $peak, 'traj' => $traj];
         }
         if (count($series) < 2) {
             return '';
         }
 
-        $svg = SvgChart::memoryTwoPanel(
+        // Rows are RANKED on the footprint (cheapest first), not left in the
+        // view's app order: the left cap is the one number here that is a
+        // property of the worker rather than of the endpoint order, so it is
+        // the only column that can carry a ranking — and a chart that claims a
+        // ranking should read as one. The prose below ranks on the same key.
+        uasort($series, static fn(array $a, array $b): int => $a['boot'] <=> $b['boot']);
+
+        $svg = SvgChart::memoryRange(
             $series,
-            'Resident worker memory — footprint and accumulated growth',
+            'Resident worker memory — footprint, end state and worst endpoint',
+            'bar spans boot (left cap) → largest endpoint (right cap) · dot = heap after the last endpoint',
+            'lightest footprint',
+            'largest peak',
             960
         );
         $file = 'resident-memory.svg';
         file_put_contents($dir . '/' . $file, $svg);
 
-        // Prose from the clean (footprint) half — boot is endpoint-independent
-        // and therefore legitimately rankable.
+        // Rank on the footprint end — boot is endpoint-independent and
+        // therefore the only legitimately comparable number here.
         $byBoot = $rows;
         uasort($byBoot, static fn(array $a, array $b): int => $a['boot'] <=> $b['boot']);
         $keys    = array_keys($byBoot);
@@ -1041,30 +1062,66 @@ final class MarkdownReport
 
         // Name the largest accumulator, if any framework actually accumulates.
         $byGrowth = $rows;
-        uasort($byGrowth, static fn(array $a, array $b): int => $b['growth'] <=> $a['growth']);
-        $gKeys  = array_keys($byGrowth);
-        $gTop   = $gKeys[0];
-        $gTopMb = $byGrowth[$gTop]['growth'] / 1048576;
+        uasort(
+            $byGrowth,
+            static fn(array $a, array $b): int =>
+                ($b['peak'] - $b['boot']) <=> ($a['peak'] - $a['boot'])
+        );
+        $gTop    = (string) array_key_first($byGrowth);
+        $gRow    = $byGrowth[$gTop];
+        $gBootMb = $gRow['boot'] / 1048576;
+        $gPeakMb = $gRow['peak'] / 1048576;
+        $gLastMb = $gRow['last'] / 1048576;
+        $gTopMb  = $gPeakMb - $gBootMb;
+
+        // A trajectory-only fact: on how many steps did the heap rise? Stated
+        // instead of "it climbs steadily" because the sequence is NOT
+        // monotone — it dips whenever an endpoint releases what the previous
+        // one held. Counting the rises claims only what was measured.
+        $rises = 0;
+        $traj  = $gRow['traj'];
+        for ($i = 1; $i < count($traj); $i++) {
+            if ($traj[$i]['heap'] > $traj[$i - 1]['heap']) {
+                $rises++;
+            }
+        }
+        $steps = max(1, count($traj) - 1);
 
         $growthSentence = $gTopMb < 0.5
-            ? 'No framework retains more than half a megabyte across the full endpoint suite — '
-                . 'state is released between requests.'
-            : '**' . $gTop . '** is the exception: it holds on to ' . SvgChart::fmt($gTopMb)
-                . ' MB by the end of the suite, so its cost grows with the number of distinct '
-                . 'endpoints served rather than with request count.';
+            ? 'No framework holds more than half a megabyte more at its worst endpoint than at '
+                . 'boot — state is released between requests.'
+            : '**' . $gTop . '** is the exception: it reaches ' . SvgChart::fmt($gPeakMb)
+                . ' MB against ' . SvgChart::fmt($gBootMb) . ' MB at boot (x '
+                . SvgChart::fmtFactor($gPeakMb / max($gBootMb, 1e-9)) . ' more), and its heap '
+                . 'is still higher than at the previous endpoint on ' . $rises . ' of the '
+                . $steps . ' steps through the suite'
+                // The end state is worth naming only when it differs from the
+                // peak: printing the same number twice reads as a mistake.
+                . ($gLastMb < $gPeakMb
+                    ? ', ending the run at ' . SvgChart::fmt($gLastMb) . ' MB after releasing '
+                        . SvgChart::fmt($gPeakMb - $gLastMb) . ' MB from that worst endpoint'
+                    : '')
+                . ' — its cost grows with the number of distinct endpoints served, not with the '
+                . 'request count.';
 
         return "## Resident worker memory\n\n"
             . "Read from inside the live RoadRunner worker after each endpoint, on an extra "
-            . "untimed request that never touches the latency numbers. Left panel: the PHP heap "
-            . "with the application booted and **no request served** — the framework's own data "
-            . "structures, with opcache bytecode excluded because it lives in shared memory. "
-            . "Right panel: how much of the heap is still held after every endpoint has run.\n\n"
+            . "untimed request that never touches the latency numbers. All six frameworks are "
+            . "drawn on one shared MB axis. The **left cap** is the PHP heap with the application "
+            . "booted and **no request served** — the framework's own data structures, with "
+            . "opcache bytecode excluded because it lives in shared memory. The **dot** is the "
+            . "heap after the last endpoint, and the **right cap** is the largest heap any "
+            . "endpoint reached. A narrow-left range that reaches far right is the shape worth "
+            . "watching: cheap to exist, expensive at its worst.\n\n"
             . "**{$light}** needs " . SvgChart::fmt($lightMb) . ' MB to exist, against '
             . SvgChart::fmt($heavyMb) . ' MB for ' . $heavy
             . ' (x ' . SvgChart::fmtFactor($heavyMb / max($lightMb, 1e-9)) . " more). "
             . $growthSentence
-            . "\n\nGrowth is endpoint-order dependent — the probe reads the whole heap once per "
-            . "endpoint — so the right panel is a movement, not a per-request footprint.\n\n"
+            . "\n\nOnly the left cap ranks frameworks: it is a property of the worker, identical "
+            . "on every endpoint. The dot and the right cap are both endpoint-order dependent — "
+            . "the probe reads the whole heap once per endpoint, so it cannot say what one request "
+            . "costs on its own — which is why they are drawn as a range and the dot marks the end "
+            . "of the run rather than a lighter reading.\n\n"
             . '![Resident worker memory](' . $rel . '/' . $file . ')';
     }
 

@@ -368,143 +368,217 @@ final class SvgChart
     }
 
     /**
-     * Resident-worker memory: a two-panel composition that separates the two
-     * questions a single bar would conflate.
+     * Resident-worker memory on ONE axis: a shared horizontal MB scale where
+     * each framework is a range, and the two ends of that range answer two
+     * different questions.
      *
-     *   LEFT  — "how much does this framework need to exist": the PHP heap
-     *           right after bootstrap(), before any request. One bar per
-     *           framework, direct comparison, clean.
-     *   RIGHT — "how much does it accumulate while serving": retained growth
-     *           from that baseline to the last probed endpoint. Endpoint-order
-     *           dependent (see ResultStore::residentHeap), so it is drawn as
-     *           movement, not as a footprint.
+     *   LEFT END  = boot heap — the PHP heap right after bootstrap(), before
+     *               any request. Endpoint-independent, so it is a footprint
+     *               and legitimately rankable.
+     *   DOT       = heap after the LAST probed endpoint — the same worker,
+     *               later. Endpoint-ORDER dependent (see
+     *               ResultStore::residentHeap), so it reads as "where the run
+     *               ended", never as a per-request cost.
+     *   RIGHT END = largest heap reached at ANY probed endpoint. The dot is the
+     *               end state, not necessarily the high-water mark, and the
+     *               gap between the two is transient state the worker held and
+     *               then released.
      *
-     * Without the split, a framework that boots tiny but leaks (the exact
-     * shape the harness's own DbEventLog bug produced) reads identically to
-     * one that boots large — so the distinction is the point of the chart.
+     * Two dashed verticals carry the aggregate story — the lightest footprint
+     * and the largest peak — so a reader gets the same two answers the retired
+     * two-panel composition gave, on one comparable scale where a framework can
+     * boot narrow-left (cheap to exist) and still reach far right (expensive at
+     * its worst). No single bar could show both.
      *
-     * @param array<string,array{label:string,color:string,boot:float,growth:float}> $series
-     *        framework label => ['label' => display name, 'color' => fill,
-     *        'boot' => MB resident after bootstrap, 'growth' => MB retained since]
+     * The dot is only ever ON the range: it marks where the run ended, and "in
+     * the middle" is not a free position. A row whose dot touches the right cap
+     * grew until the last request; a row whose dot stops short of the others is
+     * simply the later endpoint, not a lighter one.
+     *
+     * @param array<string,array{color:string,boot:float,last:float,peak:float}> $series
+     *        framework label => MB values, with boot <= last <= peak
+     * @param string $caption small line under the title explaining the marks
+     * @param string $leftRefLabel name of the lightest-footprint reference line
+     * @param string $rightRefLabel name of the largest-peak reference line
      * @return string SVG, or '' when there is nothing to draw
      */
-    public static function memoryTwoPanel(
+    public static function memoryRange(
         array $series,
         string $title = '',
+        string $caption = '',
+        string $leftRefLabel = 'lightest footprint',
+        string $rightRefLabel = 'largest peak',
         int $width = 960
     ): string {
         if ($series === []) {
             return '';
         }
 
-        $gapW    = 34;
-        $panelW  = (int) (($width - $gapW) / 2);
-        $panelH  = 300;
-        $padT    = $title !== '' ? 96 : 54;
-        $padB    = 62;
-        $barAreaH = $panelH - $padT - $padB;
+        // The same two left-hand columns dotRange() uses — name, then values —
+        // proven to fit the longest framework name without a rotated label.
+        $padL      = 218;
+        $plotR     = $width - 40;
+        $nameRight = $padL - 106;
+        $valRight  = $padL - 12;
 
-        // One shared max so the two panels are visually comparable: a bar of
-        // the same height means the same number of megabytes on both sides.
         $max = 0.0;
         foreach ($series as $s) {
-            $max = max($max, $s['boot'], $s['growth']);
+            $max = max($max, $s['boot'], $s['last'], $s['peak']);
         }
         if ($max <= 0) {
             return '';
         }
-        $axisTop = self::niceCeil($max);
-        $ticks   = self::linearTicks($axisTop, 4);
+        // Linear, anchored at zero: a range chart is read as "how much", and a
+        // truncated baseline would exaggerate the small footprints.
+        [$ratioOf, $ticks] = self::axisMap(0.0, $max, false, 4);
+        $plotW = $plotR - $padL;
+        $toX   = static fn(float $v): float => $padL + $plotW * $ratioOf($v);
 
-        $height = $panelH;
-        $out    = [];
-        $out[]  = self::svgOpen($width, $height, $title);
-        $out[]  = self::card($width, $height);
+        $rowH    = 30;
+        $n       = count($series);
+        $padT    = $title !== '' ? ($caption !== '' ? 100 : 78) : 54;
+        $gridBot = $padT + $n * $rowH + 14;
+        $height  = $gridBot + 66;
+
+        $out = [];
+        $out[] = self::svgOpen($width, $height, $title);
+        $out[] = self::card($width, $height);
 
         if ($title !== '') {
-            $out[] = self::text(24, 30, $title, 16, self::INK, 700);
+            $out[] = self::text($padL, 32, $title, 17, self::INK, 700);
             $out[] = self::text(
-                24,
-                50,
+                $padL,
+                54,
                 'linear scale · MB of PHP heap · opcache bytecode lives in shared memory and is excluded',
-                11,
+                12,
                 self::INK_SOFT,
                 400,
                 true
             );
+            if ($caption !== '') {
+                $out[] = self::text($padL, 76, $caption, 12, self::INK_SOFT, 400, true);
+            }
         }
+        $out[] = self::text($valRight, $padT - 10, 'boot / end', 11, self::INK_SOFT, 600, false, 'end');
 
-        // The two panel headings, stated as the questions they answer.
-        $out[] = self::text(24, $padT - 34, 'Resident footprint  (boot → ready to serve)', 12.5, self::INK, 700);
-        $out[] = self::text(24, $padT - 18, 'framework data structures with no request served — lower is better', 11, self::INK_SOFT, 400, true);
-        $rightX = $panelW + $gapW + 24;
-        $out[] = self::text($rightX, $padT - 34, 'Retained growth  (boot → after full suite)', 12.5, self::INK, 700);
-        $out[] = self::text($rightX, $padT - 18, 'heap still held after all probed endpoints — endpoint-order dependent', 11, self::INK_SOFT, 400, true);
-
-        $n     = count($series);
-        $labels = array_keys($series);
-
-        foreach ([[0, 'boot'], [$panelW + $gapW, 'growth']] as [$panelX, $field]) {
-            $plotL = $panelX + 56;
-            $plotR = $panelX + $panelW - 12;
-            $plotW = $plotR - $plotL;
-
-            // Grid + ticks.
-            foreach ($ticks as $t) {
-                $y = $padT + $barAreaH - ($barAreaH * ($t / $axisTop));
-                $out[] = sprintf(
-                    '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
-                    self::n($plotL),
-                    self::n($y),
-                    self::n($plotR),
-                    self::n($y),
-                    self::GRID
-                );
-                $out[] = self::text($plotL - 8, $y + 4, self::fmtTick($t), 10, self::INK_SOFT, 400, false, 'end');
+        // Vertical grid + ticks, with the unit on every label.
+        foreach ($ticks as $t) {
+            $x = $toX($t);
+            if ($x < $padL - 0.5 || $x > $plotR + 0.5) {
+                continue;
             }
             $out[] = sprintf(
                 '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
-                self::n($plotL),
-                self::n($padT + $barAreaH),
-                self::n($plotR),
-                self::n($padT + $barAreaH),
-                self::AXIS
+                self::n($x),
+                self::n($padT - 6),
+                self::n($x),
+                self::n($gridBot),
+                self::GRID
             );
+            $out[] = self::text(
+                $x,
+                $gridBot + 18,
+                self::fmtTick($t) . ' MB',
+                11.5,
+                self::INK_SOFT,
+                500,
+                false,
+                'middle'
+            );
+        }
 
-            $step = $plotW / max(1, $n);
-            $barW = min(46.0, $step * 0.56);
-            foreach ($series as $label => $s) {
-                $i   = array_search($label, $labels, true);
-                $cx  = $plotL + $step * $i + $step / 2;
-                $v   = (float) $s[$field];
-                if ($v > 0) {
-                    $y = $padT + $barAreaH - ($barAreaH * ($v / $axisTop));
-                    $out[] = sprintf(
-                        '<rect x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="0.35"/>',
-                        self::n($cx - $barW / 2),
-                        self::n($y),
-                        self::n($barW),
-                        self::n(max(1.0, $padT + $barAreaH - $y)),
-                        $s['color']
-                    );
-                    $out[] = self::text($cx, $y - 7, self::fmt($v), 10.5, self::INK, 600, false, 'middle');
-                } else {
-                    // A framework that retains nothing gets an explicit zero
-                    // mark rather than an empty slot that reads as "no data".
-                    $out[] = self::text($cx, $padT + $barAreaH - 7, '0', 10.5, self::INK_SOFT, 600, false, 'middle');
-                }
-                // Name label, rotated for the longer framework names.
+        // The two reference lines: reading aids, never a series — dashed slate
+        // so they can never be mistaken for a framework's mark.
+        if ($n > 1) {
+            $boots = array_map(static fn(array $s): float => $s['boot'], array_values($series));
+            $peaks = array_map(static fn(array $s): float => $s['peak'], array_values($series));
+            $refs  = [
+                [$toX(min($boots)), $leftRefLabel, 0],
+                [$toX(max($peaks)), $rightRefLabel, 0],
+            ];
+            // Push the second label down a row when both lines land close
+            // together, so two short labels can never overprint.
+            if (abs($refs[0][0] - $refs[1][0]) < 210) {
+                $refs[1][2] = 1;
+            }
+            foreach ($refs as [$rx, $rlabel, $row]) {
                 $out[] = sprintf(
-                    '<text x="%s" y="%s" font-family="%s" font-size="10.5" fill="%s" text-anchor="end" transform="rotate(-32 %s %s)">%s</text>',
-                    self::n($cx + 3),
-                    self::n($padT + $barAreaH + 14),
-                    self::FONT,
-                    self::INK_SOFT,
-                    self::n($cx + 3),
-                    self::n($padT + $barAreaH + 14),
-                    self::esc($label)
+                    '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1" stroke-dasharray="4 4"/>',
+                    self::n($rx),
+                    self::n($padT - 6),
+                    self::n($rx),
+                    self::n($gridBot),
+                    self::AXIS
+                );
+                $out[] = self::text($rx, $gridBot + 40 + $row * 15, $rlabel, 11, self::INK_SOFT, 600, false, 'middle');
+            }
+        }
+
+        // Axis baseline.
+        $out[] = sprintf(
+            '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+            self::n($padL),
+            self::n($gridBot),
+            self::n($plotR),
+            self::n($gridBot),
+            self::AXIS
+        );
+
+        $capH = 7.0;
+        $dotR = 5.2;
+        $ri   = 0;
+        foreach ($series as $label => $s) {
+            $cy    = $padT + $rowH * $ri + $rowH / 2;
+            $color = (string) $s['color'];
+            $xBoot = $toX($s['boot']);
+            $xLast = $toX($s['last']);
+            $xPeak = $toX($s['peak']);
+
+            // Range, left end (boot) to right end (largest peak).
+            $out[] = sprintf(
+                '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>',
+                self::n(min($xBoot, $xPeak)),
+                self::n($cy),
+                self::n(max($xBoot, $xPeak)),
+                self::n($cy),
+                $color
+            );
+            // End caps bound the two measurements: footprint on the left, worst
+            // endpoint on the right. Distinct from the dot's column.
+            foreach ([$xBoot, $xPeak] as $xc) {
+                $out[] = sprintf(
+                    '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round"/>',
+                    self::n($xc),
+                    self::n($cy - $capH),
+                    self::n($xc),
+                    self::n($cy + $capH),
+                    $color
                 );
             }
+            // End-state dot, white ring so it reads over the span.
+            $out[] = sprintf(
+                '<circle cx="%s" cy="%s" r="%s" fill="%s" stroke="%s" stroke-width="2"/>',
+                self::n($xLast),
+                self::n($cy),
+                self::n($dotR),
+                $color,
+                self::CARD_BG
+            );
+
+            // Name in the series colour (identity), values in ink. The pair is
+            // the left end and the dot, in the order the marks appear.
+            $out[] = self::text($nameRight, $cy + 4.5, $label, 12.5, $color, 700, false, 'end');
+            $out[] = self::text(
+                $valRight,
+                $cy + 4.5,
+                self::fmt($s['boot']) . ' → ' . self::fmt($s['last']),
+                12.5,
+                self::INK,
+                700,
+                false,
+                'end'
+            );
+            $ri++;
         }
 
         $out[] = '</svg>';

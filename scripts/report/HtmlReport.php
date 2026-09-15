@@ -229,7 +229,7 @@ HTML;
                 $maxReqs === 0 => 'the pool never recycles its worker, so no process is spawned '
                     . 'per request — what remains is the FastCGI handshake plus a minimal script',
                 default => 'this dataset does not record whether the pool recycled its worker, so the '
-                    . 'per-request process-spawn share of this floor is unknown',
+                    . 'per-request process-spawn share of this floor is unknown'
             };
             $advice = match ($maxReqs) {
                 1 => 'That worker spawn + FastCGI handshake is the floor every row stands on — subtract it and the '
@@ -238,7 +238,7 @@ HTML;
                     . 'the remainder is the framework\'s own per-request boot, which FPM still pays for every '
                     . 'request even though its worker survives.',
                 default => 'Subtracting it leaves the framework\'s own per-request boot, but how much of this '
-                    . 'floor is a process spawn cannot be recovered from the dataset.',
+                    . 'floor is a process spawn cannot be recovered from the dataset.'
             };
 
             return '<strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests='

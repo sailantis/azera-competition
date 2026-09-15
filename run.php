@@ -82,16 +82,16 @@ TXT;
     exit(0);
 }
 
-$apps        = isset($opts['apps']) ? explode(',', $opts['apps']) : ['azera'];
-$itersPerRun = isset($opts['iterations-per-run']) ? (int) $opts['iterations-per-run'] : 1000;
-$runs        = isset($opts['runs']) ? (int) $opts['runs'] : 30;
-$doWarm      = isset($opts['warm']) || (!isset($opts['cold']));
-$doCold      = isset($opts['cold']);
-$outPrefix   = $opts['out'] ?? null;
+$apps         = isset($opts['apps']) ? explode(',', $opts['apps']) : ['azera'];
+$itersPerRun  = isset($opts['iterations-per-run']) ? (int) $opts['iterations-per-run'] : 1000;
+$runs         = isset($opts['runs']) ? (int) $opts['runs'] : 30;
+$doWarm       = isset($opts['warm']) || (!isset($opts['cold']));
+$doCold       = isset($opts['cold']);
+$outPrefix    = $opts['out'] ?? null;
 $exportPrefix = $opts['export'] ?? null;
-$clearCache  = isset($opts['clear-cache']);
-$doSeed      = isset($opts['seed']);
-$seedRows    = isset($opts['rows']) ? (int) $opts['rows'] : 1000;
+$clearCache   = isset($opts['clear-cache']);
+$doSeed       = isset($opts['seed']);
+$seedRows     = isset($opts['rows']) ? (int) $opts['rows'] : 1000;
 
 // Cold mode times bootstrap() INSIDE the request clock (FPM story), so the
 // iteration count multiplies the number of full framework boots per endpoint

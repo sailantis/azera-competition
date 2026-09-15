@@ -15,7 +15,7 @@ supposed to isolate.
 Note precisely what the change removes. FPM still runs the app's entry script
 for every request, so the framework's boot remains **inside the request
 clock** — that is the model the cold-start view simulates. What disappears is
-the per-request *process* spawn: the worker, its opcache and its static state
+the per-request _process_ spawn: the worker, its opcache and its static state
 survive the whole block. We do not enable `opcache.preload`, so the app is
 genuinely rebuilt per request rather than hoisted into shared memory — which
 is why this stays the honest counterpart of the simulated cold-start view.
