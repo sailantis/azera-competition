@@ -114,7 +114,12 @@ return [
             'mode'       => 'roadrunner',
             'log_scale'  => false,
             'apps'       => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            'charts'     => ['hero', 'speedup', 'features', 'wins'],
+            // 'resident-memory' rather than 'memory': these rows DO carry the
+            // probe (mem_boot_heap/mem_heap), and a resident worker's retained
+            // heap is the memory question this deployment model actually
+            // raises. peak_mem is 0 here — run-http.php refuses to present the
+            // client's own footprint as the framework's.
+            'charts'     => ['hero', 'speedup', 'features', 'resident-memory', 'wins'],
             'publish'    => ['framework'],
             'publish_md' => '19-BENCHMARKS-REAL.md',
         ],

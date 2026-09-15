@@ -81,6 +81,16 @@ Total time to serve one of each of the 21 endpoints — the sum of the endpoints
 
 ![Rate Limiter](svg/real-roadrunner/feature-rate-limiter.svg)
 
+## Resident worker memory
+
+Read from inside the live RoadRunner worker after each endpoint, on an extra untimed request that never touches the latency numbers. Left panel: the PHP heap with the application booted and **no request served** — the framework's own data structures, with opcache bytecode excluded because it lives in shared memory. Right panel: how much of the heap is still held after every endpoint has run.
+
+**CakePHP** needs 0.850 MB to exist, against 7.08 MB for Spiral (x 8.3 more). **CakePHP** is the exception: it holds on to 39.7 MB by the end of the suite, so its cost grows with the number of distinct endpoints served rather than with request count.
+
+Growth is endpoint-order dependent — the probe reads the whole heap once per endpoint — so the right panel is a movement, not a per-request footprint.
+
+![Resident worker memory](svg/real-roadrunner/resident-memory.svg)
+
 ## Wins per framework
 
 Number of endpoint races won (lowest boot-inclusive per-request time) per framework. This is a real server: a race won by less than the server floor and the run-to-run jitter is a tie, so read small leads cautiously.

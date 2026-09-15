@@ -659,6 +659,91 @@ final class ResultStore
         ];
     }
 
+    // --- Resident-worker memory (the opt-in RoadRunner probe) --------------
+    //
+    // deploy/rr/worker.php answers an `X-Mem-Probe: 1` request with the
+    // worker's own heap numbers; scripts/http-bench.php makes exactly one such
+    // request per endpoint, AFTER its timed loop. Read them with the caveats
+    // below in mind — they are not the same kind of measurement as peak_mem.
+
+    /**
+     * Framework data structures resident after bootstrap(), in bytes: the
+     * PHP heap with the application built but no request served. This is the
+     * one clean "how much does this framework need to exist" number — with
+     * opcache on, compiled bytecode lives in shared memory and is NOT counted,
+     * so what remains is exactly the framework's own objects.
+     *
+     * Taken from the first probed row: the worker boots once and the value is
+     * a property of the worker, not of the request (verified — it is identical
+     * across endpoints). Returns null when the dataset predates the probe or
+     * was measured under php-fpm (the worker is recycled, so there is no
+     * resident state to report).
+     */
+    public function residentBootHeap(string $app, string $mode): ?int
+    {
+        foreach (BenchmarkConfig::requestOrder() as $req) {
+            $row = $this->data[$app][$mode][$req] ?? null;
+            if ($row !== null && (int) ($row['mem_boot_heap'] ?? 0) > 0) {
+                return (int) $row['mem_boot_heap'];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * PHP heap after the LAST probed endpoint of the run, in bytes.
+     *
+     * CAUTION — this is an ORDER-DEPENDENT cumulative reading, not a
+     * footprint. The probe fires once per endpoint in the harness's request
+     * order and reads the whole resident heap, so the final value includes
+     * every earlier endpoint's retained state. It exists to expose GROWTH
+     * (retained bytes per endpoint), not to rank frameworks on a per-request
+     * cost. Use residentBootHeap() for the footprint comparison.
+     */
+    public function residentHeap(string $app, string $mode): ?int
+    {
+        $last = null;
+        foreach (BenchmarkConfig::requestOrder() as $req) {
+            $row = $this->data[$app][$mode][$req] ?? null;
+            if ($row !== null && (int) ($row['mem_heap'] ?? 0) > 0) {
+                $last = (int) $row['mem_heap'];
+            }
+        }
+        return $last;
+    }
+
+    /**
+     * Retained heap growth across the probed endpoints, in bytes:
+     * residentHeap() minus residentBootHeap(). Same caveat as residentHeap()
+     * — endpoint-order dependent. Null when the probe is absent or the heap
+     * never rose above the boot baseline.
+     */
+    public function residentGrowth(string $app, string $mode): ?int
+    {
+        $boot = $this->residentBootHeap($app, $mode);
+        $heap = $this->residentHeap($app, $mode);
+        if ($boot === null || $heap === null || $heap <= $boot) {
+            return null;
+        }
+        return $heap - $boot;
+    }
+
+    /**
+     * Whether this dataset carries the resident-worker memory probe at all.
+     * Datasets measured before the probe existed, or over php-fpm, do not.
+     */
+    public function hasResidentMem(string $mode): bool
+    {
+        foreach ($this->data as $modes) {
+            foreach (($modes[$mode] ?? []) as $row) {
+                if ((int) ($row['mem_boot_heap'] ?? 0) > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /**
      * Requests present for a mode, in canonical order.
      *

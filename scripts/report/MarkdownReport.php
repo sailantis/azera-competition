@@ -148,12 +148,13 @@ final class MarkdownReport
         bool $logScale
     ): ?string {
         return match ($chart) {
-            'hero'     => $this->hero($svgDir, $rel, $apps, $mode, $logScale),
-            'speedup'  => $this->speedup($svgDir, $rel, $apps, $baseline, $mode),
-            'features' => $this->features($svgDir, $rel, $apps, $mode, $logScale),
-            'memory'   => $this->memory($svgDir, $rel, $apps, $mode),
-            'wins'     => $this->wins($apps, $baseline, $mode),
-            default    => null
+            'hero'             => $this->hero($svgDir, $rel, $apps, $mode, $logScale),
+            'speedup'          => $this->speedup($svgDir, $rel, $apps, $baseline, $mode),
+            'features'         => $this->features($svgDir, $rel, $apps, $mode, $logScale),
+            'memory'           => $this->memory($svgDir, $rel, $apps, $mode),
+            'resident-memory'  => $this->residentMemory($svgDir, $rel, $apps, $mode),
+            'wins'             => $this->wins($apps, $baseline, $mode),
+            default            => null
         };
     }
 
@@ -942,6 +943,104 @@ final class MarkdownReport
             . '(x ' . SvgChart::fmtFactor($worstMb / max($bestMb, 1e-9)) . " more). Each dot is the median endpoint and the "
             . "whisker spans the lightest to the heaviest endpoint.\n\n"
             . '![Peak memory footprint](' . $rel . '/' . $file . ')';
+    }
+
+    /**
+     * Resident-worker memory from the opt-in RoadRunner probe (see
+     * deploy/rr/worker.php and scripts/bench-lib.php).
+     *
+     * This is a DIFFERENT measurement from the peak_mem chart above, and the
+     * difference is the reason both exist:
+     *
+     *   peak_mem       — per-process allocator high-water mark from
+     *                    memory_get_peak_usage(true). Quantised to 2 MiB
+     *                    chunks, and in a recycled-worker harness it is a
+     *                    fresh process per endpoint.
+     *   resident heap  — exact PHP heap (memory_get_usage(false)) read from
+     *                    inside the RESIDENT worker, after the request. This
+     *                    is the only number that says what a long-lived
+     *                    process still holds.
+     *
+     * Two panels, because one bar conflates two different questions: what the
+     * framework holds to exist, and what it accumulates while serving. The
+     * second is endpoint-ORDER dependent (the probe fires once per endpoint
+     * and reads the whole heap), so it is presented as growth, never as a
+     * footprint. Ranking it would be a lie.
+     *
+     * @param list<string> $apps
+     */
+    private function residentMemory(string $dir, string $rel, array $apps, string $mode): string
+    {
+        if (!$this->store->hasResidentMem($mode)) {
+            return '';
+        }
+
+        $series = [];
+        $rows   = [];
+        foreach ($apps as $app) {
+            $boot = $this->store->residentBootHeap($app, $mode);
+            if ($boot === null) {
+                continue;
+            }
+            $label  = BenchmarkConfig::appLabel($app);
+            $growth = (int) ($this->store->residentGrowth($app, $mode) ?? 0);
+            $series[$label] = [
+                'label'  => $label,
+                'color'  => BenchmarkConfig::appColor($app),
+                'boot'   => $boot / 1048576,
+                'growth' => $growth / 1048576,
+            ];
+            $rows[$label] = ['boot' => $boot, 'growth' => $growth];
+        }
+        if (count($series) < 2) {
+            return '';
+        }
+
+        $svg = SvgChart::memoryTwoPanel(
+            $series,
+            'Resident worker memory — footprint and accumulated growth',
+            960
+        );
+        $file = 'resident-memory.svg';
+        file_put_contents($dir . '/' . $file, $svg);
+
+        // Prose from the clean (footprint) half — boot is endpoint-independent
+        // and therefore legitimately rankable.
+        $byBoot = $rows;
+        uasort($byBoot, static fn(array $a, array $b): int => $a['boot'] <=> $b['boot']);
+        $keys  = array_keys($byBoot);
+        $light = $keys[0];
+        $heavy = $keys[count($keys) - 1];
+        $lightMb = $byBoot[$light]['boot'] / 1048576;
+        $heavyMb = $byBoot[$heavy]['boot'] / 1048576;
+
+        // Name the largest accumulator, if any framework actually accumulates.
+        $byGrowth = $rows;
+        uasort($byGrowth, static fn(array $a, array $b): int => $b['growth'] <=> $a['growth']);
+        $gKeys   = array_keys($byGrowth);
+        $gTop    = $gKeys[0];
+        $gTopMb  = $byGrowth[$gTop]['growth'] / 1048576;
+
+        $growthSentence = $gTopMb < 0.5
+            ? 'No framework retains more than half a megabyte across the full endpoint suite — '
+                . 'state is released between requests.'
+            : '**' . $gTop . '** is the exception: it holds on to ' . SvgChart::fmt($gTopMb)
+                . ' MB by the end of the suite, so its cost grows with the number of distinct '
+                . 'endpoints served rather than with request count.';
+
+        return "## Resident worker memory\n\n"
+            . "Read from inside the live RoadRunner worker after each endpoint, on an extra "
+            . "untimed request that never touches the latency numbers. Left panel: the PHP heap "
+            . "with the application booted and **no request served** — the framework's own data "
+            . "structures, with opcache bytecode excluded because it lives in shared memory. "
+            . "Right panel: how much of the heap is still held after every endpoint has run.\n\n"
+            . "**{$light}** needs " . SvgChart::fmt($lightMb) . ' MB to exist, against '
+            . SvgChart::fmt($heavyMb) . ' MB for ' . $heavy
+            . ' (x ' . SvgChart::fmtFactor($heavyMb / max($lightMb, 1e-9)) . " more). "
+            . $growthSentence
+            . "\n\nGrowth is endpoint-order dependent — the probe reads the whole heap once per "
+            . "endpoint — so the right panel is a movement, not a per-request footprint.\n\n"
+            . '![Resident worker memory](' . $rel . '/' . $file . ')';
     }
 
     /**

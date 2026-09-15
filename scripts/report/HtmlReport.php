@@ -92,17 +92,18 @@ HTML;
 
         $figures = '';
         $order   = [
-            'startup' => $this->store->hasBoot()
+            'startup'         => $this->store->hasBoot()
                 ? 'Framework startup — boot + teardown (cold + warm)'
                 : 'Framework startup (GET /)',
-            'speedup' => 'Total response times',
-            'memory'  => 'Peak memory footprint',
+            'speedup'         => 'Total response times',
+            'memory'          => 'Peak memory footprint',
+            'resident-memory' => 'Resident worker memory',
         ];
         foreach ($order as $key => $caption) {
             if (!isset($svgFiles[$key])) {
                 continue;
             }
-            if ($key !== 'memory' && $this->store->hasBoot()) {
+            if (!in_array($key, ['memory', 'resident-memory'], true) && $this->store->hasBoot()) {
                 $caption .= $this->bootBasis($mode);
             }
             $figures .= sprintf(
@@ -128,11 +129,11 @@ HTML;
             );
         }
 
-        $tables       = new Tables($this->store);
-        $charts       = $view['charts'] ?? [];
-        $winsBlock    = in_array('wins', $charts, true) ? $tables->winsHtml($mode, $apps) : '';
-        $matrixBlock  = $tables->latencyHtml($mode, $apps);
-        $floorBlock   = $this->floorNote($mode) !== ''
+        $tables      = new Tables($this->store);
+        $charts      = $view['charts'] ?? [];
+        $winsBlock   = in_array('wins', $charts, true) ? $tables->winsHtml($mode, $apps) : '';
+        $matrixBlock = $tables->latencyHtml($mode, $apps);
+        $floorBlock  = $this->floorNote($mode) !== ''
             ? '<p class="floor">' . $this->floorNote($mode) . '</p>'
             : '';
         $featureBlock = $featureFigs !== ''

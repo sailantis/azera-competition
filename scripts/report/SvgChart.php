@@ -368,6 +368,150 @@ final class SvgChart
     }
 
     /**
+     * Resident-worker memory: a two-panel composition that separates the two
+     * questions a single bar would conflate.
+     *
+     *   LEFT  — "how much does this framework need to exist": the PHP heap
+     *           right after bootstrap(), before any request. One bar per
+     *           framework, direct comparison, clean.
+     *   RIGHT — "how much does it accumulate while serving": retained growth
+     *           from that baseline to the last probed endpoint. Endpoint-order
+     *           dependent (see ResultStore::residentHeap), so it is drawn as
+     *           movement, not as a footprint.
+     *
+     * Without the split, a framework that boots tiny but leaks (the exact
+     * shape the harness's own DbEventLog bug produced) reads identically to
+     * one that boots large — so the distinction is the point of the chart.
+     *
+     * @param array<string,array{label:string,color:string,boot:float,growth:float}> $series
+     *        framework label => ['label' => display name, 'color' => fill,
+     *        'boot' => MB resident after bootstrap, 'growth' => MB retained since]
+     * @return string SVG, or '' when there is nothing to draw
+     */
+    public static function memoryTwoPanel(
+        array $series,
+        string $title = '',
+        int $width = 960
+    ): string {
+        if ($series === []) {
+            return '';
+        }
+
+        $gapW    = 34;
+        $panelW  = (int) (($width - $gapW) / 2);
+        $panelH  = 300;
+        $padT    = $title !== '' ? 96 : 54;
+        $padB    = 62;
+        $barAreaH = $panelH - $padT - $padB;
+
+        // One shared max so the two panels are visually comparable: a bar of
+        // the same height means the same number of megabytes on both sides.
+        $max = 0.0;
+        foreach ($series as $s) {
+            $max = max($max, $s['boot'], $s['growth']);
+        }
+        if ($max <= 0) {
+            return '';
+        }
+        $axisTop = self::niceCeil($max);
+        $ticks   = self::linearTicks($axisTop, 4);
+
+        $height = $panelH;
+        $out    = [];
+        $out[]  = self::svgOpen($width, $height, $title);
+        $out[]  = self::card($width, $height);
+
+        if ($title !== '') {
+            $out[] = self::text(24, 30, $title, 16, self::INK, 700);
+            $out[] = self::text(
+                24,
+                50,
+                'linear scale · MB of PHP heap · opcache bytecode lives in shared memory and is excluded',
+                11,
+                self::INK_SOFT,
+                400,
+                true
+            );
+        }
+
+        // The two panel headings, stated as the questions they answer.
+        $out[] = self::text(24, $padT - 34, 'Resident footprint  (boot → ready to serve)', 12.5, self::INK, 700);
+        $out[] = self::text(24, $padT - 18, 'framework data structures with no request served — lower is better', 11, self::INK_SOFT, 400, true);
+        $rightX = $panelW + $gapW + 24;
+        $out[] = self::text($rightX, $padT - 34, 'Retained growth  (boot → after full suite)', 12.5, self::INK, 700);
+        $out[] = self::text($rightX, $padT - 18, 'heap still held after all probed endpoints — endpoint-order dependent', 11, self::INK_SOFT, 400, true);
+
+        $n     = count($series);
+        $labels = array_keys($series);
+
+        foreach ([[0, 'boot'], [$panelW + $gapW, 'growth']] as [$panelX, $field]) {
+            $plotL = $panelX + 56;
+            $plotR = $panelX + $panelW - 12;
+            $plotW = $plotR - $plotL;
+
+            // Grid + ticks.
+            foreach ($ticks as $t) {
+                $y = $padT + $barAreaH - ($barAreaH * ($t / $axisTop));
+                $out[] = sprintf(
+                    '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+                    self::n($plotL),
+                    self::n($y),
+                    self::n($plotR),
+                    self::n($y),
+                    self::GRID
+                );
+                $out[] = self::text($plotL - 8, $y + 4, self::fmtTick($t), 10, self::INK_SOFT, 400, false, 'end');
+            }
+            $out[] = sprintf(
+                '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+                self::n($plotL),
+                self::n($padT + $barAreaH),
+                self::n($plotR),
+                self::n($padT + $barAreaH),
+                self::AXIS
+            );
+
+            $step = $plotW / max(1, $n);
+            $barW = min(46.0, $step * 0.56);
+            foreach ($series as $label => $s) {
+                $i   = array_search($label, $labels, true);
+                $cx  = $plotL + $step * $i + $step / 2;
+                $v   = (float) $s[$field];
+                if ($v > 0) {
+                    $y = $padT + $barAreaH - ($barAreaH * ($v / $axisTop));
+                    $out[] = sprintf(
+                        '<rect x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="0.35"/>',
+                        self::n($cx - $barW / 2),
+                        self::n($y),
+                        self::n($barW),
+                        self::n(max(1.0, $padT + $barAreaH - $y)),
+                        $s['color']
+                    );
+                    $out[] = self::text($cx, $y - 7, self::fmt($v), 10.5, self::INK, 600, false, 'middle');
+                } else {
+                    // A framework that retains nothing gets an explicit zero
+                    // mark rather than an empty slot that reads as "no data".
+                    $out[] = self::text($cx, $padT + $barAreaH - 7, '0', 10.5, self::INK_SOFT, 600, false, 'middle');
+                }
+                // Name label, rotated for the longer framework names.
+                $out[] = sprintf(
+                    '<text x="%s" y="%s" font-family="%s" font-size="10.5" fill="%s" text-anchor="end" transform="rotate(-32 %s %s)">%s</text>',
+                    self::n($cx + 3),
+                    self::n($padT + $barAreaH + 14),
+                    self::FONT,
+                    self::INK_SOFT,
+                    self::n($cx + 3),
+                    self::n($padT + $barAreaH + 14),
+                    self::esc($label)
+                );
+            }
+        }
+
+        $out[] = '</svg>';
+        return implode("\n", $out);
+    }
+
+    /**
      * Dot-and-range chart — the readable alternative to bars when the spread
      * between frameworks is large (Azera can be 20× faster than the next
      * framework, which collapses its bar to a sliver).
