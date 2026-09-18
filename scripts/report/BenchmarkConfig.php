@@ -208,4 +208,49 @@ final class BenchmarkConfig
     {
         return self::requestWorkload()[$request] ?? '';
     }
+
+    /**
+     * What each feature comparison actually exercises, in one sentence.
+     *
+     * This is the static counterpart of the feature charts: the charts and the
+     * latency table carry every measured number, so the prose beside them
+     * explains the WORKLOAD instead of reprinting a reading. Keeping it here
+     * (rather than inline in the renderer) means the description travels with
+     * the feature key, exactly like featureLabel().
+     *
+     * @return array<string,string>
+     */
+    public static function featureDescription(): array
+    {
+        return [
+            'routing'        => 'dispatches a plain request through the router and returns a rendered '
+                . 'template — no database access.',
+            'orm'            => 'loads one page of the 1,000 seeded rows through each framework\'s '
+                . 'ORM / Active Record layer: 20 items plus a COUNT for the pagination total.',
+            'query-builder'  => 'builds the same page of 20 items with each framework\'s query builder '
+                . 'instead of its ORM, so the two data-access styles can be compared directly.',
+            'rest-api'       => 'serves the same page of items as a JSON response rather than HTML, '
+                . 'which adds serialization to the ORM work.',
+            'aop'            => 'runs a request through an interceptor pipeline — logging, retry and '
+                . 'middleware aspects wrapped around the handler. Only frameworks with an AOP layer '
+                . 'take part.',
+            'cache'          => 'reads a COUNT(*) over the 1,000 rows through the framework\'s cache '
+                . 'with a 10-second TTL, so a hit costs no database work and a miss runs the query.',
+            'db-events'      => 'inserts one event row per request and lets the framework\'s database '
+                . 'events fire around that write.',
+            'events'         => 'dispatches an in-process event to registered listeners.',
+            'validation'     => 'validates a payload with the framework\'s own validator.',
+            'config'         => 'resolves a value from the framework\'s config repository.',
+            'request-scoped' => 'resolves a service scoped to the request from the container.',
+            'rate-limiter'   => 'checks a cache-backed rate limiter.',
+        ];
+    }
+
+    /**
+     * One-line description of a feature; '' when unmapped.
+     */
+    public static function featureDescriptionFor(string $feature): string
+    {
+        return self::featureDescription()[$feature] ?? '';
+    }
 }

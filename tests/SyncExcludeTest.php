@@ -77,13 +77,13 @@ final class SyncExcludeTest extends TestCase
         return array_map(
             static fn(string $p): array => [$p],
             [
-                'runtime',           // spiral kernel cache — held the Windows paths
-                'writable',          // laravel logs + compiled views
-                'bootstrap/cache',   // laravel compiled packages/config
-                'var/cache',         // symfony compiled container
-                'storage',           // laravel storage (sessions, compiled views)
-                'vendor',            // composer install runs on the VM
-                'temp',              // run scratch (stamped configs point at the VM)
+                'runtime',         // spiral kernel cache — held the Windows paths
+                'writable',        // laravel logs + compiled views
+                'bootstrap/cache', // laravel compiled packages/config
+                'var/cache',       // symfony compiled container
+                'storage',         // laravel storage (sessions, compiled views)
+                'vendor',          // composer install runs on the VM
+                'temp',            // run scratch (stamped configs point at the VM)
             ]
         );
     }
@@ -98,10 +98,10 @@ final class SyncExcludeTest extends TestCase
         return array_map(
             static fn(string $p): array => [$p],
             [
-                'apps/codeigniter/Cache',        // CI4's cache handler class
-                'apps/azera/Views',              // templates
-                'apps/codeigniter/Views',        // templates
-                'apps/laravel/resources/views',  // templates
+                'apps/codeigniter/Cache',       // CI4's cache handler class
+                'apps/azera/Views',             // templates
+                'apps/codeigniter/Views',       // templates
+                'apps/laravel/resources/views', // templates
             ]
         );
     }
@@ -173,6 +173,17 @@ final class SyncExcludeTest extends TestCase
             'C:/Users/',
             $src,
             'the leak check must look for absolute Windows paths'
+        );
+
+        // tests/ must be excluded from the scan, because THIS test contains the
+        // literal pattern it searches for. Leaving it in makes the guard fail
+        // on every sync with a false positive that looks exactly like the real
+        // bug it exists to catch. Tests are never served, so nothing can leak
+        // through them.
+        self::assertStringContainsString(
+            "grep -v '/tests/'",
+            $src,
+            'the leak scan must skip tests/, or it matches its own pattern'
         );
     }
 }

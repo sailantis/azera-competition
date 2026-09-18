@@ -20,8 +20,8 @@ declare(strict_types=1);
  * simulate.
  *
  * Usage:
- *   php scripts/derive-fpm.php results/free-for-all-opcache
- *   # writes results/free-for-all-opcache-deployments.json
+ *   php scripts/derive-fpm.php results/free-for-all-opcache-iso
+ *   # writes results/free-for-all-opcache-iso-deployments.json
  *
  * The report manifest's "deployments" dataset points at the derived file.
  */
@@ -30,7 +30,7 @@ require_once __DIR__ . '/report/BenchmarkConfig.php';
 
 if ($argc < 2) {
     fwrite(STDERR, "Usage: php scripts/derive-fpm.php <result-prefix>\n");
-    fwrite(STDERR, "  e.g. php scripts/derive-fpm.php results/free-for-all-opcache\n");
+    fwrite(STDERR, "  e.g. php scripts/derive-fpm.php results/free-for-all-opcache-iso\n");
     exit(1);
 }
 

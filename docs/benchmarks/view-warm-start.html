@@ -52,17 +52,18 @@ main{padding-bottom:10px}
 <header>
   <h1>Framework Competition — Warm Start</h1>
   <p class="lead">RoadRunner/Octane-style resident worker: the framework boots once, then serves every request. Each number charges that boot per request, so a cell is the whole time one request keeps a worker busy — what a recycled pool or a queue behind one worker actually experiences. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).</p>
-  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; warm mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; warm mode &middot; 1000 iterations per run over 30 runs &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">Boot model: boot included: the worker&#039;s recycle cost is added to every request</p>
 </header>
 <main>
   <section class="figures">
 <figure>
-  <figcaption>Framework startup — boot + teardown (cold + warm) — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/startup.svg" alt="Framework startup — boot + teardown (cold + warm) — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Framework startup — boot + teardown (cold + FPM rebuild + warm)</figcaption>
+  <img src="svg/warm-start/startup.svg" alt="Framework startup — boot + teardown (cold + FPM rebuild + warm)" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Total response times — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/speedup.svg" alt="Total response times — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Total response times</figcaption>
+  <img src="svg/warm-start/speedup.svg" alt="Total response times" loading="lazy">
 </figure>
 <figure>
   <figcaption>Peak memory footprint</figcaption>
@@ -72,66 +73,54 @@ main{padding-bottom:10px}
   <h2>Feature benchmarks</h2>
 <section class="figures">
 <figure>
-  <figcaption>Routing — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-routing.svg" alt="Routing — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Routing</figcaption>
+  <img src="svg/warm-start/feature-routing.svg" alt="Routing" loading="lazy">
 </figure>
 <figure>
-  <figcaption>ORM / Active Record — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-orm.svg" alt="ORM / Active Record — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>ORM / Active Record</figcaption>
+  <img src="svg/warm-start/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Query Builder — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-query-builder.svg" alt="Query Builder — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Query Builder</figcaption>
+  <img src="svg/warm-start/feature-query-builder.svg" alt="Query Builder" loading="lazy">
 </figure>
 <figure>
-  <figcaption>REST API (JSON) — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-rest-api.svg" alt="REST API (JSON) — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>REST API (JSON)</figcaption>
+  <img src="svg/warm-start/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
 </figure>
 <figure>
-  <figcaption>AOP (Aspect-Oriented) — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-aop.svg" alt="AOP (Aspect-Oriented) — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>AOP (Aspect-Oriented)</figcaption>
+  <img src="svg/warm-start/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Cache — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-cache.svg" alt="Cache — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Cache</figcaption>
+  <img src="svg/warm-start/feature-cache.svg" alt="Cache" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Database Events — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-db-events.svg" alt="Database Events — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Database Events</figcaption>
+  <img src="svg/warm-start/feature-db-events.svg" alt="Database Events" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Event Dispatcher — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-events.svg" alt="Event Dispatcher — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Event Dispatcher</figcaption>
+  <img src="svg/warm-start/feature-events.svg" alt="Event Dispatcher" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Validation — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-validation.svg" alt="Validation — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Validation</figcaption>
+  <img src="svg/warm-start/feature-validation.svg" alt="Validation" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Config — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-config.svg" alt="Config — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Config</figcaption>
+  <img src="svg/warm-start/feature-config.svg" alt="Config" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Request-Scoped Services — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-request-scoped.svg" alt="Request-Scoped Services — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Request-Scoped Services</figcaption>
+  <img src="svg/warm-start/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Rate Limiter — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request</figcaption>
-  <img src="svg/warm-start/feature-rate-limiter.svg" alt="Rate Limiter — boot included: the worker&#039;s recycle cost (0.000–17.5 ms) is added to every request" loading="lazy">
+  <figcaption>Rate Limiter</figcaption>
+  <img src="svg/warm-start/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
 </figure>
 </section>
-  <h2>Wins per framework</h2>
-<table>
-<thead><tr><th>Framework</th><th>Wins</th><th>Share</th></tr></thead>
-<tbody>
-<tr><td>Azera</td><td>21</td><td>100%</td></tr>
-<tr><td>Laravel</td><td>0</td><td>0%</td></tr>
-<tr><td>Symfony</td><td>0</td><td>0%</td></tr>
-<tr><td>Spiral</td><td>0</td><td>0%</td></tr>
-<tr><td>CodeIgniter</td><td>0</td><td>0%</td></tr>
-<tr><td>CakePHP</td><td>0</td><td>0%</td></tr>
-</tbody>
-</table>
   <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span> <span class="unit">(sub-line: boot + handle + post-response cleanup, which sum to the total)</span> <span class="unit">— every row and chart point adds the worker's boot (warm recycle), so each number is the full time one request keeps that worker busy</span></h2>
 <table class="matrix">
 <thead><tr><th>Request</th><th>Workload</th><th><span class="chip" style="--c:#3459e6">Azera</span></th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th><th><span class="chip" style="--c:#0ca678">Spiral</span></th><th><span class="chip" style="--c:#e8590c">CodeIgniter</span></th><th><span class="chip" style="--c:#d6409f">CakePHP</span></th></tr></thead>
@@ -147,7 +136,7 @@ main{padding-bottom:10px}
 <tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="win">0.037 <sub>0.001+0.035+0.001</sub></td><td class="">2.88 <sub>2.48+0.40+0.00</sub></td><td class="">0.688 <sub>0.544+0.142+0.002</sub></td><td class="">17.9 <sub>17.6+0.3+0.0</sub></td><td class="">0.572 <sub>0.000+0.562+0.010</sub></td><td class="">0.241 <sub>0.006+0.235+0.000</sub></td></tr>
 <tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="win">0.054 <sub>0.001+0.051+0.002</sub></td><td class="">2.83 <sub>2.48+0.35+0.00</sub></td><td class="">0.772 <sub>0.544+0.226+0.002</sub></td><td class="">17.9 <sub>17.5+0.4+0.0</sub></td><td class="">0.644 <sub>0.000+0.633+0.011</sub></td><td class="">0.337 <sub>0.006+0.331+0.000</sub></td></tr>
 <tr><td><code>GET /features/aop</code></td><td class="muted">no DB — interceptor pipeline</td><td class="win">0.131 <sub>0.001+0.129+0.001</sub></td><td class="">2.81 <sub>2.48+0.33+0.00</sub></td><td class="">0.740 <sub>0.544+0.194+0.002</sub></td><td class="">18.1 <sub>17.6+0.5+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/cache</code></td><td class="muted">no DB — cache round-trips</td><td class="win">0.014 <sub>0.001+0.012+0.001</sub></td><td class="">2.72 <sub>2.48+0.24+0.00</sub></td><td class="">0.630 <sub>0.544+0.084+0.002</sub></td><td class="">17.9 <sub>17.6+0.3+0.0</sub></td><td class="">0.404 <sub>0.000+0.396+0.008</sub></td><td class="">0.112 <sub>0.006+0.106+0.000</sub></td></tr>
+<tr><td><code>GET /features/cache</code></td><td class="muted">COUNT(*) of 1000 rows, cached 10s (miss = query)</td><td class="win">0.014 <sub>0.001+0.012+0.001</sub></td><td class="">2.72 <sub>2.48+0.24+0.00</sub></td><td class="">0.630 <sub>0.544+0.084+0.002</sub></td><td class="">17.9 <sub>17.6+0.3+0.0</sub></td><td class="">0.404 <sub>0.000+0.396+0.008</sub></td><td class="">0.112 <sub>0.006+0.106+0.000</sub></td></tr>
 <tr><td><code>GET /features/log</code></td><td class="muted">no DB — buffered log handlers</td><td class="win">0.014 <sub>0.001+0.012+0.001</sub></td><td class="">2.70 <sub>2.48+0.22+0.00</sub></td><td class="">0.625 <sub>0.544+0.079+0.002</sub></td><td class="">17.9 <sub>17.6+0.3+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
 <tr><td><code>GET /features/retry</code></td><td class="muted">no DB — retry policy</td><td class="win">0.011 <sub>0.001+0.009+0.001</sub></td><td class="">2.71 <sub>2.48+0.23+0.00</sub></td><td class="">0.629 <sub>0.543+0.084+0.002</sub></td><td class="">17.9 <sub>17.6+0.3+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
 <tr><td><code>GET /features/pipeline</code></td><td class="muted">no DB — middleware pipeline</td><td class="win">0.015 <sub>0.001+0.013+0.001</sub></td><td class="">2.70 <sub>2.48+0.22+0.00</sub></td><td class="">0.626 <sub>0.543+0.081+0.002</sub></td><td class="">17.9 <sub>17.6+0.3+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>

@@ -25,6 +25,10 @@
 
 declare(strict_types=1);
 
+// Boot probe: the clock MUST start before any framework code loads.
+require_once __DIR__ . '/../boot-probe.php';
+boot_probe_start();
+
 // Standard guard for PHP's built-in server: let it serve real files from the
 // docroot (none expected today, but keeps static assets working if added).
 if (PHP_SAPI === 'cli-server') {
@@ -70,6 +74,10 @@ if (!file_exists($root . 'data' . DIRECTORY_SEPARATOR . 'bench.sqlite')) {
 try {
     $kernel = new App\Symfony\Kernel('bench', false);
     $kernel->boot();
+
+    // Boot complete: kernel booted (container + bundles + bundles' extensions).
+    boot_probe_record('fpm', 'symfony');
+    mem_probe_arm('symfony');
 
     $request  = Symfony\Component\HttpFoundation\Request::createFromGlobals();
     $response = $kernel->handle($request);

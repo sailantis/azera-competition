@@ -51,7 +51,7 @@ main{padding-bottom:10px}
 <header>
   <h1>Azera Benchmark Results</h1>
   <p class="lead">PHP framework comparison across a full-stack request lifecycle: routing &rarr; controller &rarr; ORM query (SQLite) &rarr; template render &rarr; response.</p>
-  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; OPcache (CLI): yes &middot; measured 2026-09-14T21:26:25+00:00</p>
+  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; OPcache (CLI): no &middot; measured 2026-09-15T23:21:30+00:00</p>
 </header>
 <main>
   <div class="grid">
@@ -67,22 +67,12 @@ main{padding-bottom:10px}
 </a>
 <a class="card" href="view-real-roadrunner.html">
   <h3>Framework Competition — Real RoadRunner</h3>
-  <p>Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.</p>
+  <p>Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker&#039;s boot depends on the pool&#039;s max_jobs, which the dataset records: the boot is amortised across the jobs a worker serves between recycles, and a pool that never recycles puts no boot into a row at all. The deployment model actually measured is stated with the table.</p>
   <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
 </a>
 <a class="card" href="view-real-fpm.html">
   <h3>Framework Competition — Real PHP-FPM</h3>
   <p>Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool&#039;s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.</p>
-  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
-</a>
-<a class="card" href="view-memory.html">
-  <h3>Peak Memory Footprint</h3>
-  <p>Highest peak memory per framework. Low memory is what makes Azera cheap to run at scale.</p>
-  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
-</a>
-<a class="card" href="view-relative.html">
-  <h3>Relative to Azera</h3>
-  <p>The same dataset with Azera pinned at 1.0, so each framework reads as a multiple of the baseline instead of an absolute time.</p>
   <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
 </a>
   </div>

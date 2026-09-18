@@ -2,36 +2,41 @@
 
 Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool's worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.
 
-**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): no · 300 iterations per run over multiple runs, lower is better.
+**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): no · 1000 iterations per run over 10 runs, lower is better.
 
-_Measured 2026-09-14T21:22:18+00:00_
+_Measured 2026-09-15T23:21:30+00:00_
 
-## Framework startup
+## Framework startup GET /
 
-Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: **Azera** responds in 9.77 ms (median; 9.94 ms trimmed mean) against 9.95 ms (median) for CodeIgniter. Every framework lands within 5% of the fastest: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
+Time from PHP start until the framework is ready to serve, measured inside the FPM entry script — the boot every request waits for on this deployment, because nginx/PHP-FPM re-runs the entry script per request.
 
-![Framework startup — GET /](svg/real-fpm/startup.svg)
+- The fastest and slowest framework on this band are named by the chart below; the multiplier beside each row states how many times the fastest boot it needed.
+- Each framework's boot is reduced to one statistic (median of the probe samples), and the samples per framework are recorded in the dataset.
+
+![Framework startup — boot](svg/real-fpm/startup.svg)
 
 ## Total response times
 
-Total time to serve one of each of the 21 endpoints — the sum of the endpoints' medians, not a single response time — relative to Azera (1.0 = the baseline's own total, higher = slower). Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over every endpoint costs. Every framework lands within 5% of Azera on the total: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
+Total time to serve one pass over every benchmarked endpoint — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over every endpoint costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
 
 ![Total response times](svg/real-fpm/speedup.svg)
 
 ## Feature benchmarks
 
-- **Routing** (`GET /`): Azera at 9.77ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **ORM / Active Record** (`GET /items`): Azera at 9.79ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **Query Builder** (`GET /items-qb`): Azera at 9.82ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **REST API (JSON)** (`GET /api/items`): Symfony at 9.79ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **AOP (Aspect-Oriented)** (`GET /features/aop`): Spiral at 9.89ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **Cache** (`GET /features/cache`): Azera at 9.79ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **Database Events** (`GET /features/db-events`): Spiral at 9.80ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **Event Dispatcher** (`GET /features/events`): Azera at 9.83ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **Validation** (`GET /features/validation`): Azera at 9.82ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **Config** (`GET /features/config`): Laravel at 9.79ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **Request-Scoped Services** (`GET /features/request-scoped`): Azera at 9.82ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
-- **Rate Limiter** (`GET /features/rate-limit`): Symfony at 9.89ms median — every framework lands within 5% of it: the deployment is server-bound, so the ranking says more about the web server than about the frameworks.
+One race per framework feature, each run as a real request against a real database. Every figure — the winner of each race and the margin over the runner-up — is in that feature's own chart below, which anchors each endpoint at its fastest framework.
+
+- **Routing** (`GET /`) — dispatches a plain request through the router and returns a rendered template — no database access.
+- **ORM / Active Record** (`GET /items`) — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total.
+- **Query Builder** (`GET /items-qb`) — builds the same page of 20 items with each framework's query builder instead of its ORM, so the two data-access styles can be compared directly.
+- **REST API (JSON)** (`GET /api/items`) — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.
+- **AOP (Aspect-Oriented)** (`GET /features/aop`) — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.
+- **Cache** (`GET /features/cache`) — reads a COUNT(*) over the 1,000 rows through the framework's cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.
+- **Database Events** (`GET /features/db-events`) — inserts one event row per request and lets the framework's database events fire around that write.
+- **Event Dispatcher** (`GET /features/events`) — dispatches an in-process event to registered listeners.
+- **Validation** (`GET /features/validation`) — validates a payload with the framework's own validator.
+- **Config** (`GET /features/config`) — resolves a value from the framework's config repository.
+- **Request-Scoped Services** (`GET /features/request-scoped`) — resolves a service scoped to the request from the container.
+- **Rate Limiter** (`GET /features/rate-limit`) — checks a cache-backed rate limiter.
 
 ### Routing
 
@@ -81,48 +86,47 @@ Total time to serve one of each of the 21 endpoints — the sum of the endpoints
 
 ![Rate Limiter](svg/real-fpm/feature-rate-limiter.svg)
 
-## Wins per framework
+## Per-request memory
 
-On this deployment the server floor dominates: the median endpoint puts every framework within 2.98% of the fastest, so the counts below record measurement noise rather than framework advantages. The honest reading is that the server, not the framework, decides the response time here.
+How much memory a single request needs, for every framework, measured inside the FPM worker that served it. The numbers come from the FPM worker process itself: because the entry script is torn down when the request ends, it appends one sample as it exits, and the harness reads that back. The pool is `pm = static` with `max_children = 1` and `max_requests = 0`, so this is ONE worker that stays alive for the whole block — which is why it has retained memory worth reporting at all.
 
-| Framework | Wins | Share |
-|---|---:|---:|
-| Azera | 11 | 52% |
-| Symfony | 7 | 33% |
-| Spiral | 2 | 10% |
-| Laravel | 1 | 5% |
-| CodeIgniter | 0 | 0% |
-| CakePHP | 0 | 0% |
+A request's high-water mark is taken from the framework-ready boundary of the entry script to the moment the response is finished, with the mark reset at that boundary — so it counts exactly what serving the request cost, and never bleeds into the next one. Each endpoint is probed 10 times and reduced to its median, so a single outlier cannot move a row; the range shows how much the endpoints themselves differ, which is a property of the workload rather than of the measurement.
+
+All six frameworks are drawn on one shared MB axis. The **left cap** is the lightest probed endpoint, the **dot** is the median endpoint, and the **right cap** is the heaviest. Every mark is a measured endpoint rather than an interpolation, so each can be named — the three numbers printed beside each bar are those same three readings. The faint bar behind each mark runs from zero to the median, so a row's length is read against the axis rather than estimated from the caps. The multiplier beside a row divides its median by the lightest median on the page; the reference row carries none.
+
+Rows are ordered by the **median** request — a framework's typical cost — so one heavy route cannot reorder the table on its own. A row that stays flat and a row that reaches far right therefore say different things: the first is cheap on every route, the second is cheap on a typical request until one heavy route sets the worst case a pool has to be sized for.
+
+![Per-request memory](svg/real-fpm/resident-memory.svg)
 
 ## Latency by endpoint
 
-Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. These are REAL deployments measured over HTTP: every row carries the constant server cost, which is why the values cluster — the floor note below states it explicitly. The workload column states what each request reads or writes — the shared SQLite database holds 1,000 item rows (re-seeded per app × mode), every list endpoint serves page 1 of 20, and every write upserts exactly one sentinel row.
+Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. Every number is END-TO-END per-request occupancy for the view's deployment model: the framework boot of that model is part of the cell, not parked in a separate chart. These are REAL deployments measured over HTTP: every row carries the constant server cost, which is why the values cluster — the floor note below states what stands under them. The workload column states what each request reads or writes. Every framework runs the same seeded database and the same page size, so the payload is identical no matter which framework served it; the workload column is the part of the suite that varies.
 
-**Server floor** — measured nginx + PHP-FPM with `pm.max_requests=?`: this dataset does not record whether the pool recycled its worker, so the per-request process-spawn share of this floor is unknown. A hello-world endpoint that boots nothing but PHP costs **9.23 ms** (`floor-php`), and a static file through nginx 0.073 ms (`floor-http`). Subtracting it leaves the framework's own per-request boot, but how much of this floor is a process spawn cannot be recovered from the dataset.
+**Server floor** — measured nginx + PHP-FPM with `pm.max_requests=0`: the pool never recycles its worker, so no process is spawned per request — what remains is the FastCGI handshake plus a minimal script. A hello-world endpoint that boots nothing but PHP (`floor-php`) and a static file through nginx (`floor-http`) measure exactly that cost — the floor every row below stands on. Subtracting that floor leaves the framework's own per-request boot, which FPM still pays for every request even though its worker survives.
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `GET /` | no DB — routing + template only | 9.94 | 10.00 | **9.90** | 10.0 | 10.0 | 10.0 |
-| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **9.90** | 9.99 | 10.0 | 10.0 | 10.0 | 10.1 |
-| `GET /items/1` | 1 item by id | **9.91** | 10.1 | 9.95 | 10.1 | 10.0 | 10.2 |
-| `POST /items` | 1 row upserted (sentinel #999999) | 9.97 | 10.1 | **9.94** | 9.97 | 10.1 | 10.2 |
-| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **9.94** | 9.98 | 9.94 | 10.1 | 10.1 | 10.2 |
-| `GET /items-qb/1` | 1 item by id | 10.00 | **9.90** | 9.98 | 10.1 | 10.1 | 10.2 |
-| `POST /items-qb` | 1 row upserted (sentinel #999997) | **9.89** | 9.95 | 9.92 | 10.00 | 10.1 | 10.2 |
-| `GET /api/items` | 20 of 1000 items as JSON | 10.0 | 9.98 | **9.89** | 10.1 | 10.0 | 10.3 |
-| `GET /api/items/1` | 1 item by id as JSON | **9.99** | 10.1 | 10.0 | 10.2 | 10.0 | 10.5 |
-| `POST /api/items` | 1 row upserted (sentinel #999998) | **9.95** | 10.0 | 10.0 | 10.3 | 10.1 | 10.7 |
-| `GET /features/aop` | no DB — interceptor pipeline | 10.0 | 10.1 | 10.3 | **10.00** | — | — |
-| `GET /features/cache` | no DB — cache round-trips | **9.91** | 10.1 | 10.2 | 9.99 | 10.2 | 10.1 |
-| `GET /features/log` | no DB — buffered log handlers | **9.88** | 10.0 | 10.0 | 9.95 | — | — |
-| `GET /features/retry` | no DB — retry policy | 10.1 | 10.1 | **10.0** | 10.1 | — | — |
-| `GET /features/pipeline` | no DB — middleware pipeline | 10.1 | 10.2 | **9.96** | 9.99 | — | — |
-| `GET /features/db-events` | 1 event row INSERTed per request | 9.94 | 10.2 | 9.94 | **9.88** | 10.2 | 10.0 |
-| `GET /features/events` | no DB — in-process listeners | **9.97** | 10.2 | 10.0 | 10.1 | 10.0 | 10.2 |
-| `GET /features/validation` | no DB — validator run | 9.96 | 10.2 | **9.95** | 10.4 | 10.2 | 10.3 |
-| `GET /features/config` | no DB — config lookup | **9.90** | 9.94 | 9.95 | 10.0 | 10.0 | 10.2 |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **9.95** | 10.1 | 10.1 | 9.95 | 10.0 | 10.0 |
-| `GET /features/rate-limit` | no DB — cache-backed limiter | 10.1 | 10.0 | **10.0** | 10.1 | 10.0 | 10.5 |
+| `GET /` | no DB — routing + template only | **0.782** | 4.50 | 2.05 | 11.2 | 1.95 | 1.48 |
+| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **1.53** | 5.73 | 3.74 | 12.4 | 2.69 | 2.83 |
+| `GET /items/1` | 1 item by id | **1.40** | 5.38 | 3.00 | 12.3 | 2.57 | 2.62 |
+| `POST /items` | 1 row upserted (sentinel #999999) | **1.58** | 5.41 | 3.90 | 12.3 | 2.68 | 2.80 |
+| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **1.36** | 5.22 | 2.62 | 11.7 | 2.66 | 2.26 |
+| `GET /items-qb/1` | 1 item by id | **1.30** | 5.07 | 2.57 | 11.6 | 2.56 | 2.17 |
+| `POST /items-qb` | 1 row upserted (sentinel #999997) | **1.41** | 5.14 | 3.45 | 11.8 | 2.81 | 2.26 |
+| `GET /api/items` | 20 of 1000 items as JSON | **1.32** | 6.04 | 3.03 | 11.2 | 2.54 | 2.52 |
+| `GET /api/items/1` | 1 item by id as JSON | **1.35** | 5.82 | 2.72 | 11.0 | 2.49 | 2.49 |
+| `POST /api/items` | 1 row upserted (sentinel #999998) | **1.43** | 5.21 | 3.65 | 11.2 | 2.62 | 2.66 |
+| `GET /features/aop` | no DB — interceptor pipeline | **2.77** | 5.99 | 3.26 | 12.7 | — | — |
+| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **1.65** | 5.32 | 2.95 | 11.9 | 2.48 | 2.39 |
+| `GET /features/log` | no DB — buffered log handlers | **1.21** | 4.47 | 1.93 | 11.2 | — | — |
+| `GET /features/retry` | no DB — retry policy | **1.21** | 4.50 | 1.96 | 11.2 | — | — |
+| `GET /features/pipeline` | no DB — middleware pipeline | **0.788** | 4.51 | 1.95 | 11.3 | — | — |
+| `GET /features/db-events` | 1 event row INSERTed per request | **1.74** | 5.36 | 3.14 | 12.1 | 2.75 | 2.59 |
+| `GET /features/events` | no DB — in-process listeners | **1.69** | 5.06 | 2.38 | 11.9 | 2.67 | 1.92 |
+| `GET /features/validation` | no DB — validator run | **0.766** | 5.58 | 2.31 | 11.3 | 2.28 | 1.83 |
+| `GET /features/config` | no DB — config lookup | **0.731** | 4.52 | 1.93 | 11.2 | 1.94 | 1.38 |
+| `GET /features/request-scoped` | no DB — scoped service resolve | **0.749** | 4.50 | 1.96 | 11.2 | 1.91 | 1.35 |
+| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.753** | 4.68 | 1.98 | 11.3 | 1.92 | 1.47 |
 
 ---
 

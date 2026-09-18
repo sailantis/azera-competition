@@ -13,19 +13,6 @@ final class Tables
     public function __construct(private readonly ResultStore $store) {}
 
     /**
-     * Win counts per framework, fastest first.
-     *
-     * @param list<string> $apps
-     * @return array<string,int> app => wins
-     */
-    public function wins(string $mode, array $apps): array
-    {
-        $counts = $this->store->winCounts($mode, $apps);
-        arsort($counts);
-        return $counts;
-    }
-
-    /**
      * Per-request latency table: rows = requests, columns = apps, winner bolded.
      *
      * The headline is END-TO-END for the mode: it is the time one request
@@ -73,32 +60,6 @@ final class Tables
             $rows[] = ['request' => $req, 'feature' => $feature, 'cells' => $cells];
         }
         return $rows;
-    }
-
-    /**
-     * Markdown win-count table.
-     *
-     * @param list<string> $apps
-     */
-    public function winsMarkdown(string $mode, array $apps): string
-    {
-        $counts = $this->wins($mode, $apps);
-        $total  = array_sum($counts);
-        if ($total === 0) {
-            return '';
-        }
-        $l = [];
-        $l[] = '| Framework | Wins | Share |';
-        $l[] = '|---|---:|---:|';
-        foreach ($counts as $app => $n) {
-            $l[] = sprintf(
-                '| %s | %d | %s%% |',
-                BenchmarkConfig::appLabel($app),
-                $n,
-                number_format($n / $total * 100, 0)
-            );
-        }
-        return implode("\n", $l);
     }
 
     /**
@@ -197,30 +158,6 @@ final class Tables
     }
 
     /**
-     * HTML win-count table.
-     *
-     * @param list<string> $apps
-     */
-    public function winsHtml(string $mode, array $apps): string
-    {
-        $counts = $this->wins($mode, $apps);
-        $total  = array_sum($counts);
-        if ($total === 0) {
-            return '';
-        }
-        $rows = '';
-        foreach ($counts as $app => $n) {
-            $rows .= sprintf(
-                "<tr><td>%s</td><td>%d</td><td>%s%%</td></tr>\n",
-                htmlspecialchars(BenchmarkConfig::appLabel($app), ENT_QUOTES, 'UTF-8'),
-                $n,
-                number_format($n / $total * 100, 0)
-            );
-        }
-        return "<h2>Wins per framework</h2>\n<table>\n<thead><tr><th>Framework</th><th>Wins</th><th>Share</th></tr></thead>\n<tbody>\n{$rows}</tbody>\n</table>";
-    }
-
-    /**
      * HTML latency matrix.
      *
      * @param list<string> $apps
@@ -272,8 +209,16 @@ final class Tables
                 $sub .= ' <span class="unit">— cold rows and charts are end-to-end: each iteration pays a fresh '
                     . 'framework boot inside the request clock (FPM story)</span>';
             } elseif (in_array($mode, ['warm', 'roadrunner'], true)) {
-                $sub .= ' <span class="unit">— every row and chart point adds the worker\'s boot (warm recycle), '
-                    . 'so each number is the full time one request keeps that worker busy</span>';
+                // Follow the stamped pool model: a pool that never recycles puts
+                // no boot into a row, so claiming one here would be wrong.
+                $sub .= match ($this->store->rrRecycleModel()) {
+                    'never' => ' <span class="unit">— the worker is never recycled (max_jobs=0), so each '
+                        . 'number is the measured request with no boot in it</span>',
+                    'every' => ' <span class="unit">— every row and chart point adds this request\'s share of '
+                        . 'the worker boot (recycle ÷ max_jobs)</span>',
+                    default => ' <span class="unit">— every row and chart point adds the worker\'s boot (warm '
+                        . 'recycle), so each number is the full time one request keeps that worker busy</span>'
+                };
             }
         }
         return "<h2>Latency by endpoint <span class=\"unit\">(ms, trimmed mean — lower is better)</span>{$sub}</h2>\n<table class=\"matrix\">\n<thead>{$head}</thead>\n<tbody>\n{$body}</tbody>\n</table>";

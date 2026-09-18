@@ -33,6 +33,10 @@ use Spiral\Core\Scope;
 use Spiral\Router\Exception\RouteNotFoundException;
 use Spiral\Router\RouterInterface;
 
+// Boot probe: the clock MUST start before any framework code loads.
+require_once __DIR__ . '/../boot-probe.php';
+boot_probe_start();
+
 require __DIR__ . '/../vendor/autoload.php';
 
 // Standard guard for PHP's built-in server: let it serve real files from the
@@ -81,6 +85,11 @@ $kernel->bootstrapped(static function () use (&$container, $kernel): void {
     // reflection once boot completes (no public accessor exists).
     $prop      = new ReflectionProperty(Spiral\Boot\AbstractKernel::class, 'container');
     $container = $prop->getValue($kernel);
+
+    // Boot complete: all bootloaders ran, the container is built. This
+    // callback is the kernel's own boot-complete hook.
+    boot_probe_record('fpm', 'spiral');
+    mem_probe_arm('spiral');
 });
 
 $kernel->run(new Environment([

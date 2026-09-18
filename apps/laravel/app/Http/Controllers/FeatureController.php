@@ -43,9 +43,7 @@ class FeatureController
         private readonly DbEventLog $dbLog,
         private readonly RequestCounter $counter,
         private readonly ScopeState $state,
-    )
-    {
-    }
+    ) {}
 
     /**
      * GET /features — overview page listing all feature demos.

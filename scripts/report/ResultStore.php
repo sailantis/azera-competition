@@ -48,6 +48,33 @@ final class ResultStore
      */
     private array $boot = [];
 
+    /**
+     * Boot-probe statistics per app (count/min/mean/median/p95/trimmed_mean)
+     * when the dataset came from the real-deployment probe. Kept separate from
+     * $boot: $boot is the two-field shape the charts read, this is the evidence
+     * behind the number (a median without its sample count is not checkable).
+     *
+     * @var array<string,array{count:int,min:float,mean:float,median:float,p95:float,trimmed_mean:float}>
+     */
+    private array $bootSamples = [];
+
+    /**
+     * Per-mode boot cost, for real deployments that measure two servers for
+     * one app: app => mode => ['cold_ms' => .., 'warm_ms' => ..].
+     *
+     * @var array<string,array<string,array{cold_ms:float,warm_ms:float}>>
+     */
+    private array $bootByMode = [];
+
+    /**
+     * Per-mode boot-probe statistics, same shape as $bootSamples but keyed by
+     * mode. A real deployment's two servers have DIFFERENT boot semantics, so
+     * the per-mode value is the one a view must read.
+     *
+     * @var array<string,array<string,array{count:int,min:float,mean:float,median:float,p95:float,trimmed_mean:float}>>
+     */
+    private array $bootSamplesByMode = [];
+
     /** @var list<string> */
     private array $apps = [];
 
@@ -140,12 +167,32 @@ final class ResultStore
         if ($replace) {
             $this->data[$key] = [];
             unset($this->boot[$key]);
+            unset($this->bootSamples[$key]);
         }
         if (isset($app['boot']['cold_ms'], $app['boot']['warm_ms'])) {
             $this->boot[$key] = [
                 'cold_ms' => (float) $app['boot']['cold_ms'],
                 'warm_ms' => (float) $app['boot']['warm_ms'],
             ];
+        }
+        if (isset($app['boot_samples']) && is_array($app['boot_samples'])) {
+            $this->bootSamples[$key] = $app['boot_samples'];
+        }
+        // Per-mode boots (real deployments measure two servers for one app, and
+        // the two boots mean different things — see run-http.php). The scalar
+        // $boot above is the legacy single-boot shape; both are ingested.
+        foreach (($app['boot_by_mode'] ?? []) as $modeName => $b) {
+            if (isset($b['cold_ms'], $b['warm_ms'])) {
+                $this->bootByMode[$key][(string) $modeName] = [
+                    'cold_ms' => (float) $b['cold_ms'],
+                    'warm_ms' => (float) $b['warm_ms'],
+                ];
+            }
+        }
+        foreach (($app['boot_samples_by_mode'] ?? []) as $modeName => $s) {
+            if (is_array($s)) {
+                $this->bootSamplesByMode[$key][(string) $modeName] = $s;
+            }
         }
         foreach (($app['modes'] ?? []) as $modeName => $mode) {
             foreach (($mode['requests'] ?? []) as $row) {
@@ -288,6 +335,46 @@ final class ResultStore
     }
 
     /**
+     * The RoadRunner pool's max_jobs the measured worker ran with, or null
+     * when the dataset does not say (every dataset written before this was
+     * stamped).
+     *
+     * RoadRunner defines 0 as "no limit" — the worker is never recycled. The
+     * warm/roadrunner band must branch on this for the same reason the
+     * cold/php-fpm band branches on fpmMaxRequests(): the boot a request
+     * carries is a property of the POOL SETTING, not of the framework. At 0
+     * one boot is amortised over the whole block; at N the pool pays a
+     * recycle every N requests, so each request carries boot/N.
+     */
+    public function rrMaxJobs(): ?int
+    {
+        $v = $this->env()['rr_max_jobs'] ?? null;
+        return $v === null ? null : (int) $v;
+    }
+
+    /**
+     * Does the measured RoadRunner pool recycle its worker, and does the
+     * dataset even say? Shared by every prose site that describes what the
+     * warm/roadrunner rows contain, so they cannot drift apart:
+     *
+     *   'never'   — max_jobs 0 (RoadRunner's "no limit"). One boot for the
+     *               whole block; no request carries a boot.
+     *   'every'   — max_jobs N > 0. A recycle every N jobs, so each request
+     *               carries boot/N.
+     *   'unknown' — un-stamped dataset (written before the stamp existed).
+     *               Prose must not claim a model it cannot see.
+     */
+    public function rrRecycleModel(): string
+    {
+        $jobs = $this->rrMaxJobs();
+        return match (true) {
+            $jobs === 0    => 'never',
+            $jobs === null => 'unknown',
+            default        => 'every'
+        };
+    }
+
+    /**
      * Webserver-overhead probes present in the dataset:
      * app => ['mode' => .., 'request' => .., 'ms' => float]. Empty for every
      * dataset produced by the in-process harness.
@@ -340,22 +427,63 @@ final class ResultStore
 
     /**
      * Whether this dataset carries per-framework boot measurements
-     * (cold_ms/warm_ms from run-app.php's measureBoot()).
+     * (cold_ms/warm_ms from run-app.php's measureBoot(), or the boot probe in
+     * run-http.php).
      */
     public function hasBoot(): bool
     {
-        return $this->boot !== [];
+        return $this->boot !== [] || $this->bootByMode !== [];
     }
 
     /**
-     * Boot cost for one app: ['cold_ms' => .., 'warm_ms' => ..], or null when
-     * the dataset predates the boot measurement.
+     * Whether the boot numbers came from a REAL deployment (the boot probe in
+     * scripts/run-http.php, measured inside the FPM entry script / RoadRunner
+     * worker) rather than from the in-process CLI harness (measureBoot()).
+     *
+     * The distinction matters because the CLI dataset has THREE bands (cold
+     * boot, FPM rebuild, warm recycle) — three harness modes of the same
+     * framework — while a real deployment has exactly ONE boot kind, fixed by
+     * the server being measured. Rendering the CLI band labels on a real
+     * dataset would describe modes that do not exist in it.
+     */
+    public function isProbedBoot(): bool
+    {
+        return (int) ($this->env['boot_probe'] ?? 0) > 0;
+    }
+
+    /**
+     * Boot cost for one app, for one mode when the dataset is mode-aware:
+     * ['cold_ms' => .., 'warm_ms' => ..], or null when nothing was measured.
+     *
+     * $mode is required for a real deployment because its two servers have
+     * different boot semantics — reading the scalar fallback there would show
+     * whichever server happened to be measured last.
      *
      * @return array{cold_ms:float,warm_ms:float}|null
      */
-    public function boot(string $app): ?array
+    public function boot(string $app, ?string $mode = null): ?array
     {
+        if ($mode !== null && isset($this->bootByMode[$app][$mode])) {
+            return $this->bootByMode[$app][$mode];
+        }
         return $this->boot[$app] ?? null;
+    }
+
+    /**
+     * The full boot-probe sample set for one app/mode (n, min, median, p95,
+     * trimmed_mean), or null when the dataset predates the probe.
+     *
+     * Kept alongside boot() because the headline number is a median, and a
+     * median without its sample count and spread is not checkable by a reader.
+     *
+     * @return array{count:int,min:float,mean:float,median:float,p95:float,trimmed_mean:float}|null
+     */
+    public function bootSamples(string $app, ?string $mode = null): ?array
+    {
+        if ($mode !== null && isset($this->bootSamplesByMode[$app][$mode])) {
+            return $this->bootSamplesByMode[$app][$mode];
+        }
+        return $this->bootSamples[$app] ?? null;
     }
 
     /**
@@ -411,6 +539,17 @@ final class ResultStore
      *
      * This is what makes a feature row mean "how long the worker is occupied
      * by one request, boot included" instead of "the request minus the boot".
+     *
+     * The warm/roadrunner branch reads the per-MODE boot first. On a real
+     * deployment one app is measured on two servers, and run-http.php writes
+     * the boot under both `boot_by_mode[mode]` (correct) and the legacy scalar
+     * `boot` (whichever server was measured LAST — php-fpm, since the server
+     * loop is [rr, fpm]). Reading the scalar here therefore charged every
+     * RoadRunner row the PHP-FPM boot: a roughly constant offset per framework
+     * (+16.0 ms Spiral, +3.2 Laravel, +0.88 CodeIgniter, ...) that reordered
+     * the field and made the inflated rows read "server-bound" — a report bug,
+     * not a measurement (2026-09-17). The scalar is only the fallback for
+     * pre-probe datasets, which carry no per-mode map.
      */
     public function modeBootMs(string $app, string $mode): ?float
     {
@@ -428,21 +567,23 @@ final class ResultStore
             return $values[(int) floor((count($values) - 1) / 2)];
         }
         if (in_array($mode, ['warm', 'roadrunner'], true)) {
-            $boot = $this->boot[$app] ?? null;
+            $boot = $this->bootByMode[$app][$mode] ?? $this->boot[$app] ?? null;
             return $boot['warm_ms'] ?? null;
         }
         return null;
     }
 
     /**
-     * End-to-end per-request latency INCLUDING the mode's boot: the whole
-     * time one request occupies (or blocks) the worker for a given app, in
-     * the given deployment model — boot + handle + cleanup.
+     * End-to-end per-request latency INCLUDING the boot that request carries:
+     * the whole time one request occupies (or blocks) the worker for a given
+     * app, in the given deployment model — boot + handle + cleanup.
      *
      * Cold/php-fpm rows already carry their boot inside trimmed_mean_ms
      * (fork-per-iteration times bootstrap() in the request clock), so this
-     * returns the measured total. Warm/roadrunner rows measure post-boot
-     * work only, so the worker's recycle cost (boot().warm_ms) is added.
+     * returns the measured total. Warm/roadrunner rows measure post-boot work
+     * only, so the boot SHARE that request carries is added — the worker's
+     * recycle divided by the pool's max_jobs (and zero when the pool never
+     * recycles; see bootAddOn()).
      *
      * Kept separate from ms() — which is what the charts and every ranking
      * use — so the boot-inclusive figure can be printed next to the measured
@@ -462,11 +603,14 @@ final class ResultStore
      *     the request clock, so the measured number IS the occupancy and
      *     adding anything would double-count the boot.
      *
-     *   warm/roadrunner — boot().warm_ms: the warm rows measure post-boot
-     *     work only, and this is what the deployment pays to bring the worker
-     *     back between requests. Added to every row so the figure answers
-     *     "how long is this worker busy with one request" — which is what a
-     *     recycled worker or a queuing pool actually experiences.
+     *   warm/roadrunner — the recycle the pool pays, DIVIDED by how many jobs
+     *     it serves between recycles (max_jobs). The warm rows measure
+     *     post-boot work only, so this is the share of the recycle one request
+     *     actually carries:
+     *       0    (RoadRunner "no limit") -> 0.0, the worker booted once for
+     *              the whole block and no request pays a boot
+     *       N    -> warm_ms / N, the recycle amortised across its jobs
+     *       null (un-stamped) -> warm_ms, the historical per-request reading
      *
      * 0.0 (never null) when the dataset carries no boot numbers, so callers
      * can add it unconditionally.
@@ -476,7 +620,28 @@ final class ResultStore
         if (in_array($mode, ['cold', 'php-fpm'], true)) {
             return 0.0;
         }
-        return (float) ($this->modeBootMs($app, $mode) ?? 0.0);
+        $warm = $this->modeBootMs($app, $mode);
+        if ($warm === null) {
+            return 0.0;
+        }
+
+        // How much of the recycle does ONE request actually carry? That is a
+        // property of the pool's max_jobs, not of the framework:
+        //
+        //   0    — RoadRunner's "no limit": the worker is never recycled, so
+        //          it boots ONCE for the whole block and no request pays a
+        //          boot. Adding warm_ms here (what this did before the stamp
+        //          existed) charged the entire recycle to every cell of a
+        //          deployment that never performed one.
+        //   N    — the pool recycles after N jobs, so a request carries
+        //          boot/N. This is the case the boot-add was written for.
+        //   null — un-stamped (pre-existing) datasets: keep the historical
+        //          per-request behaviour so old renders do not silently move.
+        $jobs = $this->rrMaxJobs();
+        if ($jobs === 0) {
+            return 0.0;
+        }
+        return $jobs === null ? $warm : $warm / $jobs;
     }
 
     /**
@@ -535,6 +700,47 @@ final class ResultStore
             }
         }
         return false;
+    }
+
+    /**
+     * Whether the dataset carries the RESIDENT-WORKER teardown split measured
+     * over HTTP (worker_handle_ms / worker_cleanup_ms).
+     *
+     * Distinct from hasCleanupSplit(), which is the framework-side
+     * handle+cleanup terms that SUM to the headline for fork-mode rows. These
+     * numbers come from a gated probe on the live worker, so they decompose
+     * only the framework's share of the client-visible round-trip, not the
+     * whole of it.
+     */
+    public function hasWorkerSplit(): bool
+    {
+        foreach ($this->data as $modes) {
+            foreach ($modes as $requests) {
+                foreach ($requests as $row) {
+                    return isset($row['worker_handle_ms'], $row['worker_cleanup_ms']);
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Median time the resident worker spent in dispatch() for one endpoint, or
+     * null when the dataset has no worker split.
+     */
+    public function workerHandleMs(string $app, string $mode, string $request): ?float
+    {
+        return $this->ms($app, $mode, $request, 'worker_handle_ms');
+    }
+
+    /**
+     * Median time the resident worker spent in cleanup() (the work BETWEEN
+     * requests: request-scoped teardown, ORM/heap resets, driver disconnects)
+     * for one endpoint, or null when the dataset has no worker split.
+     */
+    public function workerCleanupMs(string $app, string $mode, string $request): ?float
+    {
+        return $this->ms($app, $mode, $request, 'worker_cleanup_ms');
     }
 
     /**
@@ -760,7 +966,18 @@ final class ResultStore
      * order and reads the whole resident heap, so the final value includes
      * every earlier endpoint's retained state. It exists to expose GROWTH
      * (retained bytes per endpoint), not to rank frameworks on a per-request
-     * cost. Use residentBootHeap() for the footprint comparison.
+     * cost. Use residentBootHeap() for the footprint, and requestPeakSeries()
+     * for anything that must be order-INDEPENDENT.
+     *
+     * This USED to end with 'Use residentBootHeap() for the footprint
+     * comparison', which read as an instruction to rank on the boot heap. The
+     * resident-worker page ranks on THIS value instead, deliberately — see
+     * MarkdownReport::residentWorkerMemory() for why the order-dependence is
+     * the lesser evil on a chart about what a worker is left holding. Note what
+     * the caveat above does and does not forbid: comparing these values across
+     * frameworks is fine (they all come from one fixed endpoint sequence, so
+     * they are read at the same moment), calling one of them a per-request cost
+     * is not.
      */
     public function residentHeap(string $app, string $mode): ?int
     {
@@ -834,7 +1051,7 @@ final class ResultStore
 
     /**
      * Whether this dataset carries the resident-worker memory probe at all.
-     * Datasets measured before the probe existed, or over php-fpm, do not.
+     * Datasets measured before the probe existed do not.
      */
     public function hasResidentMem(string $mode): bool
     {
@@ -846,6 +1063,125 @@ final class ResultStore
             }
         }
         return false;
+    }
+
+    /**
+     * Whether this dataset carries the PER-REQUEST peak (mem_peak_heap), as
+     * opposed to only the cumulative heap. Added 2026-09-17; a dataset
+     * measured before that has the probe but not this field, and the report
+     * must fall back rather than draw an empty chart.
+     */
+    public function hasRequestPeakMem(string $mode): bool
+    {
+        foreach ($this->data as $modes) {
+            foreach (($modes[$mode] ?? []) as $row) {
+                if ((int) ($row['mem_peak_heap'] ?? 0) > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Per-request peak heap (bytes) for every endpoint, in canonical order —
+     * "how much memory serving this request needed".
+     *
+     * The series is the per-endpoint MEDIAN of the harness's repeated probes
+     * (see memProbeAggregateEndpoint), so each value is a reading the endpoint
+     * really produced. Unlike residentHeap() this is order-INDEPENDENT: the
+     * probe resets the high-water mark at the start of each request, so one
+     * request's peak does not carry any earlier endpoint's state. That is what
+     * makes it the only resident-memory series that can carry a ranking.
+     *
+     * @return list<array{request:string,peak:int}>
+     */
+    public function requestPeakSeries(string $app, string $mode): array
+    {
+        $out = [];
+        foreach (BenchmarkConfig::requestOrder() as $req) {
+            $row = $this->data[$app][$mode][$req] ?? null;
+            $v   = (int) ($row['mem_peak_heap'] ?? 0);
+            if ($row !== null && $v > 0) {
+                $out[] = [
+                    'request' => $req,
+                    'peak'    => $v,
+                    'samples' => (int) ($row['mem_samples'] ?? 1),
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * How many probes each endpoint's median came from, or null when the
+     * dataset does not record it (measured before 2026-09-17).
+     *
+     * Reported rather than assumed: the figure is dataset provenance — a run
+     * taken with a different --mem-repeats must not be described as if it used
+     * the current default.
+     */
+    public function requestPeakSamples(string $app, string $mode): ?int
+    {
+        foreach ($this->requestPeakSeries($app, $mode) as $s) {
+            if ($s['samples'] > 0) {
+                return $s['samples'];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The three marks the memory chart draws, as BYTES and with the endpoint
+     * each extreme belongs to: lightest endpoint, median endpoint, heaviest
+     * endpoint — all of the per-request peak.
+     *
+     * Every value is a real measurement of a named endpoint, never an
+     * interpolation:
+     *   - low/high are the actual minimum and maximum, so the prose can name
+     *     the route a planner should size against;
+     *   - median is the middle entry of the sorted series (the lower of the two
+     *     middles for an even count, matching stats() elsewhere in this report),
+     *     so it is a reading that exists rather than the average of two.
+     *
+     * Null when the dataset has no per-request peak. An EMPTY series is a
+     * different condition and returns null too — the caller must check
+     * hasRequestPeakMem() to tell "not measured" from "measured and empty".
+     *
+     * @return array{low:int,lowRequest:string,median:int,medianRequest:string,high:int,highRequest:string,count:int}|null
+     */
+    public function requestPeakRange(string $app, string $mode): ?array
+    {
+        $series = $this->requestPeakSeries($app, $mode);
+        if ($series === []) {
+            return null;
+        }
+
+        $points = [];
+        foreach ($series as $s) {
+            $points[] = $s['peak'];
+        }
+
+        // Sort a COPY of the request labels alongside the values, so the
+        // extremes keep the endpoint they came from. Sorting $points alone
+        // would lose that and the prose could not name the worst route.
+        $order = $series;
+        usort(
+            $order,
+            static fn(array $a, array $b): int => $a['peak'] <=> $b['peak']
+        );
+
+        $n = count($order);
+
+        return [
+            'low'           => $order[0]['peak'],
+            'lowRequest'    => $order[0]['request'],
+            'median'        => $order[(int) floor(($n - 1) / 2)]['peak'],
+            'medianRequest' => $order[(int) floor(($n - 1) / 2)]['request'],
+            'high'          => $order[$n - 1]['peak'],
+            'highRequest'   => $order[$n - 1]['request'],
+            'count'         => $n,
+        ];
     }
 
     /**

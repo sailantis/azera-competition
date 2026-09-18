@@ -355,6 +355,35 @@ function fpmMaxRequestsFromTemplate(string $root): ?int
 }
 
 /**
+ * The RoadRunner http pool's max_jobs, read from the same template the
+ * stamped .rr-<app>.yaml files are generated from.
+ *
+ * This is the RoadRunner counterpart of fpmMaxRequestsFromTemplate(), and it
+ * exists for the same reason: the report ADDS the worker's boot to every
+ * warm/roadrunner row (ResultStore::bootAddOn), and how much of that boot a
+ * real request carries depends entirely on how often the pool recycles.
+ *
+ * RoadRunner documents `max_jobs` as "maximal count of worker executions.
+ * Zero (or nothing) means no limit" — so at the 0 this benchmark stamps, the
+ * worker is NEVER recycled: it boots once and serves every request of the
+ * block. Charging the full recycle to each of those requests (what the report
+ * did before this was stamped) added the entire boot to every cell, worst on
+ * the slowest-booting framework.
+ *
+ * Without the stamp a `max_jobs` edit silently re-labels already-published
+ * numbers, exactly like a pm.max_requests edit would.
+ */
+function rrMaxJobsFromTemplate(string $root): ?int
+{
+    $tpl = @file_get_contents("{$root}/deploy/rr/config-template.php");
+    if ($tpl === false) {
+        return null;
+    }
+    // The value lives inside a nowdoc YAML block, indented under `pool:`.
+    return preg_match('/^\s*max_jobs\s*:\s*(\d+)/m', $tpl, $m) ? (int) $m[1] : null;
+}
+
+/**
  * Install + start the stamped FPM pool and nginx vhost for all benchmark
  * apps (idempotent: overwrites configs, then reloads services).
  *

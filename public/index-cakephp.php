@@ -40,6 +40,10 @@ declare(strict_types=1);
 use App\Cake\Application as BenchApp;
 use Cake\Http\Server;
 
+// Boot probe: the clock MUST start before any framework code loads.
+require_once __DIR__ . '/../boot-probe.php';
+boot_probe_start();
+
 // Standard guard for PHP's built-in server: let it serve real files from the
 // docroot (none expected today, but keeps static assets working if added).
 if (PHP_SAPI === 'cli-server') {
@@ -133,8 +137,39 @@ if (\Cake\Cache\Cache::getConfig('_cake_core_') === null) {
 }
 
 // --- Boot the application and serve the request ------------------------------
+// Boot complete: "PHP start → the framework can dispatch a request".
+//
+// WHERE THIS LINE SITS IS LOAD-BEARING. It used to record BEFORE the block
+// below, and that made the published FPM boot band meaningless: at that point
+// Cake's route table did not exist yet. Router::reload() only builds an EMPTY
+// RouteCollection, and the routes() hook is invoked from RoutingMiddleware
+// INSIDE Server::run() — so the old sample stopped at "files loaded +
+// Configure + Db::init" while the application still had to build 122 routes,
+// its container and the Server before it could serve anything.
+//
+// Every other entry script records with its route table already built (azera's
+// Bootstrap::boot() registers ~118 routes), so a pre-routes sample here
+// compared a partial boot against a complete one. Measured warm (the FPM band's
+// regime) in temp/debug-boot-fair.php: the omitted work cost 0.466 ms, MORE
+// than azera's entire 0.336 ms boot — which is why Cake appeared ~2x faster
+// than azera in the FPM band while the cold band showed the opposite.
+//
+// So the sample is taken after the two things that must happen before the
+// first request can be dispatched:
+//   - $app->routes(...)                — build the route table (loadRoutes())
+//   - $app->getContainer()             — build the application container
+// Both are exactly what Server::run() does on the way in, and both are
+// idempotent, so doing them here changes nothing about what is served: this is
+// the same work, just moved inside the measured span.
+$app = new BenchApp($root . 'apps' . DIRECTORY_SEPARATOR . 'cakephp' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR);
+$app->routes(\Cake\Routing\Router::createRouteBuilder('/'));
+$app->getContainer();
+
+boot_probe_record('fpm', 'cakephp');
+mem_probe_arm('cakephp');
+
 try {
-    $server = new Server(new BenchApp($root . 'apps' . DIRECTORY_SEPARATOR . 'cakephp' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR));
+    $server = new Server($app);
 
     // Let Cake build the request from the real SAPI superglobals (no spoofing
     // needed — this is a real HTTP request).

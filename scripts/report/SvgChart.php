@@ -368,62 +368,192 @@ final class SvgChart
     }
 
     /**
-     * Resident-worker memory on ONE axis: a shared horizontal MB scale where
-     * each framework is a range, and the two ends of that range answer two
-     * different questions.
+     * Framework memory on ONE axis: a shared horizontal MB scale where each
+     * framework is a range between its lightest and heaviest reading, with the
+     * typical reading marked by a dot.
      *
-     *   LEFT END  = boot heap — the PHP heap right after bootstrap(), before
-     *               any request. Endpoint-independent, so it is a footprint
-     *               and legitimately rankable.
-     *   DOT       = heap after the LAST probed endpoint — the same worker,
-     *               later. Endpoint-ORDER dependent (see
-     *               ResultStore::residentHeap), so it reads as "where the run
-     *               ended", never as a per-request cost.
-     *   RIGHT END = largest heap reached at ANY probed endpoint. The dot is the
-     *               end state, not necessarily the high-water mark, and the
-     *               gap between the two is transient state the worker held and
-     *               then released.
+     * THE THREE MARKS ARE ONE STATISTIC, not three different ones:
      *
-     * Two dashed verticals carry the aggregate story — the lightest footprint
-     * and the largest peak — so a reader gets the same two answers the retired
+     *   LEFT END  = the LOWEST reading.       (low)
+     *   DOT       = the TYPICAL reading.      (mid)
+     *   RIGHT END = the HIGHEST reading.      (high)
+     *
+     * with low <= mid <= high guaranteed by the caller. What the readings ARE
+     * differs by deployment model, and that is the caller's business — the
+     * chart must not invent a fourth meaning:
+     *
+     *   resident worker (roadrunner) — one worker serves every endpoint, so the
+     *     three marks are that worker at three moments: boot footprint, end
+     *     state, worst. They form a real cumulative trajectory
+     *     (ResultStore::residentHeap / residentPeakHeap).
+     *   per-request (php-fpm) — every request is a fresh process, so there is
+     *     no end state: the marks are the lightest, median and heaviest
+     *     PER-REQUEST peak across the endpoints
+     *     (ResultStore::requestPeakRange).
+     *
+     * The caller passes $valueHeader and $midSeparator so the printed row reads
+     * as what it actually is: a sequence (' → ', resident worker) or three
+     * unordered readings (' · ', per-request).
+     *
+     * History — why this is generic now. The chart used to hard-code the
+     * resident-worker reading (boot/last/peak) AND be drawn on the FPM page,
+     * where each value came from a DIFFERENT request and the "dot" marked
+     * whichever endpoint happened to be served LAST. A reader comparing a row's
+     * printed numbers against the drawn caps found the right cap's value
+     * nowhere in the text (2026-09-17: Symfony printed 0.456 → 0.574 while its
+     * cap sat at 0.752, drawn left of CakePHP's) — arithmetically correct,
+     * semantically false, and confusing. Both problems are fixed by the same
+     * change: the marks are one honest statistic, and all three are printed.
+     *
+     * Two dashed verticals carry the aggregate story — the lightest left cap
+     * and the heaviest right cap — so a reader gets the two answers the retired
      * two-panel composition gave, on one comparable scale where a framework can
-     * boot narrow-left (cheap to exist) and still reach far right (expensive at
+     * start narrow-left (cheap at best) and still reach far right (expensive at
      * its worst). No single bar could show both.
      *
-     * The dot is only ever ON the range: it marks where the run ended, and "in
-     * the middle" is not a free position. A row whose dot touches the right cap
-     * grew until the last request; a row whose dot stops short of the others is
-     * simply the later endpoint, not a lighter one.
+     * The dot is only ever ON the range, and "in the middle" is not a free
+     * position: it is the median, so it sits where the middle of the
+     * distribution is, which is generally not halfway between the caps.
      *
-     * @param array<string,array{color:string,boot:float,last:float,peak:float}> $series
-     *        framework label => MB values, with boot <= last <= peak
+     * Behind the range a faint bar runs from the zero baseline to the dot, in
+     * the same low opacity dotRange() uses for its median bar. It is the
+     * bar-chart reading of the range: the eye gets a length anchored at zero
+     * instead of a span floating in the middle of the plot. It stops AT the
+     * dot, never at the right cap, because on a linear MB axis two faint bars
+     * would overlap along most of their length and the longer one would
+     * overpaint the shorter — the caps and the dot remain the exact readings.
+     *
+     * Both left-hand columns are sized from their own longest string, so a
+     * value can never be printed on top of a name. Before that they were
+     * derived from one constant with a fixed 94px gap, which is narrower than a
+     * three-value reading: on the rendered charts the framework names ended at
+     * x=215 while the widest value ('0.629 · 0.643 · 0.693') began at x=191,
+     * so every value overlapped every name on BOTH memory pages.
+     *
+     * @param array<string,array{color:string,low:float,mid:float,high:float}> $series
+     *        framework label => MB values, with low <= mid <= high
      * @param string $caption small line under the title explaining the marks
-     * @param string $leftRefLabel name of the lightest-footprint reference line
-     * @param string $rightRefLabel name of the largest-peak reference line
+     * @param string $leftRefLabel name of the lightest-reading reference line
+     * @param string $rightRefLabel name of the heaviest-reading reference line
+     * @param string $valueHeader column header naming the three marks
+     * @param string $midSeparator separator between the printed values; ' → '
+     *        only where the marks really are a sequence (the resident worker)
+     * @param ?string $factorNote enable the optional multiplier column and state
+     *        what its ratio means. NULL = off (the default). A STRING rather
+     *        than a bool because the meaning of the mid mark is the CALLER's to
+     *        declare, not the renderer's to assume: on the FPM chart the mid is
+     *        a per-request median, while on the resident-worker chart the very
+     *        same mark is the heap left after the last endpoint. One hardcoded
+     *        sentence would therefore be false on one of the two pages — the
+     *        class of error this chart family already paid for when the FPM page
+     *        drew the RR shape. Printing the note beside the chart keeps it from
+     *        drifting away from the labels it explains.
      * @return string SVG, or '' when there is nothing to draw
      */
     public static function memoryRange(
         array $series,
         string $title = '',
         string $caption = '',
-        string $leftRefLabel = 'lightest footprint',
-        string $rightRefLabel = 'largest peak',
-        int $width = 960
+        string $leftRefLabel = 'lightest',
+        string $rightRefLabel = 'heaviest',
+        string $valueHeader = 'low / dot / high',
+        string $midSeparator = ' · ',
+        int $width = 960,
+        ?string $factorNote = null
     ): string {
         if ($series === []) {
             return '';
         }
 
-        // The same two left-hand columns dotRange() uses — name, then values —
-        // proven to fit the longest framework name without a rotated label.
-        $padL      = 218;
-        $plotR     = $width - 40;
-        $nameRight = $padL - 106;
-        $valRight  = $padL - 12;
+        // Two left-hand columns — name, then values — BOTH sized from their own
+        // content. They used to be derived from a single constant with a fixed
+        // 94px gap between them, which is narrower than a three-value string:
+        // measured on the rendered charts, the framework names ended at x=215
+        // while the widest value ('0.629 · 0.643 · 0.693') began at x=191, so
+        // every value was printed on top of a name on BOTH memory pages. A
+        // content-sized gutter cannot collide, whatever the labels become.
+        $maxNameW = 0.0;
+        $maxValW  = self::approxTextWidth($valueHeader, 11, 600);
+        $valText  = [];
+        foreach ($series as $label => $s) {
+            $maxNameW = max($maxNameW, self::approxTextWidth((string) $label, 12.5, 700));
+            // The string is built here and drawn from $valText below, so the
+            // width that was measured is the width that is printed — measuring
+            // one string and drawing a separately-assembled one is how a layout
+            // silently drifts out of sync with its own labels.
+            $str = self::fmt($s['low']) . $midSeparator . self::fmt($s['mid'])
+                . $midSeparator . self::fmt($s['high']);
+            $valText[$label] = $str;
+            $maxValW = max($maxValW, self::approxTextWidth($str, 12.5, 700));
+        }
+
+        $nameRight = round(16.0 + $maxNameW, 2);
+        $valRight  = round($nameRight + 18.0 + $maxValW, 2);
+        $padL      = round($valRight + 12.0, 2);
+
+        // Optional multiplier column, behind each row's own right cap: each
+        // row's MID reading against the lightest mid in the chart. Enabled by
+        // the caller handing over a note, which is also the sentence printed
+        // beside the chart — so the column and its explanation cannot be
+        // switched on or off independently. Built here, before the plot width,
+        // because the gutter has to be reserved for the widest label that will
+        // actually be PRINTED — a fixed reserve would clip the column the
+        // moment a multiplier grew past what it was sized for.
+        //
+        // There is no separate 'more than one framework' test: with one series
+        // the lightest mid IS that series' mid, so every label is suppressed
+        // and the guard below drops the column anyway. A second condition
+        // saying the same thing would be a branch no test could distinguish.
+        $showFactors = $factorNote !== null && $factorNote !== '';
+        $factorText  = [];
+        $maxFactorW  = 0.0;
+        if ($showFactors) {
+            $mids        = array_map(static fn(array $s): float => $s['mid'], array_values($series));
+            $lightestMid = max(min($mids), 1e-9);
+
+            foreach ($series as $label => $s) {
+                // The REFERENCE row is the one carrying the lightest mid —
+                // NOT every row that happens to format as 'x 1.0'. Those are
+                // different sets: a framework 1.4% heavier than the reference
+                // also formats to 'x 1.0', and suppressing it would leave a
+                // blank beside a row that WAS measured, indistinguishable from
+                // the deliberately unlabelled reference. Such a row prints its
+                // rounded value instead, which is honest ('essentially the same
+                // as the lightest') and keeps every blank meaning the same
+                // thing. On the published run this is not hypothetical: two of
+                // the six frameworks fall in that band.
+                $factorText[$label] = abs($s['mid'] - $lightestMid) < 1e-9
+                    ? ''
+                    : self::fmtFactor($s['mid'] / $lightestMid);
+
+                if ($factorText[$label] !== '') {
+                    $maxFactorW = max(
+                        $maxFactorW,
+                        self::approxTextWidth('x ' . $factorText[$label], 12.5, 400)
+                    );
+                }
+            }
+            // Nothing to compare — a single framework, or every framework on the
+            // same mid reading. Draw no column rather than a set of labels that
+            // all say the same thing, and reserve no gutter for them.
+            $showFactors = $maxFactorW > 0.0;
+        }
+
+        // The right gutter is the 9px offset a label sits at plus the widest
+        // label plus a margin; without factors the plot keeps the 40px it
+        // always had, so the resident-worker chart's geometry is unchanged.
+        $plotR = $width - ($showFactors ? round(9.0 + $maxFactorW + 13.0, 2) : 40);
+
+        // The sentence that explains the factor column, when one is drawn. It is
+        // the CALLER's text: 'median' would be a false description of the
+        // resident-worker chart's mid mark, which is an end state. Built once
+        // here so the wrapping below and the drawn line cannot disagree about
+        // what the line says.
+        $factorNoteText = $showFactors ? ' · ' . $factorNote : '';
 
         $max = 0.0;
         foreach ($series as $s) {
-            $max = max($max, $s['boot'], $s['last'], $s['peak']);
+            $max = max($max, $s['low'], $s['mid'], $s['high']);
         }
         if ($max <= 0) {
             return '';
@@ -434,11 +564,41 @@ final class SvgChart
         $plotW = $plotR - $padL;
         $toX   = static fn(float $v): float => $padL + $plotW * $ratioOf($v);
 
-        $rowH    = 30;
-        $n       = count($series);
-        $padT    = $title !== '' ? ($caption !== '' ? 100 : 78) : 54;
+        $rowH = 30;
+        $n    = count($series);
+        // Note lines are wrapped BEFORE the top padding is decided, because a
+        // wrapped line needs room: the header block is whatever the title, the
+        // scale note and the caption actually occupy, not a fixed two rows. The
+        // resident-worker caption (which now carries its own multiplier note)
+        // measured 11.7px past the card edge at 960px — single <text> elements
+        // do not wrap, so the card silently clipped the end of the sentence.
+        $noteMaxW = $width - $padL - 12.0;
+        $subtitle = 'linear scale · MB of PHP heap · opcache bytecode lives in shared memory and is excluded'
+            . ($caption === '' ? $factorNoteText : '');
+        $captionTx = $caption === '' ? '' : $caption . $factorNoteText;
+
+        $noteRows = [];
+        if ($title !== '') {
+            $y = 54.0;
+            foreach (self::wrapNotes($subtitle, $noteMaxW, 12) as $ln) {
+                $noteRows[] = [$y, $ln];
+                $y += 22.0;
+            }
+            if ($captionTx !== '') {
+                foreach (self::wrapNotes($captionTx, $noteMaxW, 12) as $ln) {
+                    $noteRows[] = [$y, $ln];
+                    $y += 22.0;
+                }
+            }
+        }
+        $padT = $title !== '' && $noteRows !== []
+            ? max(array_column($noteRows, 0)) + 24.0
+            : 54.0;
+
         $gridBot = $padT + $n * $rowH + 14;
-        $height  = $gridBot + 66;
+        // Rounded to int: the canvas size is whole pixels in the viewBox, and an
+        // extra note line carries a fractional 22.0 step.
+        $height = (int) round($gridBot + 66);
 
         $out = [];
         $out[] = self::svgOpen($width, $height, $title);
@@ -446,20 +606,11 @@ final class SvgChart
 
         if ($title !== '') {
             $out[] = self::text($padL, 32, $title, 17, self::INK, 700);
-            $out[] = self::text(
-                $padL,
-                54,
-                'linear scale · MB of PHP heap · opcache bytecode lives in shared memory and is excluded',
-                12,
-                self::INK_SOFT,
-                400,
-                true
-            );
-            if ($caption !== '') {
-                $out[] = self::text($padL, 76, $caption, 12, self::INK_SOFT, 400, true);
+            foreach ($noteRows as [$ny, $ln]) {
+                $out[] = self::text($padL, $ny, $ln, 12, self::INK_SOFT, 400, true);
             }
         }
-        $out[] = self::text($valRight, $padT - 10, 'boot / end', 11, self::INK_SOFT, 600, false, 'end');
+        $out[] = self::text($valRight, $padT - 10, $valueHeader, 11, self::INK_SOFT, 600, false, 'end');
 
         // Vertical grid + ticks, with the unit on every label.
         foreach ($ticks as $t) {
@@ -490,8 +641,8 @@ final class SvgChart
         // The two reference lines: reading aids, never a series — dashed slate
         // so they can never be mistaken for a framework's mark.
         if ($n > 1) {
-            $boots = array_map(static fn(array $s): float => $s['boot'], array_values($series));
-            $peaks = array_map(static fn(array $s): float => $s['peak'], array_values($series));
+            $boots = array_map(static fn(array $s): float => $s['low'], array_values($series));
+            $peaks = array_map(static fn(array $s): float => $s['high'], array_values($series));
             $refs  = [
                 [$toX(min($boots)), $leftRefLabel, 0],
                 [$toX(max($peaks)), $rightRefLabel, 0],
@@ -530,22 +681,36 @@ final class SvgChart
         foreach ($series as $label => $s) {
             $cy    = $padT + $rowH * $ri + $rowH / 2;
             $color = (string) $s['color'];
-            $xBoot = $toX($s['boot']);
-            $xLast = $toX($s['last']);
-            $xPeak = $toX($s['peak']);
+            $xLow  = $toX($s['low']);
+            $xMid  = $toX($s['mid']);
+            $xHigh = $toX($s['high']);
 
-            // Range, left end (boot) to right end (largest peak).
+            // Zero-anchored bar to the MEDIAN dot, drawn FIRST so the range,
+            // the caps and the dot all sit on top of it. Same 0.12 fill-opacity
+            // dotRange() uses for its median bar, and the caps' height, so the
+            // two figures read as one chart family. It stops at the dot: a bar
+            // to the right cap would be overpainted by the shorter one wherever
+            // the two overlap, which on this axis is everywhere.
+            $out[] = sprintf(
+                '<rect x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.12"/>',
+                self::n($padL),
+                self::n($cy - $capH),
+                self::n(max(0.0, $xMid - $padL)),
+                self::n($capH * 2),
+                $color
+            );
+
+            // Range, lowest reading to highest.
             $out[] = sprintf(
                 '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>',
-                self::n(min($xBoot, $xPeak)),
+                self::n(min($xLow, $xHigh)),
                 self::n($cy),
-                self::n(max($xBoot, $xPeak)),
+                self::n(max($xLow, $xHigh)),
                 self::n($cy),
                 $color
             );
-            // End caps bound the two measurements: footprint on the left, worst
-            // endpoint on the right. Distinct from the dot's column.
-            foreach ([$xBoot, $xPeak] as $xc) {
+            // End caps bound the two extremes. Distinct from the dot's column.
+            foreach ([$xLow, $xHigh] as $xc) {
                 $out[] = sprintf(
                     '<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round"/>',
                     self::n($xc),
@@ -555,29 +720,53 @@ final class SvgChart
                     $color
                 );
             }
-            // End-state dot, white ring so it reads over the span.
+            // Typical-reading dot, white ring so it reads over the span.
             $out[] = sprintf(
                 '<circle cx="%s" cy="%s" r="%s" fill="%s" stroke="%s" stroke-width="2"/>',
-                self::n($xLast),
+                self::n($xMid),
                 self::n($cy),
                 self::n($dotR),
                 $color,
                 self::CARD_BG
             );
 
-            // Name in the series colour (identity), values in ink. The pair is
-            // the left end and the dot, in the order the marks appear.
+            // Name in the series colour (identity), values in ink. ALL THREE
+            // values are printed, in the order the marks appear — a reader must
+            // never have to guess which number a cap represents (the bug this
+            // signature was widened to fix).
             $out[] = self::text($nameRight, $cy + 4.5, $label, 12.5, $color, 700, false, 'end');
             $out[] = self::text(
                 $valRight,
                 $cy + 4.5,
-                self::fmt($s['boot']) . ' → ' . self::fmt($s['last']),
+                $valText[$label] ?? '',
                 12.5,
                 self::INK,
                 700,
                 false,
                 'end'
             );
+
+            // Median multiplier, immediately behind this row's own right cap —
+            // the offset and the halo are dotRange()'s, so the two memory
+            // figures annotate their ranges the same way. Following the row's
+            // own cap keeps the number next to the mark it describes rather
+            // than in a column far from it. Faded slate: an annotation that
+            // whispers, never a datum — the exact numbers are the three already
+            // printed on the left. A row whose multiplier is '' is the
+            // reference itself and is deliberately left blank.
+            if ($showFactors && $factorText[$label] !== '') {
+                $out[] = self::text(
+                    max($xLow, $xHigh) + 9,
+                    $cy + 4.5,
+                    'x ' . $factorText[$label],
+                    12.5,
+                    self::FACTOR_INK,
+                    400,
+                    false,
+                    'start',
+                    true
+                );
+            }
             $ri++;
         }
 
@@ -1107,6 +1296,54 @@ final class SvgChart
     }
 
     /**
+     * Break one of the chart's note lines so it fits inside the card.
+     *
+     * The note lines under a memory chart are single <text> elements, and SVG
+     * does not wrap them: a line wider than the card is drawn and then clipped
+     * by the card edge, so the sentence simply loses its ending with no other
+     * symptom. That happened for real when the resident-worker caption grew a
+     * multiplier note (measured 11.7px past the edge at 960px).
+     *
+     * Split points are the caption's own ' · ' separators, which already divide
+     * the line into self-contained clauses — breaking there keeps each piece
+     * readable on its own. The separator is DROPPED at the break rather than
+     * dangled at the end of one line or repeated at the start of the next:
+     * this is ordinary wrapping typography, and a line opening with ' · '
+     * reads as a stray character rather than as a continuation. Greedy: as
+     * many clauses per line as fit, at least one. If a single clause is itself
+     * wider than the card it is returned unsplit; there is no separator to
+     * break at, and inventing one would reword the caller's sentence.
+     *
+     * @return list<string>
+     */
+    private static function wrapNotes(string $s, float $maxW, float $size): array
+    {
+        if ($s === '') {
+            return [];
+        }
+        if (self::approxTextWidth($s, $size) <= $maxW) {
+            return [$s];
+        }
+
+        $lines = [];
+        $cur   = '';
+        foreach (explode(' · ', $s) as $part) {
+            $candidate = $cur === '' ? $part : $cur . ' · ' . $part;
+            if ($cur !== '' && self::approxTextWidth($candidate, $size) > $maxW) {
+                $lines[] = $cur;
+                $cur = $part;
+            } else {
+                $cur = $candidate;
+            }
+        }
+        if ($cur !== '') {
+            $lines[] = $cur;
+        }
+
+        return $lines;
+    }
+
+    /**
      * Lay the legend out into rows that fit between xStart and xEnd.
      * Returns the positioned items plus the number of rows used.
      *
@@ -1154,6 +1391,72 @@ final class SvgChart
             }
         }
         return [$out, max(1, count($rows))];
+    }
+
+    /**
+     * Approximate width of a string in px at a given size and weight.
+     *
+     * SVG exposes no text metrics, so a layout that must not overlap has to
+     * estimate. The charts are drawn in a system sans-serif stack, so a
+     * per-character table calibrated against measurements of the RENDERED
+     * charts is accurate to a few percent. It is deliberately biased to
+     * OVER-estimate: the failure mode is then bounded (a few px of extra
+     * gutter) whereas under-estimating prints a value on top of a name, which
+     * is the bug this exists to prevent ('CodeIgniter' measured 70px, this
+     * says 71; '0.629 · 0.643 · 0.693' measured 117px, this says 120).
+     *
+     * Widths are for a proportional face, not a monospace one: a '.' is not a
+     * digit and an 'm' is not an 'i'. Getting that wrong by using strlen()
+     * would over-size short numeric rows and under-size the long names.
+     */
+    private static function approxTextWidth(string $s, float $size, int $weight = 400): float
+    {
+        static $em = [
+            ' ' => 0.28,
+            '.' => 0.30,
+            ',' => 0.30,
+            ':' => 0.30,
+            ';' => 0.30,
+            'i' => 0.30,
+            'l' => 0.30,
+            'j' => 0.30,
+            'I' => 0.30,
+            '|' => 0.30,
+            '!' => 0.30,
+            "'" => 0.30,
+            '(' => 0.36,
+            ')' => 0.36,
+            '[' => 0.36,
+            ']' => 0.36,
+            '-' => 0.36,
+            'f' => 0.36,
+            't' => 0.36,
+            'r' => 0.36,
+            '·' => 0.36,
+            '/' => 0.36,
+            'm' => 0.86,
+            'M' => 0.86,
+            'W' => 0.86,
+            'w' => 0.86,
+            '→' => 1.00,
+        ];
+
+        $total = 0.0;
+        foreach (preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $ch) {
+            if (isset($em[$ch])) {
+                $total += $em[$ch];
+            } elseif (ctype_digit($ch)) {
+                $total += 0.60;
+            } elseif (ctype_upper($ch)) {
+                $total += 0.68;
+            } elseif (ctype_lower($ch)) {
+                $total += 0.56;
+            } else {
+                $total += 0.60;
+            }
+        }
+
+        return $total * $size * ($weight >= 600 ? 1.06 : 1.0);
     }
 
     private static function n(float $v): string

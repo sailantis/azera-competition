@@ -72,7 +72,7 @@ return [
             'mode'      => 'warm',
             'log_scale' => false,
             'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            'charts'    => ['hero', 'speedup', 'features', 'memory', 'wins'],
+            'charts'    => ['hero', 'speedup', 'features', 'memory'],
             'publish'   => ['framework'],
         ],
 
@@ -114,7 +114,7 @@ return [
             //
             // Timing is unaffected by any of this (residue is unreachable;
             // boot_ms and run means stay flat).
-            'charts'     => ['hero', 'speedup', 'features', 'wins'],
+            'charts'     => ['hero', 'speedup', 'features'],
             'publish'    => ['framework'],
             'publish_md' => '19-BENCHMARKS-FPM.md',
         ],
@@ -124,19 +124,24 @@ return [
         // webserver/IPC overhead — sub-0.1 ms framework features are expected
         // to disappear into that floor; heavy features stay meaningful.
         'real-roadrunner' => [
-            'title'     => 'Framework Competition — Real RoadRunner',
-            'subtitle'  => 'Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.',
+            'title' => 'Framework Competition — Real RoadRunner',
+            // The boot a row carries depends on the pool's max_jobs, which is
+            // a DATASET fact — so this static subtitle states the rule only and
+            // leaves the measured model to the generated prose below the table
+            // (bootLegend/bootBasis read env.rr_max_jobs). Asserting a value
+            // here would be a claim the view cannot check.
+            'subtitle'  => 'Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker\'s boot depends on the pool\'s max_jobs, which the dataset records: the boot is amortised across the jobs a worker serves between recycles, and a pool that never recycles puts no boot into a row at all. The deployment model actually measured is stated with the table.',
             'dataset'   => 'real-deployments',
             'baseline'  => 'azera',
             'mode'      => 'roadrunner',
             'log_scale' => false,
             'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
             // 'resident-memory' rather than 'memory': these rows DO carry the
-            // probe (mem_boot_heap/mem_heap), and a resident worker's retained
-            // heap is the memory question this deployment model actually
-            // raises. peak_mem is 0 here — run-http.php refuses to present the
+            // probe (mem_boot_heap/mem_heap), and a worker's retained heap is
+            // the memory question this deployment model actually raises.
+            // peak_mem is 0 here — run-http.php refuses to present the
             // client's own footprint as the framework's.
-            'charts'     => ['hero', 'speedup', 'features', 'resident-memory', 'wins'],
+            'charts'     => ['hero', 'speedup', 'features', 'resident-memory'],
             'publish'    => ['framework'],
             'publish_md' => '19-BENCHMARKS-REAL.md',
         ],
@@ -149,42 +154,22 @@ return [
         // not assert it: floorNote() reads `env.fpm_max_requests` and states
         // the model that was actually measured.
         'real-fpm' => [
-            'title'      => 'Framework Competition — Real PHP-FPM',
-            'subtitle'   => 'Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool\'s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.',
-            'dataset'    => 'real-deployments',
-            'baseline'   => 'azera',
-            'mode'       => 'php-fpm',
-            'log_scale'  => false,
-            'apps'       => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            'charts'     => ['hero', 'speedup', 'features', 'wins'],
-            'publish'    => ['framework'],
-            'publish_md' => '19-BENCHMARKS-REAL-FPM.md',
-        ],
-
-        // A memory-focused cut of the same dataset (peak memory is
-        // mode-independent up to measurement noise).
-        'memory' => [
-            'title'    => 'Peak Memory Footprint',
-            'subtitle' => 'Highest peak memory per framework. Low memory is what makes Azera cheap to run at scale.',
-            'dataset'  => 'free-for-all',
-            'baseline' => 'azera',
-            'mode'     => 'warm',
-            'apps'     => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            'charts'   => ['memory'],
-            'publish'  => [],
-        ],
-
-        // The scale-free "second axis": everything divided by the baseline.
-        'relative' => [
-            'title'     => 'Relative to Azera',
-            'subtitle'  => 'The same dataset with Azera pinned at 1.0, so each framework reads as a multiple of the baseline instead of an absolute time.',
-            'dataset'   => 'free-for-all',
+            'title'     => 'Framework Competition — Real PHP-FPM',
+            'subtitle'  => 'Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool\'s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.',
+            'dataset'   => 'real-deployments',
             'baseline'  => 'azera',
-            'mode'      => 'warm',
+            'mode'      => 'php-fpm',
             'log_scale' => false,
             'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            'charts'    => ['speedup'],
-            'publish'   => [],
+            // 'resident-memory' here too, for the same reason as the RR view.
+            // This used to be FPM's distinguishing feature: the pool is
+            // pm=static/max_children=1/max_requests=0, so its ONE worker is
+            // resident for the whole block and does retain what it built. The
+            // probe only existed on the RoadRunner side until 2026-09-17, so
+            // these rows carried zeros and the chart rendered nothing.
+            'charts'     => ['hero', 'speedup', 'features', 'resident-memory'],
+            'publish'    => ['framework'],
+            'publish_md' => '19-BENCHMARKS-REAL-FPM.md',
         ],
     ],
 ];

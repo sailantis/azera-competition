@@ -52,86 +52,71 @@ main{padding-bottom:10px}
 <header>
   <h1>Framework Competition — Cold Start</h1>
   <p class="lead">PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM&#039;s own worker management is not simulated — real FPM keeps its worker alive and adds nginx + FastCGI overhead on top of this boot, so these are lower bounds for real FPM latency (see the real-fpm view for the measured version).</p>
-  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; php-fpm mode &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; php-fpm mode &middot; 50 iterations per run over 30 runs &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">Boot model: boot included: a fresh framework rebuild is timed inside every request</p>
 </header>
 <main>
   <section class="figures">
 <figure>
-  <figcaption>Framework startup — boot + teardown (cold + warm) — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/startup.svg" alt="Framework startup — boot + teardown (cold + warm) — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Framework startup — boot + teardown (cold + FPM rebuild + warm)</figcaption>
+  <img src="svg/cold-start/startup.svg" alt="Framework startup — boot + teardown (cold + FPM rebuild + warm)" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Total response times — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/speedup.svg" alt="Total response times — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Peak memory footprint</figcaption>
-  <img src="svg/cold-start/memory.svg" alt="Peak memory footprint" loading="lazy">
+  <figcaption>Total response times</figcaption>
+  <img src="svg/cold-start/speedup.svg" alt="Total response times" loading="lazy">
 </figure>
   </section>
   <h2>Feature benchmarks</h2>
 <section class="figures">
 <figure>
-  <figcaption>Routing — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-routing.svg" alt="Routing — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Routing</figcaption>
+  <img src="svg/cold-start/feature-routing.svg" alt="Routing" loading="lazy">
 </figure>
 <figure>
-  <figcaption>ORM / Active Record — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-orm.svg" alt="ORM / Active Record — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>ORM / Active Record</figcaption>
+  <img src="svg/cold-start/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Query Builder — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-query-builder.svg" alt="Query Builder — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Query Builder</figcaption>
+  <img src="svg/cold-start/feature-query-builder.svg" alt="Query Builder" loading="lazy">
 </figure>
 <figure>
-  <figcaption>REST API (JSON) — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-rest-api.svg" alt="REST API (JSON) — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>REST API (JSON)</figcaption>
+  <img src="svg/cold-start/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
 </figure>
 <figure>
-  <figcaption>AOP (Aspect-Oriented) — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-aop.svg" alt="AOP (Aspect-Oriented) — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>AOP (Aspect-Oriented)</figcaption>
+  <img src="svg/cold-start/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Cache — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-cache.svg" alt="Cache — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Cache</figcaption>
+  <img src="svg/cold-start/feature-cache.svg" alt="Cache" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Database Events — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-db-events.svg" alt="Database Events — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Database Events</figcaption>
+  <img src="svg/cold-start/feature-db-events.svg" alt="Database Events" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Event Dispatcher — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-events.svg" alt="Event Dispatcher — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Event Dispatcher</figcaption>
+  <img src="svg/cold-start/feature-events.svg" alt="Event Dispatcher" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Validation — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-validation.svg" alt="Validation — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Validation</figcaption>
+  <img src="svg/cold-start/feature-validation.svg" alt="Validation" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Config — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-config.svg" alt="Config — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Config</figcaption>
+  <img src="svg/cold-start/feature-config.svg" alt="Config" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Request-Scoped Services — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-request-scoped.svg" alt="Request-Scoped Services — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Request-Scoped Services</figcaption>
+  <img src="svg/cold-start/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
 </figure>
 <figure>
-  <figcaption>Rate Limiter — boot included: a fresh framework rebuild is timed inside every request</figcaption>
-  <img src="svg/cold-start/feature-rate-limiter.svg" alt="Rate Limiter — boot included: a fresh framework rebuild is timed inside every request" loading="lazy">
+  <figcaption>Rate Limiter</figcaption>
+  <img src="svg/cold-start/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
 </figure>
 </section>
-  <h2>Wins per framework</h2>
-<table>
-<thead><tr><th>Framework</th><th>Wins</th><th>Share</th></tr></thead>
-<tbody>
-<tr><td>Azera</td><td>21</td><td>100%</td></tr>
-<tr><td>Laravel</td><td>0</td><td>0%</td></tr>
-<tr><td>Symfony</td><td>0</td><td>0%</td></tr>
-<tr><td>Spiral</td><td>0</td><td>0%</td></tr>
-<tr><td>CodeIgniter</td><td>0</td><td>0%</td></tr>
-<tr><td>CakePHP</td><td>0</td><td>0%</td></tr>
-</tbody>
-</table>
   <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span> <span class="unit">(sub-line: boot + handle + post-response cleanup, which sum to the total)</span> <span class="unit">— cold rows and charts are end-to-end: each iteration pays a fresh framework boot inside the request clock (FPM story)</span></h2>
 <table class="matrix">
 <thead><tr><th>Request</th><th>Workload</th><th><span class="chip" style="--c:#3459e6">Azera</span></th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th><th><span class="chip" style="--c:#0ca678">Spiral</span></th><th><span class="chip" style="--c:#e8590c">CodeIgniter</span></th><th><span class="chip" style="--c:#d6409f">CakePHP</span></th></tr></thead>
@@ -147,7 +132,7 @@ main{padding-bottom:10px}
 <tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="win">2.97 <sub>0.05+2.91+0.01</sub></td><td class="">9.07 <sub>4.05+5.02+0.00</sub></td><td class="">5.19 <sub>1.59+3.60+0.00</sub></td><td class="">22.2 <sub>17.4+4.8+0.0</sub></td><td class="">4.37 <sub>0.03+4.32+0.02</sub></td><td class="">5.62 <sub>0.40+5.22+0.00</sub></td></tr>
 <tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="win">3.06 <sub>0.05+3.00+0.01</sub></td><td class="">7.76 <sub>4.05+3.71+0.00</sub></td><td class="">6.84 <sub>1.61+5.23+0.00</sub></td><td class="">22.7 <sub>17.6+5.1+0.0</sub></td><td class="">4.54 <sub>0.03+4.49+0.02</sub></td><td class="">5.77 <sub>0.38+5.39+0.00</sub></td></tr>
 <tr><td><code>GET /features/aop</code></td><td class="muted">no DB — interceptor pipeline</td><td class="win">5.22 <sub>0.06+5.16+0.00</sub></td><td class="">8.98 <sub>4.10+4.88+0.00</sub></td><td class="">6.25 <sub>1.60+4.65+0.00</sub></td><td class="">24.7 <sub>17.5+7.2+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/cache</code></td><td class="muted">no DB — cache round-trips</td><td class="win">54.5 <sub>0.1+54.4+0.0</sub></td><td class="">59.6 <sub>4.6+55.0+0.0</sub></td><td class="">57.1 <sub>1.9+55.2+0.0</sub></td><td class="">74.0 <sub>17.7+56.3+0.0</sub></td><td class="">55.2 <sub>0.0+55.2+0.0</sub></td><td class="">56.3 <sub>0.4+55.9+0.0</sub></td></tr>
+<tr><td><code>GET /features/cache</code></td><td class="muted">COUNT(*) of 1000 rows, cached 10s (miss = query)</td><td class="win">54.5 <sub>0.1+54.4+0.0</sub></td><td class="">59.6 <sub>4.6+55.0+0.0</sub></td><td class="">57.1 <sub>1.9+55.2+0.0</sub></td><td class="">74.0 <sub>17.7+56.3+0.0</sub></td><td class="">55.2 <sub>0.0+55.2+0.0</sub></td><td class="">56.3 <sub>0.4+55.9+0.0</sub></td></tr>
 <tr><td><code>GET /features/log</code></td><td class="muted">no DB — buffered log handlers</td><td class="win">2.92 <sub>0.05+2.87+0.00</sub></td><td class="">6.76 <sub>3.98+2.78+0.00</sub></td><td class="">3.91 <sub>1.59+2.32+0.00</sub></td><td class="">22.1 <sub>17.5+4.6+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
 <tr><td><code>GET /features/retry</code></td><td class="muted">no DB — retry policy</td><td class="win">2.91 <sub>0.06+2.85+0.00</sub></td><td class="">6.80 <sub>4.00+2.80+0.00</sub></td><td class="">3.95 <sub>1.62+2.33+0.00</sub></td><td class="">22.2 <sub>17.7+4.5+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>
 <tr><td><code>GET /features/pipeline</code></td><td class="muted">no DB — middleware pipeline</td><td class="win">2.23 <sub>0.06+2.17+0.00</sub></td><td class="">6.80 <sub>4.00+2.80+0.00</sub></td><td class="">3.90 <sub>1.58+2.32+0.00</sub></td><td class="">21.8 <sub>17.3+4.5+0.0</sub></td><td class="muted">—</td><td class="muted">—</td></tr>

@@ -12,6 +12,7 @@
 
 use App\Cake\Application as BenchApp;
 use App\Cake\Db;
+use App\Cake\Support\WorkerRequestFactory;
 use Cake\Core\Configure;
 use Cake\Http\Server;
 
@@ -104,7 +105,13 @@ class CakePhpAdapter implements WebAppAdapter
         ];
 
         try {
-            $request  = \Cake\Http\ServerRequestFactory::fromGlobals($server);
+            // WorkerRequestFactory, NOT ServerRequestFactory::fromGlobals().
+            // The stock factory builds a fresh Session on every call and
+            // Cake\Http\Session::__construct() calls session_register_shutdown(),
+            // which appends to a process-level list PHP only frees at exit — a
+            // ~186 B/request leak in a resident worker (measured linear to 80k
+            // iterations). See WorkerRequestFactory for the full analysis.
+            $request  = WorkerRequestFactory::fromGlobals($server);
             $response = $this->server->run($request);
         } catch (\Throwable $e) {
             return '500 ' . \get_class($e) . ': ' . $e->getMessage();
@@ -118,7 +125,18 @@ class CakePhpAdapter implements WebAppAdapter
      * middleware pipeline per dispatch (state is request-local by
      * construction — the Request/Response pair dies with the call) and
      * Cake's app-level finalizers only exist for the CLI shutdown path.
-     * Nothing to do between requests.
+     *
+     * The Session is the one exception, and only because it is now shared by
+     * the whole worker rather than rebuilt per request (see
+     * WorkerRequestFactory — rebuilding it leaks the shutdown-handler list).
+     * Its state lives in $_SESSION, so clearing that between requests keeps the
+     * request-scoped semantics the stock per-request Session gave for free, at
+     * the cost of one array assignment. `clear()` touches nothing but $_SESSION
+     * — no session_start(), no cookie, so it is safe on a never-started
+     * session and adds no measurable work.
      */
-    public function cleanup(): void {}
+    public function cleanup(): void
+    {
+        WorkerRequestFactory::session()->clear();
+    }
 }

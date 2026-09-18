@@ -16,7 +16,7 @@ declare(strict_types=1);
  *   php scripts/report.php                          # all views
  *   php scripts/report.php --view=warm-start        # one view
  *   php scripts/report.php --dataset=free-for-all   # pick dataset by name
- *   php scripts/report.php --dataset=results/free-for-all-opcache.json
+ *   php scripts/report.php --dataset=results/free-for-all-opcache-iso.json
  *   php scripts/report.php --list                   # list datasets + views
  *   php scripts/report.php --publish=framework      # also write into azera-framework
  *
@@ -41,10 +41,10 @@ use AzeraCompetition\Report\ResultStore;
 $root     = dirname(__DIR__);
 $manifest = require __DIR__ . '/report/views.php';
 
-$opts     = getopt('', ['dataset::', 'view::', 'out::', 'publish::', 'force-dataset', 'list', 'help']);
-$outDir   = rtrim($opts['out'] ?? $root . '/docs/benchmarks', '/');
-$onlyView = $opts['view'] ?? null;
-$publish  = $opts['publish'] ?? null;
+$opts         = getopt('', ['dataset::', 'view::', 'out::', 'publish::', 'force-dataset', 'list', 'help']);
+$outDir       = rtrim($opts['out'] ?? $root . '/docs/benchmarks', '/');
+$onlyView     = $opts['view'] ?? null;
+$publish      = $opts['publish'] ?? null;
 $forceDataset = isset($opts['force-dataset']);
 
 if (isset($opts['help'])) {
@@ -168,11 +168,21 @@ foreach ($views as $key => $view) {
     file_put_contents($outDir . '/' . $mdFile, $mdBody);
     $mdFiles[$key] = $mdFile;
 
-    // Collect the SVG files that were produced.
+    // Collect the SVG files that were produced — from the renderer's own
+    // record of what it wrote, NOT by listing the directory.
+    //
+    // Listing was wrong: $svgDir survives between runs, so a chart that a
+    // view has stopped drawing keeps sitting in it and is picked up as if it
+    // were current. That is how docs/benchmarks/view-cold-start.html came to
+    // embed a "Peak memory footprint" figure that cold-start.md never
+    // mentions — svg/cold-start/memory.svg is an orphan from an older render
+    // (707d495) and the glob resurrected it on every regeneration, so the
+    // HTML and the Markdown of one view disagreed about what it contains.
     $chartFiles = [];
-    foreach (scandir($svgDir) ?: [] as $f) {
-        if (str_ends_with($f, '.svg')) {
-            $chartFiles[basename($f, '.svg')] = $relDir . '/' . $f;
+    foreach ($md->writtenCharts() as $chartKey) {
+        $rel = $relDir . '/' . $chartKey . '.svg';
+        if (is_file($outDir . '/' . $rel)) {
+            $chartFiles[$chartKey] = $rel;
         }
     }
     $svgByView[$key] = $chartFiles;

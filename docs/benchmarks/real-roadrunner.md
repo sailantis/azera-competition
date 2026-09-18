@@ -1,37 +1,43 @@
 # Framework Competition — Real RoadRunner
 
-Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); sub-0.1 ms framework differences are below this floor. Single sequential client.
+Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker's boot depends on the pool's max_jobs, which the dataset records: the boot is amortised across the jobs a worker serves between recycles, and a pool that never recycles puts no boot into a row at all. The deployment model actually measured is stated with the table.
 
-**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): no · 1000 iterations per run over multiple runs, lower is better.
+**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): no · 1000 iterations per run over 10 runs, lower is better.
 
-_Measured 2026-09-14T21:22:18+00:00_
+_Measured 2026-09-15T23:21:30+00:00_
 
-## Framework startup
+## Framework startup GET /
 
-Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: **Azera** responds in 0.255 ms (median; 0.273 ms trimmed mean) against 0.870 ms (median) for CodeIgniter — x 3.4 slower.
+Time to re-initialise the framework in an already-warm RoadRunner worker — the cycle reset a recycled worker pays, with opcache and every class already loaded. This is NOT process start: spawning the process is the server supervisor's cost, not the framework's.
 
-![Framework startup — GET /](svg/real-roadrunner/startup.svg)
+- The fastest and slowest framework on this band are named by the chart below; the multiplier beside each row states how many times the fastest boot it needed.
+- Azera, CodeIgniter, CakePHP keep their compiled wiring across a recycle and hand it straight back, so there is no rebuild to time. They are left out of the chart's factor column.
+- Each framework's boot is reduced to one statistic (median of the probe samples), and the samples per framework are recorded in the dataset.
+
+![Framework startup — boot](svg/real-roadrunner/startup.svg)
 
 ## Total response times
 
-Total time to serve one of each of the 21 endpoints — the sum of the endpoints' medians, not a single response time — relative to Azera (1.0 = the baseline's own total, higher = slower). Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over every endpoint costs. The closest rival is Symfony, needing x 1.7 the same total.
+Total time to serve one pass over every benchmarked endpoint — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over every endpoint costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
 
 ![Total response times](svg/real-roadrunner/speedup.svg)
 
 ## Feature benchmarks
 
-- **Routing** (`GET /`): Azera at 0.255ms median, x 1.5 faster than Symfony.
-- **ORM / Active Record** (`GET /items`): Azera at 0.474ms median, x 2.0 faster than CakePHP.
-- **Query Builder** (`GET /items-qb`): Azera at 0.413ms median, x 1.6 faster than Symfony.
-- **REST API (JSON)** (`GET /api/items`): Azera at 0.327ms median, x 2.1 faster than CakePHP.
-- **AOP (Aspect-Oriented)** (`GET /features/aop`): Azera at 0.432ms median, x 1.4 faster than Symfony.
-- **Cache** (`GET /features/cache`): Azera at 0.243ms median, x 1.4 faster than Symfony.
-- **Database Events** (`GET /features/db-events`): Azera at 0.299ms median, x 2.1 faster than Symfony.
-- **Event Dispatcher** (`GET /features/events`): Azera at 0.312ms median, x 1.3 faster than Symfony.
-- **Validation** (`GET /features/validation`): Azera at 0.270ms median, x 2.0 faster than CakePHP.
-- **Config** (`GET /features/config`): Azera at 0.226ms median, x 1.5 faster than Symfony.
-- **Request-Scoped Services** (`GET /features/request-scoped`): Azera at 0.233ms median, x 1.4 faster than Symfony.
-- **Rate Limiter** (`GET /features/rate-limit`): Azera at 0.222ms median, x 1.7 faster than Symfony.
+One race per framework feature, each run as a real request against a real database. Every figure — the winner of each race and the margin over the runner-up — is in that feature's own chart below, which anchors each endpoint at its fastest framework.
+
+- **Routing** (`GET /`) — dispatches a plain request through the router and returns a rendered template — no database access.
+- **ORM / Active Record** (`GET /items`) — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total.
+- **Query Builder** (`GET /items-qb`) — builds the same page of 20 items with each framework's query builder instead of its ORM, so the two data-access styles can be compared directly.
+- **REST API (JSON)** (`GET /api/items`) — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.
+- **AOP (Aspect-Oriented)** (`GET /features/aop`) — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.
+- **Cache** (`GET /features/cache`) — reads a COUNT(*) over the 1,000 rows through the framework's cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.
+- **Database Events** (`GET /features/db-events`) — inserts one event row per request and lets the framework's database events fire around that write.
+- **Event Dispatcher** (`GET /features/events`) — dispatches an in-process event to registered listeners.
+- **Validation** (`GET /features/validation`) — validates a payload with the framework's own validator.
+- **Config** (`GET /features/config`) — resolves a value from the framework's config repository.
+- **Request-Scoped Services** (`GET /features/request-scoped`) — resolves a service scoped to the request from the container.
+- **Rate Limiter** (`GET /features/rate-limit`) — checks a cache-backed rate limiter.
 
 ### Routing
 
@@ -83,56 +89,47 @@ Total time to serve one of each of the 21 endpoints — the sum of the endpoints
 
 ## Resident worker memory
 
-Read from inside the live RoadRunner worker after each endpoint, on an extra untimed request that never touches the latency numbers. All six frameworks are drawn on one shared MB axis. The **left cap** is the PHP heap with the application booted and **no request served** — the framework's own data structures, with opcache bytecode excluded because it lives in shared memory. The **dot** is the heap after the last endpoint, and the **right cap** is the largest heap any endpoint reached. A narrow-left range that reaches far right is the shape worth watching: cheap to exist, expensive at its worst.
+Read from inside the live worker after each endpoint, on an extra untimed request that never touches the latency numbers. All six frameworks are drawn on one shared MB axis. The **left cap** is the PHP heap with the application booted and **no request served** — the framework's own data structures, with opcache bytecode excluded because it lives in shared memory. The **dot** is the heap after the last endpoint, and the **right cap** is the largest heap any endpoint reached. A narrow-left range that reaches far right is the shape worth watching: cheap to exist, expensive at its worst.
 
-**CakePHP** needs 0.850 MB to exist, against 7.08 MB for Spiral (x 8.3 more). **CakePHP** is the exception: it reaches 40.6 MB against 0.850 MB at boot (x 47.7 more), and its heap is still higher than at the previous endpoint on 15 of the 20 steps through the suite — its cost grows with the number of distinct endpoints served, not with the request count.
+The numbers are read from the resident RoadRunner worker, which answers them directly in response headers.
 
-Only the left cap ranks frameworks: it is a property of the worker, identical on every endpoint. The dot and the right cap are both endpoint-order dependent — the probe reads the whole heap once per endpoint, so it cannot say what one request costs on its own — which is why they are drawn as a range and the dot marks the end of the run rather than a lighter reading.
+Rows are ordered by the **dot** — the heap the worker was left holding after its last endpoint — so the table reads as one ranking from lightest steady state to heaviest. The multiplier beside a row divides its dot by the lightest dot on the page; the reference row carries none. A row can therefore sit high while having the lightest left cap: that is a framework that is cheap to boot and expensive to keep running, which is exactly the distinction the three marks exist to draw.
+
+The dot and the right cap are both endpoint-order dependent — the probe reads the whole heap once per endpoint, so it cannot say what one request costs on its own — which is why they are drawn as a range and the dot marks the end of the run rather than a lighter reading. That caveat bounds what the numbers MEAN; it does not invalidate the comparison, because every row is read from the same single sequence of endpoints and therefore at the same moment. What it rules out is reading any one of them as a per-request cost. The distance from the left cap to the right one, and the number of steps over which the heap rises, are the growth a long-lived worker accumulates.
 
 ![Resident worker memory](svg/real-roadrunner/resident-memory.svg)
 
-## Wins per framework
-
-Number of endpoint races won (lowest boot-inclusive per-request time) per framework. This is a real server: a race won by less than the server floor and the run-to-run jitter is a tie, so read small leads cautiously.
-
-| Framework | Wins | Share |
-|---|---:|---:|
-| Azera | 21 | 100% |
-| Laravel | 0 | 0% |
-| Symfony | 0 | 0% |
-| Spiral | 0 | 0% |
-| CodeIgniter | 0 | 0% |
-| CakePHP | 0 | 0% |
-
 ## Latency by endpoint
 
-Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. These are REAL deployments measured over HTTP: every row carries the constant server cost, which is why the values cluster — the floor note below states it explicitly. The workload column states what each request reads or writes — the shared SQLite database holds 1,000 item rows (re-seeded per app × mode), every list endpoint serves page 1 of 20, and every write upserts exactly one sentinel row.
+Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. Every number is END-TO-END per-request occupancy for the view's deployment model: the framework boot of that model is part of the cell, not parked in a separate chart. These are REAL deployments measured over HTTP: every row carries the constant server cost, which is why the values cluster — the floor note below states what stands under them. The workload column states what each request reads or writes. Every framework runs the same seeded database and the same page size, so the payload is identical no matter which framework served it; the workload column is the part of the suite that varies.
 
-**Server floor** — real RoadRunner over loopback: a bare resident worker that renders a fixed string costs **0.192 ms** (`floor-rr`) — the IPC + server floor every row below also pays. Only differences larger than this floor are framework differences.
+These rows are end-to-end for a resident worker with a pool that never recycles it (max_jobs=0): the worker booted once before the first request and serves the whole run, so a cell is the measured request itself and carries no boot. The one-time recycle cost is measured in the startup chart — read that when sizing a pool that is recycled or restarted, or when requests queue behind one worker.
+
+**Server floor** — real RoadRunner over loopback: a bare resident worker that renders a fixed string (`floor-rr`) measures the IPC + server floor every row below also pays. Only differences larger than this floor are framework differences.
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `GET /` | no DB — routing + template only | **0.273** | 0.618 | 0.406 | 0.660 | 0.890 | 0.482 |
-| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.488** | 1.22 | 1.08 | 1.01 | 1.25 | 0.989 |
-| `GET /items/1` | 1 item by id | **0.354** | 0.866 | 0.588 | 0.804 | 1.12 | 0.765 |
-| `POST /items` | 1 row upserted (sentinel #999999) | **0.466** | 0.882 | 0.812 | 0.857 | 1.21 | 0.872 |
-| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.428** | 0.921 | 0.658 | 0.803 | 1.22 | 0.746 |
-| `GET /items-qb/1` | 1 item by id | **0.364** | 0.774 | 0.521 | 0.740 | 1.11 | 0.670 |
-| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.377** | 0.868 | 0.691 | 0.802 | 1.33 | 0.766 |
-| `GET /api/items` | 20 of 1000 items as JSON | **0.341** | 1.06 | 0.689 | 0.838 | 1.06 | 0.702 |
-| `GET /api/items/1` | 1 item by id as JSON | **0.317** | 0.857 | 0.503 | 0.747 | 1.03 | 0.646 |
-| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.317** | 0.765 | 0.741 | 0.776 | 1.10 | 0.784 |
-| `GET /features/aop` | no DB — interceptor pipeline | **0.442** | 0.763 | 0.624 | 0.971 | — | — |
-| `GET /features/cache` | no DB — cache round-trips | **0.257** | 0.621 | 0.368 | 0.693 | 0.811 | 0.392 |
-| `GET /features/log` | no DB — buffered log handlers | **0.256** | 0.559 | 0.375 | 0.678 | — | — |
-| `GET /features/retry` | no DB — retry policy | **0.240** | 0.617 | 0.398 | 0.709 | — | — |
-| `GET /features/pipeline` | no DB — middleware pipeline | **0.248** | 0.581 | 0.372 | 0.693 | — | — |
-| `GET /features/db-events` | 1 event row INSERTed per request | **0.318** | 0.848 | 0.646 | 0.930 | 1.16 | 0.694 |
-| `GET /features/events` | no DB — in-process listeners | **0.330** | 0.730 | 0.430 | 0.777 | 1.14 | 0.563 |
-| `GET /features/validation` | no DB — validator run | **0.283** | 1.30 | 0.558 | 0.732 | 1.11 | 0.550 |
-| `GET /features/config` | no DB — config lookup | **0.240** | 0.590 | 0.362 | 0.674 | 0.823 | 0.390 |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **0.248** | 0.594 | 0.353 | 0.697 | 0.800 | 0.359 |
-| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.234** | 0.601 | 0.392 | 0.710 | 0.809 | 0.398 |
+| `GET /` | no DB — routing + template only | **0.267** | 0.611 | 0.415 | 0.663 | 0.893 | 0.461 |
+| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.503** | 1.23 | 1.05 | 0.996 | 1.25 | 0.944 |
+| `GET /items/1` | 1 item by id | **0.343** | 0.844 | 0.578 | 0.807 | 1.08 | 0.737 |
+| `POST /items` | 1 row upserted (sentinel #999999) | **0.447** | 0.878 | 0.790 | 0.842 | 1.20 | 0.846 |
+| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.420** | 0.895 | 0.669 | 0.821 | 1.23 | 0.734 |
+| `GET /items-qb/1` | 1 item by id | **0.359** | 0.741 | 0.478 | 0.725 | 1.10 | 0.652 |
+| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.397** | 0.859 | 0.698 | 0.790 | 1.32 | 0.752 |
+| `GET /api/items` | 20 of 1000 items as JSON | **0.304** | 1.09 | 0.671 | 0.818 | 1.05 | 0.672 |
+| `GET /api/items/1` | 1 item by id as JSON | **0.326** | 0.855 | 0.512 | 0.748 | 1.03 | 0.652 |
+| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.343** | 0.784 | 0.714 | 0.806 | 1.11 | 0.755 |
+| `GET /features/aop` | no DB — interceptor pipeline | **0.433** | 0.770 | 0.596 | 0.944 | — | — |
+| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **0.236** | 0.599 | 0.372 | 0.679 | 0.811 | 0.391 |
+| `GET /features/log` | no DB — buffered log handlers | **0.255** | 0.571 | 0.354 | 0.658 | — | — |
+| `GET /features/retry` | no DB — retry policy | **0.236** | 0.576 | 0.367 | 0.683 | — | — |
+| `GET /features/pipeline` | no DB — middleware pipeline | **0.243** | 0.590 | 0.363 | 0.679 | — | — |
+| `GET /features/db-events` | 1 event row INSERTed per request | **0.362** | 0.838 | 0.617 | 0.917 | 1.20 | 0.684 |
+| `GET /features/events` | no DB — in-process listeners | **0.328** | 0.725 | 0.468 | 0.786 | 1.13 | 0.562 |
+| `GET /features/validation` | no DB — validator run | **0.255** | 1.29 | 0.510 | 0.717 | 1.10 | 0.526 |
+| `GET /features/config` | no DB — config lookup | **0.226** | 0.577 | 0.352 | 0.657 | 0.815 | 0.366 |
+| `GET /features/request-scoped` | no DB — scoped service resolve | **0.229** | 0.582 | 0.355 | 0.683 | 0.778 | 0.374 |
+| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.241** | 0.598 | 0.365 | 0.709 | 0.818 | 0.395 |
 
 ---
 

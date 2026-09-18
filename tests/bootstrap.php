@@ -24,5 +24,12 @@ require_once "{$root}/scripts/bench-lib.php";
 require_once "{$root}/scripts/deploy-lib.php";
 
 // Report tooling has no composer autoload entry (report.php requires the files
-// explicitly), so the tests do the same.
+// explicitly), so the tests do the same. The whole chain is loaded, in
+// report.php's own order, so a test can construct a real MarkdownReport and
+// render a view instead of asserting on source text alone.
+require_once "{$root}/scripts/report/BenchmarkConfig.php";
 require_once "{$root}/scripts/report/ResultStore.php";
+require_once "{$root}/scripts/report/SvgChart.php";
+require_once "{$root}/scripts/report/Tables.php";
+require_once "{$root}/scripts/report/MarkdownReport.php";
+require_once "{$root}/scripts/report/HtmlReport.php";

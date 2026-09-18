@@ -45,6 +45,10 @@ declare(strict_types=1);
 use CodeIgniter\Boot;
 use Config\Paths;
 
+// Boot probe: the clock MUST start before any framework code loads.
+require_once __DIR__ . '/../boot-probe.php';
+boot_probe_start();
+
 // Standard guard for PHP's built-in server: let it serve real files from the
 // docroot (none expected today, but keeps static assets working if added).
 if (PHP_SAPI === 'cli-server') {
@@ -178,6 +182,21 @@ register_shutdown_function(static function (): void {
             $connection->close();
         } catch (\Throwable $e) {}
     }
+});
+
+// Boot complete: CI4 fires 'pre_system' at the end of run()'s own bootstrap
+// (after CodeIgniter::initialize(), before required filters and routing).
+// This is CI4's only boot-complete hook — Boot::bootWeb() fuses the boot and
+// the dispatch into one call, so there is no point in the calling script to
+// time instead.
+//
+// The class is CodeIgniter\Events\Events (NOT CodeIgniter\Events — that name
+// does not exist in CI4 4.x; CodeIgniter.php's own `use` line says so). The
+// wrong name is an uncaught Error thrown while the file is still being
+// loaded, so every request 500s with a 335-byte body.
+\CodeIgniter\Events\Events::on('pre_system', static function (): void {
+    boot_probe_record('fpm', 'codeigniter');
+    mem_probe_arm('codeigniter');
 });
 
 exit(Boot::bootWeb($paths));

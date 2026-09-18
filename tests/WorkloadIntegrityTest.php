@@ -36,8 +36,8 @@ final class WorkloadIntegrityTest extends TestCase
      */
     private static function appFiles(): array
     {
-        $root    = self::repoRoot();
-        $files   = [];
+        $root     = self::repoRoot();
+        $files    = [];
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($root . '/apps', \FilesystemIterator::SKIP_DOTS)
         );

@@ -17,6 +17,11 @@
  *   POST /items       — create a new item (use curl or a form)
  */
 
+// Boot probe: the clock MUST start as the first statement so the measurement
+// covers "PHP start → framework ready" (see boot-probe.php).
+require_once __DIR__ . '/../boot-probe.php';
+boot_probe_start();
+
 require __DIR__ . '/../vendor/autoload.php';
 
 // PSR-4 autoloader for the App\Azera namespace (same mapping the adapter
@@ -46,6 +51,14 @@ if (!file_exists($dbPath)) {
 }
 
 $ctx = \App\Azera\Bootstrap::boot($dbPath);
+
+// Boot complete: container built, providers registered, routes loaded.
+boot_probe_record('fpm', 'azera');
+
+// FPM memory probe: arms a shutdown hook that appends one sample when this
+// request finishes (see boot-probe.php for what each field means and why the
+// write is gated on a header the timed loop never sends).
+mem_probe_arm('azera');
 
 $path   = $ctx->request()->path();
 $method = $ctx->request()->method();

@@ -16,11 +16,55 @@ use RuntimeException;
  */
 final class MarkdownReport
 {
+    /**
+     * Chart keys (`startup`, `feature-orm`, …) this instance actually WROTE.
+     *
+     * Recorded at the write site rather than discovered by listing $svgDir.
+     * Listing was the old behaviour and it was wrong: the directory persists
+     * between renders, so a chart that a view has STOPPED drawing keeps
+     * sitting there and gets picked up again as if it were current. That is
+     * exactly how docs/benchmarks/view-cold-start.html ended up embedding a
+     * "Peak memory footprint" figure that cold-start.md never mentioned — an
+     * orphan SVG from an older render (commit 707d495) that outlived the
+     * chart-list entry that used to produce it. The list below is the
+     * authoritative one.
+     *
+     * @var list<string>
+     */
+    private array $written = [];
+
     public function __construct(
         private readonly ResultStore $store,
         private readonly string $viewKey,
         private readonly array $view
     ) {}
+
+    /**
+     * Chart keys written by the most recent render(), in write order.
+     *
+     * Callers MUST use this instead of scanning the output directory: only
+     * charts produced by this render are guaranteed to match the Markdown and
+     * the dataset it was rendered from.
+     *
+     * @return list<string>
+     */
+    public function writtenCharts(): array
+    {
+        return $this->written;
+    }
+
+    /**
+     * Write one chart and record that it exists.
+     *
+     * The single funnel for every SVG this class emits, so writtenCharts()
+     * cannot drift from what is on disk: there is no way to write a chart
+     * without registering it.
+     */
+    private function writeSvg(string $dir, string $file, string $svg): void
+    {
+        file_put_contents($dir . '/' . $file, $svg);
+        $this->written[] = basename($file, '.svg');
+    }
 
     /**
      * Build every chart for the view, write the SVGs under $svgDir, and return
@@ -34,11 +78,14 @@ final class MarkdownReport
             throw new RuntimeException("Cannot create SVG dir: {$svgDir}");
         }
 
+        // A re-render of the same view must not accumulate chart keys.
+        $this->written = [];
+
         $apps     = array_values(array_intersect($this->view['apps'] ?? $this->store->apps(), $this->store->apps()));
         $baseline = (string) ($this->view['baseline'] ?? $apps[0] ?? '');
         $mode     = (string) ($this->view['mode'] ?? 'warm');
         $logScale = (bool) ($this->view['log_scale'] ?? false);
-        $charts   = $this->view['charts'] ?? ['hero', 'speedup', 'features', 'memory', 'wins'];
+        $charts   = $this->view['charts'] ?? ['hero', 'speedup', 'features', 'memory'];
 
         $l = [];
         $l[] = '# ' . ($this->view['title'] ?? 'Benchmark');
@@ -80,11 +127,12 @@ final class MarkdownReport
                 : '')
             . ($realServer
                 ? 'These are REAL deployments measured over HTTP: every row carries the constant server '
-                    . 'cost, which is why the values cluster — the floor note below states it explicitly. '
+                    . 'cost, which is why the values cluster — the floor note below states what stands '
+                    . 'under them. '
                 : '')
-            . 'The workload column states what each request reads or writes — the shared SQLite database '
-            . 'holds 1,000 item rows (re-seeded per app × mode), every list endpoint serves page 1 of 20, '
-            . 'and every write upserts exactly one sentinel row.'
+            . 'The workload column states what each request reads or writes. Every framework runs the '
+            . 'same seeded database and the same page size, so the payload is identical no matter which '
+            . 'framework served it; the workload column is the part of the suite that varies.'
             . ($this->store->hasCleanupSplit()
                 ? "\n\nEach cell also shows the request's lifecycle split as `total <sub>boot + handle + cleanup</sub>` — "
                     . 'the terms sum to the headline. Cleanup is the post-response teardown a worker performs '
@@ -152,7 +200,6 @@ final class MarkdownReport
             'features'        => $this->features($svgDir, $rel, $apps, $mode, $logScale),
             'memory'          => $this->memory($svgDir, $rel, $apps, $mode),
             'resident-memory' => $this->residentMemory($svgDir, $rel, $apps, $mode),
-            'wins'            => $this->wins($apps, $baseline, $mode),
             default           => null
         };
     }
@@ -177,6 +224,10 @@ final class MarkdownReport
      * One-line note on the boot each dot carries, for the mode being drawn:
      * the FPM rebuild in cold mode (already inside the measured request), the
      * worker recycle in warm mode (added on top of the measured request).
+     *
+     * The sentence states the MODEL, never the recycle's duration — that
+     * number is the startup chart's, and copying it here would be a figure no
+     * re-measure can update.
      */
     private function bootPerPoint(string $mode): string
     {
@@ -188,43 +239,13 @@ final class MarkdownReport
                 ? 'boot included (fresh per-request rebuild)'
                 : '';
         }
-        $lo = null;
-        $hi = null;
-        foreach ($this->store->apps() as $app) {
-            $boot = $this->store->modeBootMs($app, $mode);
-            if ($boot === null) {
-                continue;
-            }
-            $lo = $lo === null ? $boot : min($lo, $boot);
-            $hi = $hi === null ? $boot : max($hi, $boot);
+        // A pool that never recycles puts no boot on a dot at all, so the
+        // note must not claim one — the boot it would refer to is the one the
+        // startup chart measures, not a term inside these points.
+        if ($this->store->rrRecycleModel() === 'never') {
+            return 'worker never recycled (max_jobs=0) — no boot inside these points';
         }
-        return $lo === null
-            ? ''
-            : 'boot included (worker recycle ' . SvgChart::fmt($lo) . '–' . SvgChart::fmt($hi) . ' ms)';
-    }
-
-    /**
-     * True when this dataset measured a REAL server (its rows carry the
-     * floor-* probes). Only then may the prose blame a web server for a flat
-     * ranking — the in-process harness has none.
-     */
-    private function isRealDeployment(): bool
-    {
-        return $this->store->floors() !== [];
-    }
-
-    /**
-     * Closing clause for a set of frameworks that all land within 5% of each
-     * other. The honest reason depends on the dataset: on a real deployment the
-     * constant nginx/FPM/RR cost swamps the framework, while in the in-process
-     * harness a shared fixed cost (e.g. cache round-trips) does. Never blame a
-     * web server that was not measured.
-     */
-    private function withinNoiseReason(): string
-    {
-        return $this->isRealDeployment()
-            ? 'the deployment is server-bound, so the ranking says more about the web server than about the frameworks'
-            : 'a shared fixed cost dominates it, so the endpoint does not separate the frameworks';
+        return 'boot included (worker recycle, sized in the startup chart)';
     }
 
     /**
@@ -253,8 +274,7 @@ final class MarkdownReport
         $ms = static fn(string $key): ?float => $floors[$key]['ms'] ?? null;
 
         if (in_array($mode, ['cold', 'php-fpm'], true)) {
-            $php  = $ms('floor-php');
-            $http = $ms('floor-http');
+            $php = $ms('floor-php');
             if ($php === null) {
                 return '';
             }
@@ -275,20 +295,23 @@ final class MarkdownReport
             // Only a known-recycled pool lets us subtract a spawn; the other
             // two cases must not imply we know where the floor comes from.
             $advice = match ($maxReqs) {
-                1 => 'That worker spawn + FastCGI handshake is the floor every row below stands on — '
-                    . 'subtract it and the remainder is the framework\'s own per-request boot.',
-                0 => 'That FastCGI handshake + minimal-script cost is the floor every row below stands on — '
-                    . 'subtract it and the remainder is the framework\'s own per-request boot, which FPM '
-                    . 'still pays for every request even though its worker survives.',
+                1 => 'Subtracting that floor leaves the framework\'s own per-request boot — what it costs '
+                    . 'to build itself again for every request.',
+                0 => 'Subtracting that floor leaves the framework\'s own per-request boot, which FPM still '
+                    . 'pays for every request even though its worker survives.',
                 default => 'Subtracting it leaves the framework\'s own per-request boot, but how much of '
                     . 'this floor is a process spawn cannot be recovered from the dataset.'
             };
 
+            // The floor's own VALUES deliberately stay out of this sentence:
+            // the `floor-php` and `floor-http` rows in the dataset carry them,
+            // and a figure repeated in prose is the one thing a re-run cannot
+            // update. The note explains what the floor IS and where to read it.
             return "\n\n**Server floor** — measured nginx + PHP-FPM with `pm.max_requests="
                 . ($maxReqs ?? '?') . "`: " . $model
-                . '. A hello-world endpoint that boots nothing but PHP costs '
-                . '**' . SvgChart::fmt($php) . ' ms** (`floor-php`), and a static file through nginx '
-                . SvgChart::fmt($http ?? 0.0) . ' ms (`floor-http`). ' . $advice;
+                . '. A hello-world endpoint that boots nothing but PHP (`floor-php`) and a static file '
+                . 'through nginx (`floor-http`) measure exactly that cost — the floor every row below '
+                . 'stands on. ' . $advice;
         }
 
         if (in_array($mode, ['warm', 'roadrunner'], true)) {
@@ -297,8 +320,8 @@ final class MarkdownReport
                 return '';
             }
             return "\n\n**Server floor** — real RoadRunner over loopback: a bare resident worker that renders a "
-                . 'fixed string costs **' . SvgChart::fmt($rr) . ' ms** (`floor-rr`) — the IPC + server floor '
-                . 'every row below also pays. Only differences larger than this floor are framework differences.';
+                . 'fixed string (`floor-rr`) measures the IPC + server floor every row below also pays. '
+                . 'Only differences larger than this floor are framework differences.';
         }
 
         return '';
@@ -334,23 +357,28 @@ final class MarkdownReport
                 . 'the totals here are the numbers a user waits for.';
         }
         if (in_array($mode, ['warm', 'roadrunner'], true)) {
-            $values = [];
-            foreach ($this->store->apps() as $app) {
-                $boot = $this->store->modeBootMs($app, $mode);
-                if ($boot !== null) {
-                    $values[] = $boot;
-                }
-            }
-            if ($values === []) {
-                return '';
-            }
-            sort($values);
-            $lo = $values[0];
-            $hi = $values[count($values) - 1];
-            return "\n\nThese rows are end-to-end for a resident worker: every headline and every chart point adds the "
-                . 'worker\'s boot (warm recycle, ' . SvgChart::fmt($lo) . '–' . SvgChart::fmt($hi) . ' ms here) to the '
-                . 'measured request, so a cell is the time one request keeps that worker busy — the number to read '
-                . 'when workers are recycled per request or requests queue behind one pool.';
+            // The boot each row carries is the pool's recycle divided by its
+            // max_jobs, so the sentence has to follow the stamped model — the
+            // recycle is a different quantity once the pool recycles on a
+            // schedule (or never). The recycle's own DURATION is deliberately
+            // not quoted here: the startup chart measures it directly, and a
+            // figure repeated in prose is the one thing a re-run cannot update.
+            return match ($this->store->rrRecycleModel()) {
+                'never' => "\n\nThese rows are end-to-end for a resident worker with a pool that never "
+                    . 'recycles it (max_jobs=0): the worker booted once before the first request and '
+                    . 'serves the whole run, so a cell is the measured request itself and carries no '
+                    . 'boot. The one-time recycle cost is measured in the startup chart — read that when '
+                    . 'sizing a pool that is recycled or restarted, or when requests queue behind one worker.',
+                'every' => "\n\nThese rows are end-to-end for a resident worker whose pool recycles it "
+                    . 'every ' . $this->store->rrMaxJobs() . ' jobs: the recycle is divided across those '
+                    . 'jobs, so a cell is the measured request plus its share of the boot.',
+                default => "\n\nThese rows are end-to-end for a resident worker: every headline and every chart "
+                    . 'point adds the worker\'s boot (warm recycle, timed in the startup chart) to the '
+                    . 'measured request, so a cell is the time one request keeps that worker busy — the '
+                    . 'number to read when workers are recycled per request or requests queue behind one '
+                    . 'pool. This dataset does not record the pool\'s max_jobs, so the boot is charged per '
+                    . 'request.'
+            };
         }
         return '';
     }
@@ -406,16 +434,41 @@ final class MarkdownReport
         $metrics  = [];
         $colors   = [];
         $coldMode = $this->store->coldModeName() ?? 'cold';
-        $bands    = [
-            'cold' => ['label' => 'Cold boot — real, first boot in a process (CGI/CLI model)', 'key' => 'cold_ms'],
-        ];
-        // The FPM band only exists when the cold rows carry their per-request
-        // boot share (fork-mode datasets). On the derived deployments file the
-        // cold side is named 'php-fpm'.
-        if ($this->store->fpmBootMedian($apps[0] ?? '') !== null || $this->store->fpmBootMedian($apps[1] ?? '') !== null) {
-            $bands['fpm'] = ['label' => 'FPM rebuild — per-request boot on shared opcache', 'key' => 'fpm_boot'];
+        $probed   = $this->store->isProbedBoot();
+
+        // REAL datasets (boot-probe) get exactly ONE band: a real deployment
+        // has one boot kind, decided by the server measured — not the CLI
+        // harness's three modes. The band is chosen from THIS view's mode:
+        //
+        //   php-fpm    -> the entry script re-runs per request, so the probe
+        //                 measures the boot each request waits for.
+        //   roadrunner -> the worker re-inits the framework in an already-warm
+        //                 process N times, so the probe measures the cycle
+        //                 reset: opcache and every class are loaded, only the
+        //                 kernel/container is rebuilt. The process-start cost
+        //                 is the server supervisor's, not the framework's, and
+        //                 is deliberately NOT the reported number.
+        //
+        // Without this branch a real dataset would be drawn with the CLI band
+        // labels ("FPM rebuild — per-request boot on shared opcache", "Warm
+        // recycle — resident worker"), which describe things that were never
+        // measured here.
+        if ($probed) {
+            $bands = ($mode === 'roadrunner')
+                ? ['warm' => ['label' => 'Warm recycle — framework re-init in a resident worker (RoadRunner)', 'key' => 'warm_ms']]
+                : ['cold' => ['label' => 'Framework boot — per request (PHP-FPM)', 'key' => 'cold_ms']];
+        } else {
+            $bands = [
+                'cold' => ['label' => 'Cold boot — real, first boot in a process (CGI/CLI model)', 'key' => 'cold_ms'],
+            ];
+            // The FPM band only exists when the cold rows carry their
+            // per-request boot share (fork-mode datasets). On the derived
+            // deployments file the cold side is named 'php-fpm'.
+            if ($this->store->fpmBootMedian($apps[0] ?? '') !== null || $this->store->fpmBootMedian($apps[1] ?? '') !== null) {
+                $bands['fpm'] = ['label' => 'FPM rebuild — per-request boot on shared opcache', 'key' => 'fpm_boot'];
+            }
+            $bands['warm'] = ['label' => 'Warm recycle — resident worker (RoadRunner model)', 'key' => 'warm_ms'];
         }
-        $bands['warm'] = ['label' => 'Warm recycle — resident worker (RoadRunner model)', 'key' => 'warm_ms'];
 
         foreach ($bands as $band => $cfg) {
             foreach ($apps as $app) {
@@ -428,7 +481,7 @@ final class MarkdownReport
                     }
                     $bootVal = $fpmBoot;
                 } else {
-                    $boot = $this->store->boot($app);
+                    $boot = $this->store->boot($app, $probed ? $mode : null);
                     if ($boot === null) {
                         continue;
                     }
@@ -437,8 +490,13 @@ final class MarkdownReport
                 // Boot and teardown are the same kind of time — the worker
                 // cannot serve another request during either — so each band
                 // shows their sum: boot cost + the cold side's median
-                // per-request cleanup.
-                $cleanup = $this->store->cleanupMedian($app, $coldMode) ?? 0.0;
+                // per-request cleanup. On a REAL dataset the probe already
+                // timed the whole "PHP start → framework ready" span inside
+                // the request, and teardown is a separate phase the probe
+                // never covered, so adding a cleanup median measured by a
+                // different harness would invent a number rather than report
+                // one. The probe's own measurement stands alone there.
+                $cleanup = $probed ? 0.0 : ($this->store->cleanupMedian($app, $coldMode) ?? 0.0);
                 $total   = $bootVal + $cleanup;
                 $label   = BenchmarkConfig::appLabel($app);
                 $metrics[$band][$label] = [
@@ -504,93 +562,126 @@ final class MarkdownReport
             $logScale,
             960,
             360,
-            'Framework startup — boot + teardown',
-            'boot + median per-request teardown — both block the worker between requests',
+            $probed ? 'Framework startup — boot' : 'Framework startup — boot + teardown',
+            $probed
+                ? 'PHP start → framework ready, measured in the running deployment'
+                : 'boot + median per-request teardown — both block the worker between requests',
             $factors,
-            'x = median ÷ the fastest working boot of that kind (no-op re-boots excluded)',
+            $probed
+                ? 'x = median ÷ the fastest boot on this server'
+                : 'x = median ÷ the fastest working boot of that kind (no-op re-boots excluded)',
             true
         );
         $file = 'startup.svg';
-        file_put_contents($dir . '/' . $file, $svg);
+        $this->writeSvg($dir, $file, $svg);
+
+        // --- Real-deployment prose -------------------------------------------
+        // A probed dataset has ONE band, so the three-model story below does
+        // not apply: there is no "cold vs FPM vs warm" contrast to narrate,
+        // only the measured spread across frameworks on the server that was
+        // actually run.
+        if ($probed) {
+            $race = $metrics[array_key_first($bands)] ?? [];
+            if ($race === []) {
+                return '';
+            }
+
+            $intro = ($mode === 'roadrunner')
+                ? 'Time to re-initialise the framework in an already-warm RoadRunner worker — the cycle reset a '
+                    . 'recycled worker pays, with opcache and every class already loaded. This is NOT process start: '
+                    . 'spawning the process is the server supervisor\'s cost, not the framework\'s.'
+                : 'Time from PHP start until the framework is ready to serve, measured inside the FPM entry '
+                    . 'script — the boot every request waits for on this deployment, because nginx/PHP-FPM '
+                    . 're-runs the entry script per request.';
+
+            // The anchor must be the fastest boot that actually REBUILDS
+            // something, exactly as the chart's factor logic does. Several
+            // frameworks memoise their re-bootstrap (azera returns its wired
+            // AppContext, CodeIgniter/CakePHP reset state only) and land at a
+            // few microseconds — 0.001 ms. Anchoring on one of those prints
+            // "x 1000+ slower" for a legitimate redesign, which reads as a
+            // broken measurement rather than a design difference. The CHART
+            // partitions them and leaves them out of its factor column; the
+            // prose states the rule rather than reprinting the readings.
+            $rebuilt = [];
+            $noop    = [];
+            foreach ($race as $label => $m) {
+                if ($m['median'] >= 0.1) {
+                    $rebuilt[$label] = $m['median'];
+                } else {
+                    $noop[$label] = $m['median'];
+                }
+            }
+            asort($rebuilt);
+
+            // Every figure lives in the chart; the prose explains what the
+            // chart's reading MEANS. A sentence that reprints medians, minima
+            // and p95s is a second copy of the chart that a re-measure can
+            // leave behind, so the section states the measurement model and
+            // the no-op rule only.
+            $rebuiltNote = $rebuilt !== []
+                ? '- The fastest and slowest framework on this band are named by the chart below; the '
+                    . "multiplier beside each row states how many times the fastest boot it needed.\n"
+                : '- Every framework re-bootstraps in microseconds on this deployment — the wiring '
+                    . "survives the recycle, so the band measures no meaningful rebuild cost.\n";
+            $noopNote = $rebuilt !== [] && $noop !== []
+                ? '- ' . implode(', ', array_keys($noop))
+                    . ($mode === 'roadrunner'
+                        ? ' keep their compiled wiring across a recycle and hand it straight back, so '
+                            . 'there is no rebuild to time.'
+                        : ' re-run the entry script but had nothing left to build.')
+                    . " They are left out of the chart's factor column.\n"
+                : '';
+
+            return "## Framework startup GET /\n\n"
+                . $intro . "\n\n"
+                . $rebuiltNote
+                . $noopNote
+                . "- Each framework's boot is reduced to one statistic (median of the probe samples), "
+                . "and the samples per framework are recorded in the dataset.\n"
+                . "\n"
+                . '![Framework startup — boot](' . $rel . '/' . $file . ')';
+        }
 
         // Prose: the cold race (first boot is what a deploy/server start pays),
-        // plus the FPM-rebuild story when that band exists.
+        // plus the FPM-rebuild story when that band exists. Every figure lives
+        // in the startup chart, which draws all bands on one shared axis and
+        // prints each row's own reading; the prose describes the MODELS only,
+        // so a re-measure can never leave a stale number behind in a sentence.
         $cold = $metrics['cold'] ?? [];
-        asort($cold);
-        $keys  = array_keys($cold);
-        $best  = $keys[0] ?? null;
-        $worst = $keys[count($keys) - 1] ?? null;
-        if ($best === null || $worst === null) {
+        if ($cold === []) {
             return '';
         }
-        $bestMs  = $cold[$best]['median'];
-        $worstMs = $cold[$worst]['median'];
-
-        $warm = $metrics['warm'] ?? [];
-        asort($warm);
-        $warmKeys = array_keys($warm);
-        $warmBest = $warmKeys[0] ?? null;
-
-        // FPM band prose: who rebuilds least per request, and how it compares
-        // to the real first boot — the gap between the two bands is exactly
-        // the one-time cost (compile + FS cache) shared bytecode eliminates.
-        $fpmSentence = '';
-        $fpm         = $metrics['fpm'] ?? [];
-        if ($fpm !== [] && $cold !== []) {
-            $fpmSorted = $fpm;
-            asort($fpmSorted);
-            $fKeys       = array_keys($fpmSorted);
-            $fBest       = $fKeys[0];
-            $fWorst      = $fKeys[count($fKeys) - 1];
-            $fpmSentence = '**FPM rebuild** — a recycled PHP-FPM worker never pays the first band: sharing opcache bytecode '
-                . 'with the master, it only rebuilds the application (container, routes, DB connect) — '
-                . SvgChart::fmt($fpmSorted[$fBest]['median']) . ' ms for ' . $fBest . ' at the low end, '
-                . SvgChart::fmt($fpmSorted[$fWorst]['median']) . ' ms for ' . $fWorst . ' at the high end. '
-                . 'The gap between the cold and FPM bands is the one-time compile cost shared bytecode removes.';
-        }
+        $fpm = $metrics['fpm'] ?? [];
 
         // Per-request teardown share, when the dataset carries the split.
-        // Guarded against a collapsed range: with the boot now inside the
-        // total, teardown is a rounding error in most apps, and
-        // "ranges from 0% up to 0%" reads as a bug rather than a finding.
-        $cleanupSentence = '';
-        if ($this->store->hasCleanupSplit()) {
-            $shares = [];
-            foreach ($apps as $app) {
-                $share = $this->store->cleanupShare($app, $mode);
-                if ($share !== null) {
-                    $shares[$app] = $share;
-                }
-            }
-            if ($shares !== []) {
-                asort($shares);
-                $cKeys = array_keys($shares);
-                $cLo   = $shares[$cKeys[0]];
-                $cHi   = $shares[$cKeys[count($cKeys) - 1]];
-                if ($cHi - $cLo >= 0.005) {
-                    $cleanupSentence = ' The teardown share of a full request ranges from '
-                        . number_format($cLo * 100, 0) . '% (' . BenchmarkConfig::appLabel($cKeys[0]) . ') up to '
-                        . number_format($cHi * 100, 0) . '% (' . BenchmarkConfig::appLabel($cKeys[count($cKeys) - 1]) . ').';
-                } else {
-                    $cleanupSentence = ' Post-response teardown stays under 1% of a full request for every framework here.';
-                }
-            }
-        }
+        //
+        // ONE static sentence, not a computed range: the numbers used to be
+        // printed here, and a share that collapsed to "0% up to 0%" read as a
+        // bug rather than a finding. The per-cell sub-line in the table below
+        // already states each row's own split, so the prose only has to say
+        // what the term IS and where the real figures live.
+        $cleanupSentence = $this->store->hasCleanupSplit()
+            ? "\nPost-response teardown is the third term of each row's sub-line below — the work a worker "
+                . 'does between requests (terminate() finalizers, request-scoped resets) and the smallest of '
+                . 'the three terms in every row here.'
+            : '';
 
-        return "## Framework startup\n\n"
+        return "## Framework startup GET /\n\n"
             . "Three boot models, timed directly by the harness — each band shows boot + median teardown, because "
             . "during both the worker cannot serve another request:\n\n"
             . '- **Cold boot** — the very first bootstrap in a fresh PHP process (autoloader + compile + FS cache): '
-            . "what a CLI run, CGI request, or newly spawned worker pays once. **{$best}** pays "
-            . SvgChart::fmt($bestMs) . ' ms against ' . SvgChart::fmt($worstMs) . " ms for {$worst}"
-            . ' — x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . " slower.\n"
-            . ($fpmSentence !== '' ? '- ' . $fpmSentence . "\n" : '')
-            . ($warmBest !== null && isset($warm[$warmBest])
-                ? '- **Warm recycle** — worker restart with opcache warm: '
-                    . SvgChart::fmt($warm[$warmBest]['median']) . ' ms for ' . $warmBest
-                    . " at the low end — CodeIgniter and CakePHP re-bootstrap is a state reset there, not a kernel rebuild.\n"
+            . "what a CLI run, CGI request, or newly spawned worker pays once. This is the most expensive band, "
+            . "and the chart's multiplier states by how much.\n"
+            . ($fpm !== [] && $cold !== []
+                ? '- **FPM rebuild** — a recycled PHP-FPM worker never pays the first band: sharing opcache '
+                    . 'bytecode with the master, it only rebuilds the application (container, routes, DB '
+                    . 'connect). The gap between the cold and FPM bands is the one-time compile cost shared '
+                    . "bytecode removes.\n"
                 : '')
-            . "\n"
+            . '- **Warm recycle** — worker restart with opcache warm: a re-bootstrap with every class already '
+            . "loaded. CodeIgniter's and CakePHP's re-bootstrap is a state reset there, not a kernel rebuild, "
+            . "so they read near zero.\n"
             . $cleanupSentence
             . "\n\n"
             . '![Framework startup — boot + teardown](' . $rel . '/' . $file . ')';
@@ -608,7 +699,6 @@ final class MarkdownReport
         $metrics = [];
         $colors  = [];
         $medians = [];
-        $means   = [];
         foreach ($apps as $app) {
             $spread = $this->store->spread($app, $mode, $startup);
             if ($spread === null) {
@@ -618,7 +708,6 @@ final class MarkdownReport
             $metrics[$label] = $spread;
             $colors[$label] = BenchmarkConfig::appColor($app);
             $medians[$label] = $spread['median'];
-            $means[$label] = $this->store->msWithBoot($app, $mode, $startup) ?? $spread['median'];
         }
         if (count($metrics) < 2) {
             return '';
@@ -646,29 +735,17 @@ final class MarkdownReport
             'x = median ÷ fastest (Azera = 1.0)'
         );
         $file = 'startup.svg';
-        file_put_contents($dir . '/' . $file, $svg);
+        $this->writeSvg($dir, $file, $svg);
 
-        asort($medians);
-        $keys    = array_keys($medians);
-        $best    = $keys[0];
-        $bestMs  = $medians[$best];
-        $bestTm  = $means[$best] ?? $bestMs;
-        $worst   = $keys[count($keys) - 1];
-        $worstMs = $medians[$worst];
-        $worstTm = $means[$worst] ?? $worstMs;
-
-        // When a real server's constant cost dwarfs the framework, the spread
-        // is noise on the floor — do not phrase it as a framework difference.
-        $floorBound = $bestMs > 0 && ($worstMs / $bestMs) < 1.05;
-        $closing    = $floorBound
-            ? '. Every framework lands within 5% of the fastest: ' . $this->withinNoiseReason() . '.'
-            : ' — x ' . SvgChart::fmtFactor($worstMs / max($bestMs, 1e-9)) . ' slower.';
-
-        return "## Framework startup\n\n"
-            . "Router + dispatcher + plain response, no database. The gap here is pure framework bootstrap and dispatch cost: "
-            . "**{$best}** responds in " . SvgChart::fmt($bestMs) . ' ms (median; ' . SvgChart::fmt($bestTm) . " ms trimmed mean) "
-            . 'against ' . SvgChart::fmt($worstMs) . " ms (median) for {$worst}"
-            . $closing . "\n\n"
+        // The chart prints every framework's own median, its spread and its
+        // multiplier, so the prose states only WHAT this endpoint measures.
+        // Reprinting the winner's number here would be a second copy of the
+        // chart that a re-measure cannot keep in sync.
+        return "## Framework startup GET /\n\n"
+            . 'Router + dispatcher + plain response, no database. This endpoint measures pure framework '
+            . 'bootstrap and dispatch cost, with no ORM or template work to hide behind — the chart '
+            . 'names the fastest framework and how many times longer each other one took.'
+            . "\n\n"
             . '![Framework startup — GET /](' . $rel . '/' . $file . ')';
     }
 
@@ -738,41 +815,20 @@ final class MarkdownReport
             'total'
         );
         $file = 'speedup.svg';
-        file_put_contents($dir . '/' . $file, $svg);
+        $this->writeSvg($dir, $file, $svg);
 
-        // Fastest/slowest app for the prose, ranked on the same sum of medians
-        // the dot shows. The server-bound wording requires EVERY framework to
-        // be within 5% (worst factor) — checking only the closest app claimed
-        // "within 5%" for datasets whose slowest app needed 2.4x the baseline.
-        $totals = array_map(static fn(array $m): float => $m['median'], $metrics);
-        asort($totals);
-        $fastest   = array_key_first($totals);
-        $slowest   = array_key_last($totals);
-        $maxFactor = $factors[$slowest] ?? 1.0;
-        $extra     = '';
-        if ($maxFactor < 1.05) {
-            $extra = " Every framework lands within 5% of {$base} on the total: " . $this->withinNoiseReason() . '.';
-        } elseif ($fastest === $base) {
-            $rivals = $totals;
-            unset($rivals[$base]);
-            $closest = array_key_first($rivals);
-            $extra   = " The closest rival is {$closest}, needing x " . SvgChart::fmtFactor($factors[$closest]) . ' the same total.';
-        } else {
-            $extra = sprintf(
-                ' %s is fastest overall at x %s of %s\'s total; %s is slowest at x %s.',
-                $fastest,
-                SvgChart::fmtFactor($factors[$fastest]),
-                $base,
-                $slowest,
-                SvgChart::fmtFactor($maxFactor)
-            );
-        }
-
+        // The chart ranks every framework on the shared axis, names its own
+        // reference in the caption and prints each row's multiplier, so the
+        // prose states only what the total IS. Naming the baseline — or
+        // reprinting the closest rival — would put a view setting and a reading
+        // into a sentence that no re-measure regenerates.
         return "## Total response times\n\n"
-            . 'Total time to serve one of each of the ' . count($requests) . " endpoints — the sum of the endpoints' "
-            . "medians, not a single response time — relative to {$base} (1.0 = the baseline's own total, "
-            . "higher = slower). Each endpoint's median is boot-inclusive occupancy for this view's "
-            . "deployment model, so the total is the worker time one pass over every endpoint costs.{$extra}\n\n"
+            . 'Total time to serve one pass over every benchmarked endpoint — each framework\'s sum of its '
+            . 'endpoint medians, not a single response time — drawn relative to the baseline, so a row '
+            . 'states how many times the baseline\'s own total it needed. Each endpoint\'s median is '
+            . 'boot-inclusive occupancy for this view\'s deployment model, so the total is the worker time '
+            . 'one pass over every endpoint costs. The chart orders the frameworks by that total and prints '
+            . "each one's multiplier beside its row.\n\n"
             . '![Total response times](' . $rel . '/' . $file . ')';
     }
 
@@ -855,52 +911,29 @@ final class MarkdownReport
                 'x = median ÷ the fastest on that endpoint'
             );
             $file = 'feature-' . $feature . '.svg';
-            file_put_contents($dir . '/' . $file, $svg);
+            $this->writeSvg($dir, $file, $svg);
             $charts[] = "### {$title}\n\n![{$title}](" . $rel . '/' . $file . ')';
 
-            // Winner row for the feature's first request (the canonical one).
-            // Uses the same median the dot shows, so text and chart agree.
-            $race = $this->store->race($feature, $mode, $cats[0], $participants);
-            if ($race !== null) {
-                $medians = [];
-                foreach ($participants as $p) {
-                    $spread = $this->store->spread($p, $mode, $cats[0]);
-                    if ($spread !== null) {
-                        $medians[$p] = $spread['median'];
-                    }
-                }
-                asort($medians);
-                $pKeys    = array_keys($medians);
-                $winner   = $pKeys[0] ?? $race['winner'];
-                $runner   = $pKeys[1] ?? null;
-                $winnerMs = (float) ($medians[$winner] ?? $race['winner_ms']);
-                $runnerMs = $runner !== null ? (float) $medians[$runner] : null;
-                // Below the server floor's own noise a "x 1.0 faster" claim is
-                // meaningless — say the endpoint is floor-bound instead.
-                $floorBound = $runnerMs !== null && $winnerMs > 0
-                    && ($runnerMs / $winnerMs) < 1.05;
-                $sections[] = sprintf(
-                    '- **%s** (`%s`): %s at %sms median%s.',
-                    $title,
-                    $cats[0],
-                    BenchmarkConfig::appLabel($winner),
-                    SvgChart::fmt($winnerMs),
-                    $runner === null
-                        ? ''
-                        : ($winnerMs <= 0
-                            ? ', x ' . SvgChart::fmtFactor($runnerMs / max($winnerMs, 1e-9)) . ' faster than ' . BenchmarkConfig::appLabel($runner)
-                            : ($floorBound
-                                ? ' — every framework lands within 5% of it: ' . $this->withinNoiseReason()
-                                : ', x ' . SvgChart::fmtFactor($runnerMs / $winnerMs) . ' faster than ' . BenchmarkConfig::appLabel($runner)))
-                );
-            }
+            // The feature's own WORKLOAD, stated once as static text. Every
+            // measured number — the winner, its median and the margin over the
+            // runner-up — is drawn in the chart below, which anchors each
+            // endpoint at its own fastest framework and prints the multiplier
+            // beside every row. A prose copy of those readings is the thing a
+            // re-measure leaves behind, so this section names no figures.
+            $what = BenchmarkConfig::featureDescriptionFor($feature);
+            $sections[] = '- **' . $title . '** (`' . $cats[0] . '`) — '
+                . ($what !== '' ? $what : 'runs the feature\'s request against every framework that supports it.');
         }
 
         if ($charts === []) {
             return '';
         }
 
-        return "## Feature benchmarks\n\n" . implode("\n", $sections) . "\n\n" . implode("\n\n", $charts);
+        return "## Feature benchmarks\n\n"
+            . "One race per framework feature, each run as a real request against a real database. "
+            . "Every figure — the winner of each race and the margin over the runner-up — is in that "
+            . "feature's own chart below, which anchors each endpoint at its fastest framework.\n\n"
+            . implode("\n", $sections) . "\n\n" . implode("\n\n", $charts);
     }
 
     /**
@@ -910,7 +943,6 @@ final class MarkdownReport
     {
         $metrics = [];
         $colors  = [];
-        $rows    = [];
         foreach ($apps as $app) {
             $range = $this->store->peakMemRange($app, $mode);
             if ($range === null) {
@@ -923,7 +955,6 @@ final class MarkdownReport
                 'high'   => $range['high'] / 1048576,
             ];
             $colors[$label] = BenchmarkConfig::appColor($app);
-            $rows[$label] = $range;
         }
         if (count($metrics) < 2) {
             return '';
@@ -949,23 +980,13 @@ final class MarkdownReport
             'x = median ÷ the lightest framework'
         );
         $file = 'memory.svg';
-        file_put_contents($dir . '/' . $file, $svg);
-
-        // Rank on the worst endpoint — the safe planning number.
-        $ranked = [];
-        foreach ($rows as $label => $r) {
-            $ranked[$label] = $r['high'];
-        }
-        asort($ranked);
-        $bestLabel = array_key_first($ranked);
-        $bestMb    = ($ranked[$bestLabel] ?? 0) / 1048576;
-        $worstMb   = (max($ranked)) / 1048576;
+        $this->writeSvg($dir, $file, $svg);
 
         return "## Peak memory\n\n"
-            . "Peak memory reached on any endpoint. **{$bestLabel}** stays under "
-            . SvgChart::fmt($bestMb) . " MB, against " . SvgChart::fmt($worstMb) . " MB for the heaviest framework "
-            . '(x ' . SvgChart::fmtFactor($worstMb / max($bestMb, 1e-9)) . " more). Each dot is the median endpoint and the "
-            . "whisker spans the lightest to the heaviest endpoint.\n\n"
+            . 'Peak memory reached on any endpoint, in MB. Each row is one framework: the **bar** and '
+            . 'the **dot** are its median endpoint, the **whisker** spans its lightest to its heaviest '
+            . 'endpoint, and the multiplier beside the row states how many times the lightest '
+            . "framework's median it needed.\n\n"
             . '![Peak memory footprint](' . $rel . '/' . $file . ')';
     }
 
@@ -996,9 +1017,19 @@ final class MarkdownReport
      *
      * The end state and the peak are endpoint-ORDER dependent (the probe fires
      * once per endpoint and reads the whole heap), so neither is a per-request
-     * cost; only the left cap ranks frameworks. That distinction is why the
-     * chart carries a dot and a right cap instead of collapsing the run to one
-     * number.
+     * cost — none of the three is.
+     *
+     * THE RANKING KEY IS THE DOT — see residentWorkerMemory(), which owns the
+     * reasoning and does the sorting. This docblock used to assert that 'only
+     * the left cap ranks frameworks' because it is endpoint-INDEPENDENT; that
+     * was self-consistent but it ordered the table by a number the page is not
+     * about, and it put the row order at odds with the multiplier printed
+     * beside each row. The distinction it was reaching for is still real and
+     * still worth keeping: a mark's SUITABILITY as a ranking key (is it a
+     * property of the worker, or of the endpoint order?) is a different
+     * question from which mark the page is ABOUT. On this page the answer to
+     * the second is the dot, and the reasoning is there rather than here so
+     * the two cannot drift apart.
      *
      * @param list<string> $apps
      */
@@ -1008,8 +1039,242 @@ final class MarkdownReport
             return '';
         }
 
+        // TWO DIFFERENT QUESTIONS, so two different charts — one code path,
+        // because the chart itself only knows "lowest / typical / highest" and
+        // the difference is entirely in what those readings are.
+        //
+        //   roadrunner — ONE worker serves every endpoint. boot -> last ->
+        //     worst is a real cumulative sequence, and its GROWTH is the
+        //     finding. cakePHP's was 39.7 MB on the 2026-09-15 run (the leak
+        //     documented below); after the adapter fix the re-measured
+        //     2026-09-18 run puts it at 5.0 MB, in band with the others.
+        //     Drawn as a sequence.
+        //   php-fpm — every request is a FRESH process, so there is no end
+        //     state and no trajectory. The three marks are the lightest,
+        //     median and heaviest PER-REQUEST PEAK across the endpoints —
+        //     "how much memory serving one request needed", which is the only
+        //     thing an FPM worker can legitimately be ranked on.
+        //
+        // Before 2026-09-17 the FPM page drew the RR shape anyway, which made
+        // its dot the heap of whichever endpoint happened to sort LAST and its
+        // right cap a third unrelated request. Arithmetically the chart was
+        // right; every reading in it was wrong.
+        return $mode === 'php-fpm'
+            ? $this->fpmMemory($dir, $rel, $apps, $mode)
+            : $this->residentWorkerMemory($dir, $rel, $apps, $mode);
+    }
+
+    /**
+     * Per-request memory for a fresh-process deployment (nginx + php-fpm).
+     *
+     * The statistic is the peak heap one request needed, measured with
+     * memory_reset_peak_usage() at the entry script's boot-complete boundary
+     * and memory_get_peak_usage() in the shutdown hook (see boot-probe.php).
+     * The harness takes N probes per endpoint and reduces them to one median
+     * (memProbeAggregateEndpoint), so every value here is an endpoint's own
+     * reading. The chart prints all three readings beside each row and names
+     * nothing, so the prose below describes the STATISTIC only.
+     */
+    private function fpmMemory(string $dir, string $rel, array $apps, string $mode): string
+    {
+        $series  = [];
+        $rows    = [];
+        $samples = null;
+        foreach ($apps as $app) {
+            $range = $this->store->requestPeakRange($app, $mode);
+            if ($range === null) {
+                continue;
+            }
+            $label = BenchmarkConfig::appLabel($app);
+            $series[$label] = [
+                'color' => BenchmarkConfig::appColor($app),
+                'low'   => $range['low'] / 1048576,
+                'mid'   => $range['median'] / 1048576,
+                'high'  => $range['high'] / 1048576,
+            ];
+            // How many probes this endpoint's median came from. Read per app
+            // from the dataset, never assumed: it is provenance.
+            if ($samples === null) {
+                $samples = $this->store->requestPeakSamples($app, $mode);
+            }
+            $rows[$label] = [
+                'low'    => $range['low'],
+                'median' => $range['median'],
+                'high'   => $range['high'],
+                'count'  => $range['count'],
+            ];
+        }
+        if (count($series) < 2) {
+            return '';
+        }
+
+        // Ranked on the MEDIAN reading — the typical request, which is what a
+        // framework's memory cost actually is; the high end is one route's
+        // worst case and ranking on it lets a single heavy endpoint decide the
+        // whole ordering. Every framework's median is a real endpoint reading,
+        // and on this transport the median is also the mark the chart
+        // emphasises (the dot) and anchors its bar at.
+        //
+        // The footprint is still drawn, as context. It is NOT the ranking key
+        // here even though it is endpoint-independent: it says what a process
+        // costs to exist, not what serving a request costs, which is the
+        // question this section answers.
+        $byMid = $rows;
+        uasort(
+            $byMid,
+            static fn(array $a, array $b): int =>
+                $a['median'] <=> $b['median'] ?: $a['high'] <=> $b['high']
+        );
+
+        // The chart is sorted on the same key the rows are described in, so the
+        // picture reads as the ranking the introduction states — cheapest
+        // typical request first.
+        $ranked = [];
+        foreach (array_keys($byMid) as $label) {
+            $ranked[$label] = $series[$label];
+        }
+        $series = $ranked;
+
+        // The two left-hand columns are sized from their own longest string
+        // inside memoryRange(), so the three-value readings and the framework
+        // names cannot collide however the numbers get wider.
+        //
+        // The multiplier column is enabled HERE and not on the resident-worker
+        // page: this chart's dot is a per-request peak that resets every
+        // request, so comparing two frameworks' medians is comparing the same
+        // quantity.
+        $svg = SvgChart::memoryRange(
+            $series,
+            'Per-request memory — lightest, typical and heaviest endpoint',
+            'bar spans lightest (left cap) → heaviest (right cap) · dot = median endpoint',
+            'lightest request',
+            'heaviest request',
+            'low / median / high',
+            ' · ',
+            960,
+            'x = median ÷ the lightest median'
+        );
+        $file = 'resident-memory.svg';
+        $this->writeSvg($dir, $file, $svg);
+
+        // No figure is named here, so no provenance count is needed either: the
+        // table below lists every probed endpoint, and the chart prints each
+        // row's own three readings.
+        return "## Per-request memory\n\n"
+            . "How much memory a single request needs, for every framework, measured "
+            . "inside the FPM worker that served it. " . $this->workerMemoryTransport($mode)
+            . "A request's high-water mark is taken from the framework-ready boundary of "
+            . "the entry script to the moment the response is finished, with the mark reset "
+            . "at that boundary — so it counts exactly what serving the request cost, and "
+            . "never bleeds into the next one. "
+            . $this->probeRepeatNote($samples)
+            . "\n\n"
+            . "All six frameworks are drawn on one shared MB axis. The **left cap** is the "
+            . "lightest probed endpoint, the "
+            . "**dot** is the median endpoint, and the **right cap** is the heaviest. Every "
+            . "mark is a measured endpoint rather than an interpolation, so each can be named — "
+            . "the three numbers printed beside each bar are those same three readings. The "
+            . "faint bar behind each mark runs from zero to the median, so a row's length is "
+            . "read against the axis rather than estimated from the caps. The multiplier beside "
+            . "a row divides its median by the lightest median on the page; the reference row "
+            . "carries none.\n\n"
+            . "Rows are ordered by the **median** request — a framework's typical cost — so "
+            . "one heavy route cannot reorder the table on its own. A row that stays flat and "
+            . "a row that reaches far right therefore say different things: the first is cheap "
+            . "on every route, the second is cheap on a typical request until one heavy route "
+            . "sets the worst case a pool has to be sized for.\n\n"
+            . '![Per-request memory](' . $rel . '/' . $file . ')';
+    }
+
+    /**
+     * One sentence naming how many probes each endpoint's numbers came from.
+     *
+     * The count is dataset provenance, not a constant: it is whatever
+     * --mem-repeats the run used. When the dataset predates the field (null)
+     * the sentence is omitted rather than guessed — a page that claims "probed
+     * 10 times" for a run that probed once would be a fabricated methodology.
+     */
+    private function probeRepeatNote(?int $samples): string
+    {
+        if ($samples === null || $samples <= 0) {
+            return '';
+        }
+
+        if ($samples === 1) {
+            return 'Each endpoint was probed once, so the range shows how much the '
+                . 'endpoints themselves differ — a property of the workload rather than '
+                . 'of the measurement.';
+        }
+
+        return 'Each endpoint is probed ' . $samples . ' times and reduced to its median, so a '
+            . 'single outlier cannot move a row; the range shows how much the endpoints '
+            . 'themselves differ, which is a property of the workload rather than of the '
+            . 'measurement.';
+    }
+
+    /**
+     * Memory of a RESIDENT worker (RoadRunner), where one process serves every
+     * endpoint — so the three marks are that one worker at three moments and
+     * form a genuine cumulative sequence:
+     *
+     *   LEFT CAP  = boot heap, before any request. Endpoint-independent, so it
+     *               is a footprint.
+     *   DOT       = heap after the LAST probed endpoint — where the run ended.
+     *   RIGHT CAP = largest heap any endpoint reached.
+     *
+     * The growth from left to right is the finding here, which is why this
+     * view keeps the sequence and its own prose rather than sharing the
+     * per-request wording of fpmMemory().
+     *
+     * ROWS ARE RANKED ON THE DOT, and the objection to that is worth stating
+     * because it is not stupid: the dot depends on the endpoint ORDER, so it is
+     * not a reproducible property of the framework the way the boot heap is.
+     * Reorder the suite and every row can move.
+     *
+     * It is still the right key, for three reasons:
+     *
+     *   1. WHAT THE PAGE IS ABOUT. This is resident-worker memory: the question
+     *      is what a long-lived process is left holding, and that is the dot.
+     *      The boot heap answers 'what does this framework cost to exist',
+     *      which is a different and much less interesting number here.
+     *   2. THE COUNTER-EVIDENCE IS CONCRETE. Ranking on the boot heap puts
+     *      cakePHP at the TOP — its 0.923 MB is the lightest of all six —
+     *      while printing 'x 3.5' beside it and drawing its dot fourth-heaviest
+     *      down the chart. A table headed by the 4th-heaviest steady state, and
+     *      contradicted by its own annotation column, is worse than an
+     *      order-dependent one.
+     *   3. IT IS THE MARK THE CHART ALREADY EMPHASISES. The faint bar runs to
+     *      the dot, the caption names the dot, and the prose is about growth
+     *      across endpoints. Ordering by anything else makes the row order the
+     *      only part of the figure that disagrees with the rest of it.
+     *
+     * The order-dependence is real but SHARED: all six frameworks are read from
+     * the same single fixed sequence of endpoints, so their dots are comparable
+     * to each other even though none of them would survive a reordered suite.
+     * That is exactly the caveat the prose states rather than hides, which is
+     * why it can be said out loud here and printed under the chart.
+     *
+     * Tiebreak on the left cap, so the order is total and does not fall back on
+     * the order the dataset happened to list the apps in.
+     *
+     * HISTORY, because the chart is the reason this was ever noticed: the
+     * 2026-09-15 run drew cakePHP at 0.851 -> 40.556 MB (growth 39.7 MB) while
+     * every other framework stayed between 0.7 and 1.5 MB, and that outlier
+     * was a genuine bug — a fresh Cake Session per request (built by the stock
+     * request factory) leaked the engine's shutdown-handler list, ~186 B per
+     * request, unbounded. Fixed in the adapter; RE-MEASURED 2026-09-18 on the
+     * bench VM at the same 1000x10 budget: 0.923 -> 5.96 MB, worst 8.14 MB,
+     * growth 5.0 MB.
+     *
+     * The shape changed, not just the magnitude, and the shape is the real
+     * evidence: pre-fix the series climbed monotonically (+~2.4 MB every
+     * endpoint and never came down, i.e. retained); post-fix it oscillates and
+     * returns to baseline (released). A chart that merely looked less steep
+     * could still hide a slower leak — a chart that comes back down cannot.
+     */
+    private function residentWorkerMemory(string $dir, string $rel, array $apps, string $mode): string
+    {
         $series = [];
-        $rows   = [];
         foreach ($apps as $app) {
             $boot = $this->store->residentBootHeap($app, $mode);
             if ($boot === null) {
@@ -1017,26 +1282,33 @@ final class MarkdownReport
             }
             $last  = (int) ($this->store->residentHeap($app, $mode) ?? $boot);
             $peak  = (int) ($this->store->residentPeakHeap($app, $mode) ?? $boot);
-            $traj  = $this->store->residentTrajectory($app, $mode);
             $label = BenchmarkConfig::appLabel($app);
             $series[$label] = [
                 'color' => BenchmarkConfig::appColor($app),
-                'boot'  => $boot / 1048576,
-                'last'  => $last / 1048576,
-                'peak'  => $peak / 1048576,
+                'low'   => $boot / 1048576,
+                'mid'   => $last / 1048576,
+                'high'  => $peak / 1048576,
             ];
-            $rows[$label] = ['boot' => $boot, 'last' => $last, 'peak' => $peak, 'traj' => $traj];
         }
         if (count($series) < 2) {
             return '';
         }
 
-        // Rows are RANKED on the footprint (cheapest first), not left in the
-        // view's app order: the left cap is the one number here that is a
-        // property of the worker rather than of the endpoint order, so it is
-        // the only column that can carry a ranking — and a chart that claims a
-        // ranking should read as one. The prose below ranks on the same key.
-        uasort($series, static fn(array $a, array $b): int => $a['boot'] <=> $b['boot']);
+        // Rows are RANKED on the DOT — the heap the worker was left holding
+        // after each framework's last endpoint — because that is the reading a
+        // long-lived worker's steady state is judged on, and it is the mark the
+        // page's prose and its multiplier column are both built around. The
+        // left cap used to rank these rows; it is a footprint, measured before
+        // any request, so a framework could be drawn cheapest-to-exist while
+        // being the heaviest one to keep running, and the row order then
+        // disagreed with the x factor printed beside it. Tiebreak on the left
+        // cap so the order is total and stable rather than dependent on
+        // whatever order the dataset happened to list the apps in.
+        uasort(
+            $series,
+            static fn(array $a, array $b): int =>
+                [$a['mid'], $a['low']] <=> [$b['mid'], $b['low']]
+        );
 
         $svg = SvgChart::memoryRange(
             $series,
@@ -1044,67 +1316,16 @@ final class MarkdownReport
             'bar spans boot (left cap) → largest endpoint (right cap) · dot = heap after the last endpoint',
             'lightest footprint',
             'largest peak',
-            960
+            'boot / end / worst',
+            ' → ',
+            960,
+            'x = end state ÷ the lightest end state'
         );
         $file = 'resident-memory.svg';
-        file_put_contents($dir . '/' . $file, $svg);
-
-        // Rank on the footprint end — boot is endpoint-independent and
-        // therefore the only legitimately comparable number here.
-        $byBoot = $rows;
-        uasort($byBoot, static fn(array $a, array $b): int => $a['boot'] <=> $b['boot']);
-        $keys    = array_keys($byBoot);
-        $light   = $keys[0];
-        $heavy   = $keys[count($keys) - 1];
-        $lightMb = $byBoot[$light]['boot'] / 1048576;
-        $heavyMb = $byBoot[$heavy]['boot'] / 1048576;
-
-        // Name the largest accumulator, if any framework actually accumulates.
-        $byGrowth = $rows;
-        uasort(
-            $byGrowth,
-            static fn(array $a, array $b): int =>
-                ($b['peak'] - $b['boot']) <=> ($a['peak'] - $a['boot'])
-        );
-        $gTop    = (string) array_key_first($byGrowth);
-        $gRow    = $byGrowth[$gTop];
-        $gBootMb = $gRow['boot'] / 1048576;
-        $gPeakMb = $gRow['peak'] / 1048576;
-        $gLastMb = $gRow['last'] / 1048576;
-        $gTopMb  = $gPeakMb - $gBootMb;
-
-        // A trajectory-only fact: on how many steps did the heap rise? Stated
-        // instead of "it climbs steadily" because the sequence is NOT
-        // monotone — it dips whenever an endpoint releases what the previous
-        // one held. Counting the rises claims only what was measured.
-        $rises = 0;
-        $traj  = $gRow['traj'];
-        for ($i = 1; $i < count($traj); $i++) {
-            if ($traj[$i]['heap'] > $traj[$i - 1]['heap']) {
-                $rises++;
-            }
-        }
-        $steps = max(1, count($traj) - 1);
-
-        $growthSentence = $gTopMb < 0.5
-            ? 'No framework holds more than half a megabyte more at its worst endpoint than at '
-                . 'boot — state is released between requests.'
-            : '**' . $gTop . '** is the exception: it reaches ' . SvgChart::fmt($gPeakMb)
-                . ' MB against ' . SvgChart::fmt($gBootMb) . ' MB at boot (x '
-                . SvgChart::fmtFactor($gPeakMb / max($gBootMb, 1e-9)) . ' more), and its heap '
-                . 'is still higher than at the previous endpoint on ' . $rises . ' of the '
-                . $steps . ' steps through the suite'
-                // The end state is worth naming only when it differs from the
-                // peak: printing the same number twice reads as a mistake.
-                . ($gLastMb < $gPeakMb
-                    ? ', ending the run at ' . SvgChart::fmt($gLastMb) . ' MB after releasing '
-                        . SvgChart::fmt($gPeakMb - $gLastMb) . ' MB from that worst endpoint'
-                    : '')
-                . ' — its cost grows with the number of distinct endpoints served, not with the '
-                . 'request count.';
+        $this->writeSvg($dir, $file, $svg);
 
         return "## Resident worker memory\n\n"
-            . "Read from inside the live RoadRunner worker after each endpoint, on an extra "
+            . "Read from inside the live worker after each endpoint, on an extra "
             . "untimed request that never touches the latency numbers. All six frameworks are "
             . "drawn on one shared MB axis. The **left cap** is the PHP heap with the application "
             . "booted and **no request served** — the framework's own data structures, with "
@@ -1112,91 +1333,56 @@ final class MarkdownReport
             . "heap after the last endpoint, and the **right cap** is the largest heap any "
             . "endpoint reached. A narrow-left range that reaches far right is the shape worth "
             . "watching: cheap to exist, expensive at its worst.\n\n"
-            . "**{$light}** needs " . SvgChart::fmt($lightMb) . ' MB to exist, against '
-            . SvgChart::fmt($heavyMb) . ' MB for ' . $heavy
-            . ' (x ' . SvgChart::fmtFactor($heavyMb / max($lightMb, 1e-9)) . " more). "
-            . $growthSentence
-            . "\n\nOnly the left cap ranks frameworks: it is a property of the worker, identical "
-            . "on every endpoint. The dot and the right cap are both endpoint-order dependent — "
-            . "the probe reads the whole heap once per endpoint, so it cannot say what one request "
-            . "costs on its own — which is why they are drawn as a range and the dot marks the end "
-            . "of the run rather than a lighter reading.\n\n"
+            . $this->workerMemoryTransport($mode)
+            . "Rows are ordered by the **dot** — the heap the worker was left holding after its "
+            . "last endpoint — so the table reads as one ranking from lightest steady state to "
+            . "heaviest. The multiplier beside a row divides its dot by the lightest dot on the "
+            . "page; the reference row carries none. A row can therefore sit high while having "
+            . "the lightest left cap: that is a framework that is cheap to boot and expensive to "
+            . "keep running, which is exactly the distinction the three marks exist to draw.\n\n"
+            . "The dot and the right cap are both endpoint-order dependent — the probe reads the "
+            . "whole heap once per endpoint, so it cannot say what one request costs on its own — "
+            . "which is why they are drawn as a range and the dot marks the end of the run rather "
+            . "than a lighter reading. That caveat bounds what the numbers MEAN; it does not "
+            . "invalidate the comparison, because every row is read from the same single sequence "
+            . "of endpoints and therefore at the same moment. What it rules out is reading any one "
+            . "of them as a per-request cost. The distance from the left cap to the right one, and "
+            . "the number of steps over which the heap rises, are the growth a long-lived worker "
+            . "accumulates.\n\n"
             . '![Resident worker memory](' . $rel . '/' . $file . ')';
     }
 
     /**
-     * How much this dataset separates the frameworks on a given mode: the
-     * MEDIAN across-endpoint relative spread (max/min over the frameworks),
-     * plus how many endpoints keep every framework within 5% of each other.
+     * How the worker-memory numbers were collected on the server this view
+     * measured — which is a fact about the SERVER, not about the view.
      *
-     * This is the honest replacement for an all-or-nothing "is floor bound"
-     * test: on the real nginx/FPM run the per-request worker spawn (~9.3 ms) is
-     * ~93% of a ~10 ms request, so the median endpoint spread is ~3% — smaller
-     * than the run-to-run noise — while a handful of endpoints reach 5-7%.
+     * The two transports are genuinely different, and a reader comparing the
+     * real-roadrunner and real-fpm pages has to know that:
      *
-     * @param list<string> $apps
-     * @return array{median_pct:float,within5:int,total:int}|null
+     *   roadrunner — the worker is resident in a request loop, so it answers
+     *                in RESPONSE HEADERS (deploy/rr/worker.php) whenever a
+     *                probe request carries X-Mem-Probe: 1.
+     *   php-fpm    — there is no loop to ask: the entry script runs, serves
+     *                one request and is torn down. It appends a sample from a
+     *                shutdown hook (mem_probe_arm() in boot-probe.php) and the
+     *                harness reads the newest line back.
+     *
+     * Both sides call the same PHP functions for the same four quantities, so
+     * the numbers are comparable; only the route out of the process differs.
+     * Claiming "read from inside the RoadRunner worker" on an FPM page would
+     * simply be false, which is why this is a branch and not a constant.
      */
-    private function spreadProfile(string $mode, array $apps): ?array
+    private function workerMemoryTransport(string $mode): string
     {
-        $common  = $this->store->commonRequests($mode, $apps);
-        $spreads = [];
-        $within5 = 0;
-        foreach ($common as $request) {
-            $vals = [];
-            foreach ($apps as $app) {
-                $ms = $this->store->ms($app, $mode, $request);
-                if ($ms !== null && $ms > 0) {
-                    $vals[] = $ms;
-                }
-            }
-            if (count($vals) < 2) {
-                continue;
-            }
-            $ratio = max($vals) / min($vals);
-            $spreads[] = ($ratio - 1.0) * 100.0;
-            if ($ratio < 1.05) {
-                $within5++;
-            }
+        if ($mode === 'roadrunner') {
+            return 'The numbers are read from the resident RoadRunner worker, which answers '
+                . "them directly in response headers.\n\n";
         }
-        if ($spreads === []) {
-            return null;
-        }
-        sort($spreads);
-        return [
-            'median_pct' => $spreads[intdiv(count($spreads), 2)],
-            'within5'    => $within5,
-            'total'      => count($spreads),
-        ];
-    }
 
-    /**
-     * @param list<string> $apps
-     */
-    private function wins(array $apps, string $baseline, string $mode): string
-    {
-        $table = (new Tables($this->store))->winsMarkdown($mode, $apps);
-        if ($table === '') {
-            return '';
-        }
-        $profile = $this->spreadProfile($mode, $apps);
-        if ($profile !== null && $profile['median_pct'] < 5.0) {
-            return "## Wins per framework\n\n"
-                . 'On this deployment the server floor dominates: the median endpoint puts every framework '
-                . 'within ' . SvgChart::fmt($profile['median_pct']) . '% of the fastest, so the counts below '
-                . 'record measurement noise rather than framework advantages. The honest reading is that the '
-                . 'server, not the framework, decides the response time here.'
-                . "\n\n"
-                . $table;
-        }
-        return "## Wins per framework\n\n"
-            . 'Number of endpoint races won (lowest boot-inclusive per-request time) per framework.'
-            . ($this->isRealDeployment()
-                ? ' This is a real server: a race won by less than the server floor and the run-to-run '
-                    . 'jitter is a tie, so read small leads cautiously.'
-                : '')
-            . "\n\n"
-            . $table;
+        return 'The numbers come from the FPM worker process itself: because the entry '
+            . 'script is torn down when the request ends, it appends one sample as it exits, and '
+            . 'the harness reads that back. The pool is `pm = static` with `max_children = 1` and '
+            . '`max_requests = 0`, so this is ONE worker that stays alive for the whole block — '
+            . "which is why it has retained memory worth reporting at all.\n\n";
     }
-
 }

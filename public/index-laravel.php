@@ -36,6 +36,10 @@
 
 declare(strict_types=1);
 
+// Boot probe: the clock MUST start before any framework code loads.
+require_once __DIR__ . '/../boot-probe.php';
+boot_probe_start();
+
 // Standard guard for PHP's built-in server: let it serve real files from the
 // docroot (none expected today, but keeps static assets working if added).
 if (PHP_SAPI === 'cli-server') {
@@ -86,6 +90,16 @@ try {
     $app = require $root . 'apps' . DIRECTORY_SEPARATOR . 'laravel' . DIRECTORY_SEPARATOR . 'bootstrap' . DIRECTORY_SEPARATOR . 'app.php';
 
     $kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
+
+    // Laravel boots LAZILY: app.php only builds the container, and the bulk
+    // of the boot (service providers, facades, config/env resolution) happens
+    // inside handle()'s sendRequestThroughRouter(). Calling bootstrap()
+    // explicitly puts the boundary where "framework ready" actually is —
+    // recording before it would measure only the container build and
+    // understate Laravel's boot by a factor of several.
+    $kernel->bootstrap();
+    boot_probe_record('fpm', 'laravel');
+    mem_probe_arm('laravel');
 
     // Let Laravel build the request from the real SAPI superglobals (no
     // spoofing needed — this is a real HTTP request).

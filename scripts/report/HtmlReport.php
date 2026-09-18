@@ -99,19 +99,14 @@ HTML;
 
         $figures = '';
         $order   = [
-            'startup' => $this->store->hasBoot()
-                ? 'Framework startup — boot + teardown (cold + warm)'
-                : 'Framework startup (GET /)',
+            'startup'         => $this->startupCaption($mode),
             'speedup'         => 'Total response times',
             'memory'          => 'Peak memory footprint',
-            'resident-memory' => 'Resident worker memory',
+            'resident-memory' => $this->memoryCaption($mode),
         ];
         foreach ($order as $key => $caption) {
             if (!isset($svgFiles[$key])) {
                 continue;
-            }
-            if (!in_array($key, ['memory', 'resident-memory'], true) && $this->store->hasBoot()) {
-                $caption .= $this->bootBasis($mode);
             }
             $figures .= sprintf(
                 "<figure>\n  <figcaption>%s</figcaption>\n  <img src=\"%s\" alt=\"%s\" loading=\"lazy\">\n</figure>\n",
@@ -121,13 +116,22 @@ HTML;
             );
         }
 
+        // The boot each point carries is a property of the PAGE, not of one
+        // chart, so it is stated once in the header row below rather than
+        // repeated on all fifteen captions. (The table restates it in its own
+        // sub-line, where the numbers it qualifies actually appear.)
+        $bootBasis = $this->bootBasis($mode);
+        $bootLine  = $bootBasis !== ''
+            ? '<p class="env">Boot model: ' . self::esc(ltrim($bootBasis, ' —')) . '</p>'
+            : '';
+
         // Feature charts.
         $featureFigs = '';
         foreach (BenchmarkConfig::featureOrder() as $feature) {
             if (!isset($svgFiles['feature-' . $feature])) {
                 continue;
             }
-            $label = BenchmarkConfig::featureLabel($feature) . ($this->store->hasBoot() ? $this->bootBasis($mode) : '');
+            $label = BenchmarkConfig::featureLabel($feature);
             $featureFigs .= sprintf(
                 "<figure>\n  <figcaption>%s</figcaption>\n  <img src=\"%s\" alt=\"%s\" loading=\"lazy\">\n</figure>\n",
                 self::esc($label),
@@ -137,8 +141,6 @@ HTML;
         }
 
         $tables      = new Tables($this->store);
-        $charts      = $view['charts'] ?? [];
-        $winsBlock   = in_array('wins', $charts, true) ? $tables->winsHtml($mode, $apps) : '';
         $matrixBlock = $tables->latencyHtml($mode, $apps);
         $floorBlock  = $this->floorNote($mode) !== ''
             ? '<p class="floor">' . $this->floorNote($mode) . '</p>'
@@ -153,12 +155,12 @@ HTML;
   <h1>{$this->esc($title)}</h1>
   <p class="lead">{$this->esc((string)($view['subtitle'] ?? ''))}</p>
   <p class="env">PHP {$env['php_version']} &middot; {$env['os']} &middot; {$mode} mode &middot; {$budget} &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  {$bootLine}
 </header>
 <main>
   <section class="figures">
 {$figures}  </section>
   {$featureBlock}
-  {$winsBlock}
   {$matrixBlock}
   {$floorBlock}
 </main>
@@ -176,6 +178,40 @@ HTML;
     }
 
     /**
+     * Caption for the startup figure, matching the chart actually drawn.
+     *
+     * A real-deployment dataset has ONE boot band, and which one it is depends
+     * on the server: php-fpm measures the per-request boot, roadrunner the
+     * in-worker re-init. The CLI harness draws three bands and adds teardown to
+     * each. A fixed "boot + teardown (cold + warm)" caption described a chart
+     * that the FPM and RoadRunner pages do not contain.
+     */
+    private function startupCaption(string $mode): string
+    {
+        if (!$this->store->hasBoot()) {
+            return 'Framework startup (GET /)';
+        }
+        if ($this->store->isProbedBoot()) {
+            return $mode === 'roadrunner'
+                ? 'Framework startup — worker re-init (RoadRunner)'
+                : 'Framework startup — per-request boot (PHP-FPM)';
+        }
+        return 'Framework startup — boot + teardown (cold + FPM rebuild + warm)';
+    }
+
+    /**
+     * Caption for the memory figure. The two transports answer different
+     * questions, and MarkdownReport draws a different chart for each, so the
+     * caption has to follow the mode rather than name one of them always.
+     */
+    private function memoryCaption(string $mode): string
+    {
+        return $mode === 'php-fpm'
+            ? 'Per-request memory — lightest, typical and heaviest endpoint'
+            : 'Resident worker memory';
+    }
+
+    /**
      * One-line note naming the boot that every chart point and table cell of
      * this view carries, so a reader never has to guess whether a number is
      * bare request time or full per-request worker occupancy.
@@ -189,19 +225,16 @@ HTML;
             return ' — boot included: a fresh framework rebuild is timed inside every request';
         }
         if (in_array($mode, ['warm', 'roadrunner'], true)) {
-            $lo = null;
-            $hi = null;
-            foreach ($this->store->apps() as $app) {
-                $boot = $this->store->modeBootMs($app, $mode);
-                if ($boot === null) {
-                    continue;
-                }
-                $lo = $lo === null ? $boot : min($lo, $boot);
-                $hi = $hi === null ? $boot : max($hi, $boot);
-            }
-            return $lo === null
-                ? ''
-                : ' — boot included: the worker\'s recycle cost (' . SvgChart::fmt($lo) . '–' . SvgChart::fmt($hi) . ' ms) is added to every request';
+            // The recycle's own duration is measured in the startup chart, so
+            // the note states the MODEL only. A figure copied into this line
+            // would be a number a re-measure cannot keep in sync.
+            return match ($this->store->rrRecycleModel()) {
+                'never' => ' — the worker is never recycled (max_jobs=0), so no boot is '
+                    . 'added to these requests; the one-time recycle is measured in the startup chart',
+                'every' => ' — boot included: each request carries its share of the worker\'s recycle '
+                    . 'divided by max_jobs',
+                default => ' — boot included: the worker\'s recycle cost is added to every request'
+            };
         }
         return '';
     }
@@ -225,7 +258,6 @@ HTML;
             if ($php === null) {
                 return '';
             }
-            $http = $ms('floor-http');
             // Branch on the stamped setting — a recycled pool's floor contains
             // a per-request process spawn, a persistent pool's does not.
             // See MarkdownReport::floorNote() for the full rationale.
@@ -239,21 +271,22 @@ HTML;
                     . 'per-request process-spawn share of this floor is unknown'
             };
             $advice = match ($maxReqs) {
-                1 => 'That worker spawn + FastCGI handshake is the floor every row stands on — subtract it and the '
-                    . 'remainder is the framework\'s own per-request boot.',
-                0 => 'That FastCGI handshake + minimal-script cost is the floor every row stands on — subtract it and '
-                    . 'the remainder is the framework\'s own per-request boot, which FPM still pays for every '
-                    . 'request even though its worker survives.',
+                1 => 'Subtracting that floor leaves the framework\'s own per-request boot — what it costs '
+                    . 'to build itself again for every request.',
+                0 => 'Subtracting that floor leaves the framework\'s own per-request boot, which FPM still '
+                    . 'pays for every request even though its worker survives.',
                 default => 'Subtracting it leaves the framework\'s own per-request boot, but how much of this '
                     . 'floor is a process spawn cannot be recovered from the dataset.'
             };
 
+            // The floor's own values stay in the dataset's floor-php/floor-http
+            // rows, never in this sentence — a copied figure is one a re-run
+            // cannot update.
             return '<strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests='
                 . ($maxReqs ?? '?') . '</code>: ' . $model
-                . '. A hello-world endpoint that boots nothing but PHP costs <strong>'
-                . self::esc(SvgChart::fmt($php)) . '&nbsp;ms</strong> (<code>floor-php</code>; '
-                . 'a static file through nginx, <code>floor-http</code>, is ' . self::esc(SvgChart::fmt($http ?? 0.0)) . '&nbsp;ms). '
-                . $advice;
+                . '. A hello-world endpoint that boots nothing but PHP (<code>floor-php</code>) and a '
+                . 'static file through nginx (<code>floor-http</code>) measure exactly that cost — the '
+                . 'floor every row stands on. ' . $advice;
         }
 
         if (in_array($mode, ['warm', 'roadrunner'], true)) {
@@ -262,9 +295,8 @@ HTML;
                 return '';
             }
             return '<strong>Server floor</strong> — real RoadRunner over loopback: a bare resident worker that '
-                . 'renders a fixed string costs <strong>' . self::esc(SvgChart::fmt($rr)) . '&nbsp;ms</strong> '
-                . '(<code>floor-rr</code>) — the IPC + server floor every row below also pays. Only differences '
-                . 'larger than this floor are framework differences.';
+                . 'renders a fixed string (<code>floor-rr</code>) measures the IPC + server floor every row '
+                . 'below also pays. Only differences larger than this floor are framework differences.';
         }
 
         return '';
