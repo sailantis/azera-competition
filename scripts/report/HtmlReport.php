@@ -26,7 +26,7 @@ final class HtmlReport
         $env = $this->store->env();
 
         $cards = '';
-        foreach ($this->manifest['views'] as $key => $view) {
+        foreach ($this->cardOrder() as $key => $view) {
             if (!isset($viewFiles[$key])) {
                 continue;
             }
@@ -64,6 +64,49 @@ final class HtmlReport
 HTML;
 
         return $this->page('Azera Benchmark Results', $body, 0);
+    }
+
+    /**
+     * The order the dashboard's cards appear in — stated here rather than
+     * inherited from $manifest['views'].
+     *
+     * Two reasons it is its own list:
+     *
+     *  1. The dashboard groups by DEPLOYMENT MODEL, which is the reader's first
+     *     question, and the manifest has no reason to be ordered that way. The
+     *     two views measured on a real server (RoadRunner's resident worker,
+     *     then nginx+PHP-FPM's boot-per-request) come first; each is followed by
+     *     the in-process harness view that studies the SAME model, so a reader
+     *     who picks a model lands on its two views together.
+     *  2. The manifest's own order is the render AND publish order (and what
+     *     the .md files, the publish list and the tests walk). Regrouping cards
+     *     must not disturb any of that.
+     *
+     * Keys the manifest has but this list does not are appended in manifest
+     * order, so a view added to views.php can never lose its card.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    private function cardOrder(): array
+    {
+        $order = [
+            'real-roadrunner', // real server, resident worker
+            'real-fpm',        // real server, boot paid per request
+            'warm-start',      // harness: the resident-worker model
+            'cold-start',      // harness: the boot-per-request model
+        ];
+
+        $out = [];
+        foreach ($order as $key) {
+            if (isset($this->manifest['views'][$key])) {
+                $out[$key] = $this->manifest['views'][$key];
+            }
+        }
+        foreach ($this->manifest['views'] as $key => $view) {
+            $out[$key] ??= $view;
+        }
+
+        return $out;
     }
 
     /**
@@ -341,7 +384,8 @@ h2{font-size:20px;margin:36px 0 12px}
 h3{font-size:17px;margin:0 0 6px}
 .lead{margin:0 0 8px;font-size:16px;max-width:72ch}
 .env{margin:0;color:var(--muted);font-size:13px}
-.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin:24px 0 48px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(2,minmax(0,1fr));margin:24px 0 48px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
 .card{background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:18px 18px 16px;text-decoration:none;color:inherit;transition:transform .12s ease,border-color .12s ease}
 .card:hover{transform:translateY(-2px);border-color:var(--accent)}
 .card p{color:var(--muted);font-size:13px;margin:0 0 12px}

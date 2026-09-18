@@ -21,7 +21,8 @@ declare(strict_types=1);
  *   php scripts/report.php --publish=framework      # also write into azera-framework
  *
  * Output (default docs/benchmarks/):
- *   index.html          dashboard linking every view
+ *   index.html          dashboard linking every view (cards ordered by the
+ *                       deployment model, two per row)
  *   view-<key>.html     one page per view
  *   <view>.md          Markdown fragment (README/docs ready)
  *   svg/<view>/*.svg    the charts
