@@ -204,8 +204,6 @@ class Bootstrap
             $r->get('/features/log', '::logAction');
             $r->get('/features/retry', '::retryAction');
             $r->get('/features/db-events', '::dbEventsAction');
-            $r->get('/features/orm', '::ormAction');
-            $r->get('/features/orm-hydrate', '::ormHydrateAction');
             $r->get('/features/validation', '::validationAction');
             $r->get('/features/config', '::configAction');
             $r->get('/features/request-scoped', '::requestScopedAction');

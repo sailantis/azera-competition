@@ -90,7 +90,7 @@ One race per framework feature, each run as a real request against a real databa
 
 How much memory a single request needs, for every framework, measured inside the FPM worker that served it. The numbers come from the FPM worker process itself: because the entry script is torn down when the request ends, it appends one sample as it exits, and the harness reads that back. The pool is `pm = static` with `max_children = 1` and `max_requests = 0`, so this is ONE worker that stays alive for the whole block — which is why it has retained memory worth reporting at all.
 
-A request's high-water mark is taken from the framework-ready boundary of the entry script to the moment the response is finished, with the mark reset at that boundary — so it counts exactly what serving the request cost, and never bleeds into the next one. Each endpoint is probed 10 times and reduced to its median, so a single outlier cannot move a row; the range shows how much the endpoints themselves differ, which is a property of the workload rather than of the measurement.
+A request's high-water mark is taken from the framework-ready boundary of the entry script to the moment the response is finished, with the mark reset at that boundary — so it counts exactly what serving the request cost, and never bleeds into the next one. Each endpoint was probed once, so the range shows how much the endpoints themselves differ — a property of the workload rather than of the measurement.
 
 All six frameworks are drawn on one shared MB axis. The **left cap** is the lightest probed endpoint, the **dot** is the median endpoint, and the **right cap** is the heaviest. Every mark is a measured endpoint rather than an interpolation, so each can be named — the three numbers printed beside each bar are those same three readings. The faint bar behind each mark runs from zero to the median, so a row's length is read against the axis rather than estimated from the caps. The multiplier beside a row divides its median by the lightest median on the page; the reference row carries none.
 
@@ -106,27 +106,27 @@ Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpo
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `GET /` | no DB — routing + template only | **0.782** | 4.50 | 2.05 | 11.2 | 1.95 | 1.48 |
-| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **1.53** | 5.73 | 3.74 | 12.4 | 2.69 | 2.83 |
-| `GET /items/1` | 1 item by id | **1.40** | 5.38 | 3.00 | 12.3 | 2.57 | 2.62 |
-| `POST /items` | 1 row upserted (sentinel #999999) | **1.58** | 5.41 | 3.90 | 12.3 | 2.68 | 2.80 |
-| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **1.36** | 5.22 | 2.62 | 11.7 | 2.66 | 2.26 |
-| `GET /items-qb/1` | 1 item by id | **1.30** | 5.07 | 2.57 | 11.6 | 2.56 | 2.17 |
-| `POST /items-qb` | 1 row upserted (sentinel #999997) | **1.41** | 5.14 | 3.45 | 11.8 | 2.81 | 2.26 |
-| `GET /api/items` | 20 of 1000 items as JSON | **1.32** | 6.04 | 3.03 | 11.2 | 2.54 | 2.52 |
-| `GET /api/items/1` | 1 item by id as JSON | **1.35** | 5.82 | 2.72 | 11.0 | 2.49 | 2.49 |
-| `POST /api/items` | 1 row upserted (sentinel #999998) | **1.43** | 5.21 | 3.65 | 11.2 | 2.62 | 2.66 |
-| `GET /features/aop` | no DB — interceptor pipeline | **2.77** | 5.99 | 3.26 | 12.7 | — | — |
-| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **1.65** | 5.32 | 2.95 | 11.9 | 2.48 | 2.39 |
-| `GET /features/log` | no DB — buffered log handlers | **1.21** | 4.47 | 1.93 | 11.2 | — | — |
-| `GET /features/retry` | no DB — retry policy | **1.21** | 4.50 | 1.96 | 11.2 | — | — |
-| `GET /features/pipeline` | no DB — middleware pipeline | **0.788** | 4.51 | 1.95 | 11.3 | — | — |
-| `GET /features/db-events` | 1 event row INSERTed per request | **1.74** | 5.36 | 3.14 | 12.1 | 2.75 | 2.59 |
-| `GET /features/events` | no DB — in-process listeners | **1.69** | 5.06 | 2.38 | 11.9 | 2.67 | 1.92 |
-| `GET /features/validation` | no DB — validator run | **0.766** | 5.58 | 2.31 | 11.3 | 2.28 | 1.83 |
-| `GET /features/config` | no DB — config lookup | **0.731** | 4.52 | 1.93 | 11.2 | 1.94 | 1.38 |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **0.749** | 4.50 | 1.96 | 11.2 | 1.91 | 1.35 |
-| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.753** | 4.68 | 1.98 | 11.3 | 1.92 | 1.47 |
+| `GET /` | no DB — routing + template only | **0.818** | 4.50 | 2.05 | 7.96 | 1.95 | 1.48 |
+| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **1.57** | 5.73 | 3.74 | 9.03 | 2.69 | 2.83 |
+| `GET /items/1` | 1 item by id | **1.44** | 5.38 | 3.00 | 8.93 | 2.57 | 2.62 |
+| `POST /items` | 1 row upserted (sentinel #999999) | **1.63** | 5.41 | 3.90 | 9.05 | 2.68 | 2.80 |
+| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **1.41** | 5.22 | 2.62 | 8.57 | 2.66 | 2.26 |
+| `GET /items-qb/1` | 1 item by id | **1.34** | 5.07 | 2.57 | 8.52 | 2.56 | 2.17 |
+| `POST /items-qb` | 1 row upserted (sentinel #999997) | **1.45** | 5.14 | 3.45 | 8.64 | 2.81 | 2.26 |
+| `GET /api/items` | 20 of 1000 items as JSON | **1.36** | 6.04 | 3.03 | 8.13 | 2.54 | 2.52 |
+| `GET /api/items/1` | 1 item by id as JSON | **1.39** | 5.82 | 2.72 | 8.06 | 2.49 | 2.49 |
+| `POST /api/items` | 1 row upserted (sentinel #999998) | **1.46** | 5.21 | 3.65 | 8.12 | 2.62 | 2.66 |
+| `GET /features/aop` | no DB — interceptor pipeline | **2.62** | 5.99 | 3.26 | 9.92 | — | — |
+| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **1.66** | 5.32 | 2.95 | 8.88 | 2.48 | 2.39 |
+| `GET /features/log` | no DB — buffered log handlers | **1.25** | 4.47 | 1.93 | 8.25 | — | — |
+| `GET /features/retry` | no DB — retry policy | **1.25** | 4.50 | 1.96 | 8.11 | — | — |
+| `GET /features/pipeline` | no DB — middleware pipeline | **0.819** | 4.51 | 1.95 | 8.15 | — | — |
+| `GET /features/db-events` | 1 event row INSERTed per request | **1.77** | 5.36 | 3.14 | 9.03 | 2.75 | 2.59 |
+| `GET /features/events` | no DB — in-process listeners | **1.74** | 5.06 | 2.38 | 8.79 | 2.67 | 1.92 |
+| `GET /features/validation` | no DB — validator run | **0.820** | 5.58 | 2.31 | 8.25 | 2.28 | 1.83 |
+| `GET /features/config` | no DB — config lookup | **0.772** | 4.52 | 1.93 | 8.10 | 1.94 | 1.38 |
+| `GET /features/request-scoped` | no DB — scoped service resolve | **0.782** | 4.50 | 1.96 | 8.10 | 1.91 | 1.35 |
+| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.782** | 4.68 | 1.98 | 8.22 | 1.92 | 1.47 |
 
 ---
 

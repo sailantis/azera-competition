@@ -48,8 +48,6 @@ $expect = [
     'GET /features/validation'     => '"valid_payload"',
     'GET /features/config'         => '"feature"',
     'GET /features/db-events'      => '"events"',
-    'GET /features/orm'            => '"report"',
-    'GET /features/orm-hydrate'    => '"report"',
     'GET /features/request-scoped' => '"count_after"',
     'GET /features/rate-limit'     => '"allowed"',
 ];

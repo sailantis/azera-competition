@@ -67,12 +67,66 @@ final class AppRoutesBootloader extends RoutesBootloader
     {
         return [
             \Cocur\Slugify\SlugifyInterface::class => [self::class, 'initSlugify'],
+            \Spiral\Router\UriHandler::class       => [self::class, 'initUriHandler'],
+            \Spiral\Http\LazyPipeline::class       => [self::class, 'initLazyPipeline'],
         ];
     }
 
     public static function initSlugify(): \Cocur\Slugify\SlugifyInterface
     {
         return new \Cocur\Slugify\Slugify();
+    }
+
+    /**
+     * Bind UriHandler as a container SINGLETON.
+     *
+     * Same shape of problem as the Slugify binding above, one level up.
+     * `RouteGroup::register()` (vendor: Spiral\Router\RouteGroup) calls
+     * `$factory->make(UriHandler::class)` once per route on EVERY re-boot, and
+     * each of those goes through the container's reflection-based autowiring
+     * for a constructor that takes three arguments. That is ~24 us per route
+     * (measured 2026-09-18) against ~0.3 us for a plain `new`, i.e. the cost is
+     * the autowiring, not the object: the handler it builds is thrown away in
+     * the very next statement, because `register()` immediately calls
+     * `->withPrefix(...)` which CLONES.
+     *
+     * With 122 routes that is ~2.9 ms of pure reflection per recycle.
+     * Sharing one instance is safe by construction: every `with*()` method on
+     * UriHandler clones before mutating (withPrefix / withPattern /
+     * withConstrains / withBasePath / withPathSegmentEncoder), and the one
+     * genuinely mutating method, `setStrict()`, is not called anywhere in the
+     * framework (verified: no call site outside UriHandler itself).
+     */
+    public static function initUriHandler(
+        \Psr\Http\Message\UriFactoryInterface $uriFactory,
+        \Cocur\Slugify\SlugifyInterface $slugify,
+    ): \Spiral\Router\UriHandler {
+        return new \Spiral\Router\UriHandler($uriFactory, $slugify);
+    }
+
+    /**
+     * Bind LazyPipeline as a container SINGLETON.
+     *
+     * `Router::configure()` runs for every route (`Router::setRoute()` ->
+     * `configure()`), and calls `$route->withContainer($this->container)`,
+     * which builds a LazyPipeline via `$this->container->get(LazyPipeline::class)`.
+     * That lookup autowires a `#[Proxy] ContainerInterface` plus an optional
+     * event dispatcher and costs ~14 us per route — ~1.8 ms across 122 routes,
+     * for a pipeline object that is then cloned (`withMiddleware()` in
+     * RouteGroup::register(), and again per request in `next()`).
+     *
+     * Safe to share because every `with*()` method on LazyPipeline clones, and
+     * the mutable `position`/`handler`/`span` fields only ever live on those
+     * clones. The `#[Proxy]` attribute is carried on the factory parameter so
+     * the injected container stays scope-aware, matching LazyPipeline's own
+     * constructor contract.
+     */
+    public static function initLazyPipeline(
+        #[\Spiral\Core\Attribute\Proxy]
+        \Psr\Container\ContainerInterface $container,
+        ?\Psr\EventDispatcher\EventDispatcherInterface $dispatcher = null,
+    ): \Spiral\Http\LazyPipeline {
+        return new \Spiral\Http\LazyPipeline($container, $dispatcher);
     }
 
     protected function defineRoutes(RoutingConfigurator $routes): void
