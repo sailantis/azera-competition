@@ -262,9 +262,25 @@ function envInfo(): array
 /**
  * Git ref of the local azera-framework path repository. Azera is not published
  * on Packagist yet, so pinning the ref makes results reproducible.
+ *
+ * THE ENVIRONMENT WINS, exactly as in scripts/version-lib.php — the two copies
+ * must agree, because this one stamps `env.azera_framework_ref` while the lib
+ * stamps `env.frameworks.azera.ref` in the same run.
+ *
+ * Reading `.git` beside the measured source only answers the question where a
+ * checkout exists. The bench VM has none (run-remote.ps1 excludes `.git` from
+ * the sync and deletes any stale leftover), so a harness run there would
+ * otherwise stamp the ref as null even though the launcher that tarred the tree
+ * knows it. The host states it in AZERA_FRAMEWORK_REF; that answer is
+ * authoritative, so it short-circuits the memoisation below.
  */
 function azeraFrameworkRef(): ?string
 {
+    $declared = getenv('AZERA_FRAMEWORK_REF');
+    if (is_string($declared) && $declared !== '') {
+        return $declared;
+    }
+
     static $ref = false;
     if ($ref !== false) {
         return $ref;

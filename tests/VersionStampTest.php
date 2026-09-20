@@ -261,6 +261,66 @@ final class VersionStampTest extends TestCase
     }
 
     /**
+     * The OTHER copy of azeraFrameworkRef() must honour the environment too.
+     *
+     * There are two: scripts/version-lib.php (stamps `env.frameworks.azera.ref`)
+     * and run.php's own (stamps `env.azera_framework_ref`). The test above only
+     * covers the library — and it is the run.php copy that actually stamps a
+     * CLI-harness dataset, which is exactly the dataset a harness run on the
+     * bench VM produces. That VM has no `.git` (the sync excludes it and
+     * deletes any stale leftover), so a copy that reads only `.git` records the
+     * build as null even though the launcher that tarred the tree knew the ref.
+     * Two copies that disagree about the same question is the failure mode; the
+     * library was fixed for it and run.php was not.
+     *
+     * run.php is a SCRIPT, so requiring it would execute a whole benchmark. The
+     * function is therefore extracted from the shipped bytes and evaluated in a
+     * CHILD process: a behavioural check of the code that will actually run on
+     * the VM, not a grep for a string in the source. The child runs with
+     * opcache disabled, because a cached pristine copy of a just-edited script
+     * is the known way a mutation test lies on this machine.
+     */
+    public function testRunPhpHarnessHonoursTheStatedAzeraRef(): void
+    {
+        $driver = sys_get_temp_dir() . '/ref-driver-' . bin2hex(random_bytes(6)) . '.php';
+        file_put_contents($driver, <<<'PHP'
+<?php
+// Evaluate ONLY run.php's azeraFrameworkRef() definition, then call it.
+$src   = (string) file_get_contents($argv[1]);
+$start = strpos($src, 'function azeraFrameworkRef(): ?string');
+if ($start === false) { fwrite(STDERR, "signature not found\n"); exit(2); }
+$end = strpos($src, "\n}", $start);
+if ($end === false) { fwrite(STDERR, "body end not found\n"); exit(3); }
+eval(substr($src, $start, $end - $start + 2));
+echo var_export(azeraFrameworkRef(), true);
+PHP);
+
+        $previous = getenv('AZERA_FRAMEWORK_REF');
+        putenv('AZERA_FRAMEWORK_REF=deadbee');
+        try {
+            $out  = [];
+            $code = 0;
+            exec(
+                'php -d opcache.enable_cli=0 -d opcache.enable=0 '
+                    . escapeshellarg($driver) . ' ' . escapeshellarg(dirname(__DIR__) . '/run.php') . ' 2>&1',
+                $out,
+                $code
+            );
+            $text = implode("\n", $out);
+
+            self::assertSame(0, $code, "the extraction driver must run:\n{$text}");
+            self::assertStringContainsString(
+                "'deadbee'",
+                $text,
+                "run.php's azeraFrameworkRef() must return the LAUNCHER's ref, not read .git:\n{$text}"
+            );
+        } finally {
+            if ($previous === false) { putenv('AZERA_FRAMEWORK_REF'); } else { putenv('AZERA_FRAMEWORK_REF=' . $previous); }
+            @unlink($driver);
+        }
+    }
+
+    /**
      * A minimal scratch repository root for the library to read.
      *
      * @param array<string,string> $files relative path => contents
@@ -411,30 +471,54 @@ final class VersionStampTest extends TestCase
     /**
      * A dataset that predates the stamp prints NO version line.
      *
-     * The in-process datasets (`free-for-all`, `deployments`) were measured
-     * before version stamping existed. Printing "unknown" six times would be
-     * noise; omitting the line is honest, and the absence is explained by the
-     * dataset's own age. Pinned so a future edit cannot make the report claim
-     * versions for a run that never recorded them.
+     * Printing "unknown" six times would be noise; omitting the line is honest,
+     * and the absence is explained by the dataset's own age. Pinned so a future
+     * edit cannot make the report claim versions for a run that never recorded
+     * them.
+     *
+     * The fixture is DERIVED, not borrowed. This test used to load the committed
+     * CLI dataset (`results/free-for-all-opcache-iso.json`) and assert it had no
+     * `env.frameworks` — true while that file sat un-re-measured since
+     * 2026-09-14, and a guaranteed false alarm the moment it was re-run with
+     * stamping in place (which happened on 2026-09-20, when re-measuring it was
+     * the whole point). The contract under test is "a dataset WITHOUT a stamp
+     * renders without a version line", which has nothing to do with the age of
+     * whichever dataset happens to be committed: so the stamp is removed from a
+     * real dataset here, and the renderer is asked about that.
      */
     public function testAnUnstampedDatasetPrintsNoVersionLine(): void
     {
         $manifest = self::manifest();
-        $store    = ResultStore::load(
-            dirname(__DIR__) . '/results/free-for-all-opcache-iso.json'
+
+        // Start from a STAMPED dataset and delete the stamp: the only
+        // difference from a genuinely old file is the key we are testing.
+        $raw = json_decode(
+            (string) file_get_contents(dirname(__DIR__) . self::DATASET),
+            true
         );
+        self::assertIsArray($raw, 'the stamped dataset must parse');
+        self::assertArrayHasKey('frameworks', $raw['env'], 'fixture must start stamped');
+        unset($raw['env']['frameworks']);
 
-        self::assertArrayNotHasKey(
-            'frameworks',
-            $store->env(),
-            'the CLI dataset is the fixture for "unstamped" — if it gains a stamp, this test needs a new one'
-        );
+        $tmp = sys_get_temp_dir() . '/tmp-unstamped-' . bin2hex(random_bytes(6)) . '.json';
+        file_put_contents($tmp, json_encode($raw, JSON_PRETTY_PRINT));
 
-        $md = (new MarkdownReport($store, 'warm-start', $manifest['views']['warm-start']))
-            ->render(sys_get_temp_dir() . '/tmp-ver-none', 'svg/warm-start');
+        try {
+            $store = ResultStore::load($tmp);
+            self::assertArrayNotHasKey(
+                'frameworks',
+                $store->env(),
+                'the fixture must be unstamped for this test to mean anything'
+            );
 
-        self::assertStringNotContainsString('**Frameworks**', $md);
-        self::assertStringNotContainsString('unknown', $md);
+            $md = (new MarkdownReport($store, 'warm-start', $manifest['views']['warm-start']))
+                ->render(sys_get_temp_dir() . '/tmp-ver-none', 'svg/warm-start');
+
+            self::assertStringNotContainsString('**Frameworks**', $md);
+            self::assertStringNotContainsString('unknown', $md);
+        } finally {
+            @unlink($tmp);
+        }
     }
 
     /**
