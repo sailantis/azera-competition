@@ -2,60 +2,20 @@
     "env": {
         "php_version": "8.3.33",
         "os": "Linux 6.8.0-139-generic",
-        "sapi": "cli",
         "timestamp": "2026-09-20T11:44:35+00:00",
         "deployment": "real",
         "opcache_by_mode": {
             "php-fpm": true,
             "roadrunner": true
         },
-        "opcache_derived": {
-            "at": "2026-09-18T22:28:35+00:00",
-            "reason": "the dataset predates the per-mode stamp, and the RoadRunner worker reads opcache.enable_cli from the bench VM's CLI php.ini, which is not reachable from the machine that wrote this dataset",
-            "evidence": "/etc/php/8.3/cli/php.ini on the bench VM sets opcache.enable_cli=1 UNCOMMENTED (grep ^opcache.enable_cli=1 -> 1 match, ^;opcache.enable_cli -> 0); PHP's own default for that directive is 0, so it was set deliberately. The file mtime is 2026-09-12T19:53Z, three days before the dataset timestamp of 2026-09-15T23:21:30Z, and the php8.3-cli package was installed 2026-09-12T15:48Z \u2014 so the setting cannot have differed at measurement time",
-            "limit": "this establishes the CLI ini value, not that the worker was observed running under it. deploy/rr/config-template.php spawns the worker as a bare `php {{ROOT}}/deploy/rr/worker.php` with no `-d opcache.*` and no PHP_INI_SCAN_DIR override, so it does inherit that ini \u2014 verified against the template at backfill time",
-            "scope": "env only; no measurement was touched",
-            "probe": "php -r 'echo ini_get(\"opcache.enable_cli\");' on the bench VM (2026-09-19)"
-        },
         "fpm_max_requests": 0,
-        "budget": "1000x10",
-        "servers": {
-            "roadrunner": "rr version 2025.1.15 (build time: 2026-06-17T16:05:22+0000, go1.26.4), OS: linux, arch: amd64",
-            "nginx": "nginx version: nginx/1.24.0 (Ubuntu)",
-            "php_fpm": "PHP 8.3.33 (fpm-fcgi) (built: Jul 30 2026 15:39:15) Copyright (c) The PHP Group Zend Engine v4.3.33, Copyright (c) Zend Technologies     with Zend OPcache v8.3.33, Copyright (c), by Zend Technologies"
-        },
-        "boot_probe": 50,
         "rr_max_jobs": 0,
-        "app_refresh": {
-            "azera": {
-                "timestamp": "2026-09-20T11:44:35+00:00",
-                "source_file": "full-2026-09-20.json"
-            },
-            "laravel": {
-                "timestamp": "2026-09-20T11:44:35+00:00",
-                "source_file": "full-2026-09-20.json"
-            },
-            "symfony": {
-                "timestamp": "2026-09-20T11:44:35+00:00",
-                "source_file": "full-2026-09-20.json"
-            },
-            "spiral": {
-                "timestamp": "2026-09-20T11:44:35+00:00",
-                "source_file": "full-2026-09-20.json"
-            },
-            "codeigniter": {
-                "timestamp": "2026-09-20T11:44:35+00:00",
-                "source_file": "full-2026-09-20.json"
-            },
-            "cakephp": {
-                "timestamp": "2026-09-20T11:44:35+00:00",
-                "source_file": "full-2026-09-20.json"
-            }
-        },
+        "budget": "1000x10",
+        "boot_probe": 50,
         "frameworks": {
             "azera": {
                 "version": "0.1.0",
-                "ref": "e55225e"
+                "ref": "6f57113"
             },
             "laravel": {
                 "version": "12.69.2"
@@ -73,18 +33,11 @@
                 "version": "5.4.0"
             }
         },
-        "frameworks_derived": {
-            "at": "2026-09-18T20:58:36+00:00",
-            "reason": "the dataset predates version stamping; composer.lock was unchanged between the measured run and this stamp, so the package versions are the ones that ran",
-            "evidence": "composer.lock last modified 2026-09-15 21:00 local, run measured 2026-09-15T23:21Z, no lock change since",
-            "limit": "the azera git ref is NOT recoverable (the VM sync excludes .git, so the ref never existed there, and the 09-16/09-18 app refreshes recorded none); it is stamped null rather than guessed. The azera VERSION comes from the framework's declared composer.json, because installed.json records only the branch (dev-main) for a path-repository package",
-            "scope": "env only; no measurement was touched"
-        },
-        "measured_window": {
-            "first": "2026-09-20T11:44:35+00:00",
-            "last": "2026-09-20T11:44:35+00:00"
-        },
-        "azera_framework_ref": "e55225e"
+        "servers": {
+            "roadrunner": "rr version 2025.1.15 (build time: 2026-06-17T16:05:22+0000, go1.26.4), OS: linux, arch: amd64",
+            "nginx": "nginx version: nginx\/1.24.0 (Ubuntu)",
+            "php_fpm": "PHP 8.3.33 (fpm-fcgi) (built: Jul 30 2026 15:39:15) Copyright (c) The PHP Group Zend Engine v4.3.33, Copyright (c) Zend Technologies     with Zend OPcache v8.3.33, Copyright (c), by Zend Technologies"
+        }
     },
     "apps": [
         {
@@ -95,7 +48,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.25976877362499995,
@@ -116,7 +69,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.49390104425000014,
@@ -137,7 +90,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.33987886575000015,
@@ -158,7 +111,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.47080652975,
@@ -179,7 +132,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.44810040524999983,
@@ -200,7 +153,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.34069594512500007,
@@ -221,7 +174,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.4344122038749998,
@@ -242,7 +195,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.32336387300000013,
@@ -263,7 +216,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.2970544922500001,
@@ -284,7 +237,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.3290715907500002,
@@ -305,7 +258,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.4405982883750001,
@@ -326,7 +279,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.2331506253750001,
@@ -347,7 +300,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.23731100949999995,
@@ -368,7 +321,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.22728120212500003,
@@ -389,7 +342,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.2441102698749999,
@@ -410,7 +363,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.3468456564999999,
@@ -431,7 +384,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.326121981625,
@@ -452,7 +405,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.2573064526249999,
@@ -473,7 +426,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.22863745174999991,
@@ -494,7 +447,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.23049485325000002,
@@ -515,7 +468,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.24646090987500002,
@@ -542,7 +495,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8099959645000004,
@@ -561,7 +514,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.5759500647500002,
@@ -580,7 +533,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.4381333411250008,
@@ -599,7 +552,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.6392462305000004,
@@ -618,7 +571,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.3961355172500003,
@@ -637,7 +590,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.3419208618749994,
@@ -656,7 +609,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.4403850129999998,
@@ -675,7 +628,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.3816157477500002,
@@ -694,7 +647,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.405904954875,
@@ -713,7 +666,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.4715709535000003,
@@ -732,7 +685,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.519969004499999,
@@ -751,7 +704,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.658148384375001,
@@ -770,7 +723,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.2286000642500003,
@@ -789,7 +742,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.2237939090000003,
@@ -808,7 +761,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8113475101249997,
@@ -827,7 +780,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.7473003551249995,
@@ -846,7 +799,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.7325888618749996,
@@ -865,7 +818,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8228398011250001,
@@ -884,7 +837,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7652922960000004,
@@ -903,7 +856,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7700535061250005,
@@ -922,7 +875,7 @@
                             "boot_ms": 0.4852
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.771676323125,
@@ -992,7 +945,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.596954641625,
@@ -1013,7 +966,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.2248928023749999,
@@ -1034,7 +987,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.850546941375,
@@ -1055,7 +1008,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8850616371250004,
@@ -1076,7 +1029,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.9013679907499997,
@@ -1097,7 +1050,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.749306254375,
@@ -1118,7 +1071,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8688770433750004,
@@ -1139,7 +1092,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.0723783087500003,
@@ -1160,7 +1113,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8540292072500001,
@@ -1181,7 +1134,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7906829230000001,
@@ -1202,7 +1155,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7851895166250003,
@@ -1223,7 +1176,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6227926676249999,
@@ -1244,7 +1197,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.5798269484999999,
@@ -1265,7 +1218,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6075569597499998,
@@ -1286,7 +1239,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.593664007,
@@ -1307,7 +1260,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8414865436249995,
@@ -1328,7 +1281,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7459847914999999,
@@ -1349,7 +1302,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.3107735155000007,
@@ -1370,7 +1323,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.5915352384999997,
@@ -1391,7 +1344,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.584778239625,
@@ -1412,7 +1365,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.5852707963750001,
@@ -1439,7 +1392,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 4.505018378999999,
@@ -1458,7 +1411,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.736886349999999,
@@ -1477,7 +1430,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.3999632662499994,
@@ -1496,7 +1449,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.404558267375004,
@@ -1515,7 +1468,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.24256108175,
@@ -1534,7 +1487,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.111458792375001,
@@ -1553,7 +1506,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.172022266999999,
@@ -1572,7 +1525,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 6.093328838374997,
@@ -1591,7 +1544,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.880152667499996,
@@ -1610,7 +1563,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.277122037874999,
@@ -1629,7 +1582,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.986637820874998,
@@ -1648,7 +1601,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.364710732750002,
@@ -1667,7 +1620,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 4.520428378124997,
@@ -1686,7 +1639,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 4.617708952624998,
@@ -1705,7 +1658,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 4.560846994,
@@ -1724,7 +1677,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.425654326875003,
@@ -1743,7 +1696,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.116820710125,
@@ -1762,7 +1715,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 5.617497557874999,
@@ -1781,7 +1734,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 4.58525195175,
@@ -1800,7 +1753,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 4.586543353999997,
@@ -1819,7 +1772,7 @@
                             "boot_ms": 3.0822
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 4.734827763875,
@@ -1889,7 +1842,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.4242781775000001,
@@ -1910,7 +1863,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.073933425125,
@@ -1931,7 +1884,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6006379150000002,
@@ -1952,7 +1905,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7882937197499998,
@@ -1973,7 +1926,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6698626081249999,
@@ -1994,7 +1947,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.5036099859999998,
@@ -2015,7 +1968,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6940530500000001,
@@ -2036,7 +1989,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.708457865875,
@@ -2057,7 +2010,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.5223940162500001,
@@ -2078,7 +2031,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.73380656225,
@@ -2099,7 +2052,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6242309517500001,
@@ -2120,7 +2073,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.37614055099999993,
@@ -2141,7 +2094,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.3871483906250001,
@@ -2162,7 +2115,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.356414687,
@@ -2183,7 +2136,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.389928502375,
@@ -2204,7 +2157,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6109761382499999,
@@ -2225,7 +2178,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.45020751587499996,
@@ -2246,7 +2199,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.538090866875,
@@ -2267,7 +2220,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.39897499262500014,
@@ -2288,7 +2241,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.38608955899999986,
@@ -2309,7 +2262,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.36000155349999996,
@@ -2336,7 +2289,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.097292099375,
@@ -2355,7 +2308,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.7633515632500005,
@@ -2374,7 +2327,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.0435021982500006,
@@ -2393,7 +2346,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.9181536239999994,
@@ -2412,7 +2365,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.6560947507499995,
@@ -2431,7 +2384,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.5768284473749996,
@@ -2450,7 +2403,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.467468717874999,
@@ -2469,7 +2422,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.031497346,
@@ -2488,7 +2441,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.765541827375001,
@@ -2507,7 +2460,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.5976954117499993,
@@ -2526,7 +2479,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.268668957624998,
@@ -2545,7 +2498,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.976459547874999,
@@ -2564,7 +2517,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9451450786250002,
@@ -2583,7 +2536,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.973148924124999,
@@ -2602,7 +2555,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9803477882499998,
@@ -2621,7 +2574,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.1614001221250008,
@@ -2640,7 +2593,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.408155768125,
@@ -2659,7 +2612,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.2904790826249997,
@@ -2678,7 +2631,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9589619607499995,
@@ -2697,7 +2650,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9845238981250004,
@@ -2716,7 +2669,7 @@
                             "boot_ms": 0.6385
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.00040876525,
@@ -2786,7 +2739,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6673802153750001,
@@ -2807,7 +2760,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.0125377276250003,
@@ -2828,7 +2781,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.791461459,
@@ -2849,7 +2802,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.853243643125,
@@ -2870,7 +2823,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8127073189999999,
@@ -2891,7 +2844,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7617699648749999,
@@ -2912,7 +2865,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8102693758750004,
@@ -2933,7 +2886,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8518109882499998,
@@ -2954,7 +2907,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7319772347500002,
@@ -2975,7 +2928,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8187549756249998,
@@ -2996,7 +2949,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.949327955375,
@@ -3017,7 +2970,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6938771909999998,
@@ -3038,7 +2991,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.69063683725,
@@ -3059,7 +3012,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7029630856249999,
@@ -3080,7 +3033,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6999218138750003,
@@ -3101,7 +3054,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.939057937625,
@@ -3122,7 +3075,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7971293725,
@@ -3143,7 +3096,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7293382779999997,
@@ -3164,7 +3117,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6776113771249996,
@@ -3185,7 +3138,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7239241835000003,
@@ -3206,7 +3159,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7251869157500002,
@@ -3233,7 +3186,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 7.93167377925,
@@ -3252,7 +3205,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.994772743875004,
@@ -3271,7 +3224,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.883735118625001,
@@ -3290,7 +3243,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.957877354374995,
@@ -3309,7 +3262,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.514145637624999,
@@ -3328,7 +3281,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.447734813375007,
@@ -3347,7 +3300,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.645177124999996,
@@ -3366,7 +3319,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.011408843125002,
@@ -3385,7 +3338,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 7.886939542375002,
@@ -3404,7 +3357,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.026796413250006,
@@ -3423,7 +3376,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 9.662459834750006,
@@ -3442,7 +3395,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.774099618125,
@@ -3461,7 +3414,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.063675235,
@@ -3480,7 +3433,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.063787942499998,
@@ -3499,7 +3452,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.069756059749997,
@@ -3518,7 +3471,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.997798676750001,
@@ -3537,7 +3490,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.670196564625002,
@@ -3556,7 +3509,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.184704135875,
@@ -3575,7 +3528,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.07346699175,
@@ -3594,7 +3547,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.070831856000002,
@@ -3613,7 +3566,7 @@
                             "boot_ms": 4.8815
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 8.155296251250004,
@@ -3683,7 +3636,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.892775334125,
@@ -3704,7 +3657,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.25824057925,
@@ -3725,7 +3678,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.1221870143749997,
@@ -3746,7 +3699,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.212827178,
@@ -3767,7 +3720,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.2297294788749993,
@@ -3788,7 +3741,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.1344718908750002,
@@ -3809,7 +3762,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.3389661928749996,
@@ -3830,7 +3783,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.0653632111249995,
@@ -3851,7 +3804,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.0286360472500005,
@@ -3872,7 +3825,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.1228110583750002,
@@ -3893,7 +3846,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.3192705966250007,
@@ -3914,7 +3867,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8161305231249998,
@@ -3935,7 +3888,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8009586843750002,
@@ -3956,7 +3909,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.800095083625,
@@ -3977,7 +3930,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8244914349999999,
@@ -3998,7 +3951,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.1995584411249998,
@@ -4019,7 +3972,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.1720438817499998,
@@ -4040,7 +3993,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.1220026762500002,
@@ -4061,7 +4014,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8383130597499999,
@@ -4082,7 +4035,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8172432192500001,
@@ -4103,7 +4056,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8239476666249997,
@@ -4130,7 +4083,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9695509000000007,
@@ -4149,7 +4102,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.719055592250001,
@@ -4168,7 +4121,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.607323264500001,
@@ -4187,7 +4140,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.7052495344999987,
@@ -4206,7 +4159,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.6860006593749985,
@@ -4225,7 +4178,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.5858349071250006,
@@ -4244,7 +4197,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.8215828563749983,
@@ -4263,7 +4216,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.544568386249999,
@@ -4282,7 +4235,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.5182727958749997,
@@ -4301,7 +4254,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.635048411874999,
@@ -4320,7 +4273,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 3.4951294254999996,
@@ -4339,7 +4292,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.5038062709999993,
@@ -4358,7 +4311,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9206198106249996,
@@ -4377,7 +4330,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9356689783749998,
@@ -4396,7 +4349,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9357753981249994,
@@ -4415,7 +4368,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.7894639869999995,
@@ -4434,7 +4387,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.6942340781249996,
@@ -4453,7 +4406,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.28709417875,
@@ -4472,7 +4425,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9748462388749997,
@@ -4491,7 +4444,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9491224091249997,
@@ -4510,7 +4463,7 @@
                             "boot_ms": 0.8714
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.9567752342499998,
@@ -4580,7 +4533,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.4859320160000002,
@@ -4601,7 +4554,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.96411750125,
@@ -4622,7 +4575,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7095700036249999,
@@ -4643,7 +4596,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.8753017989999999,
@@ -4664,7 +4617,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7611973075000003,
@@ -4685,7 +4638,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.655117534625,
@@ -4706,7 +4659,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7295348393750001,
@@ -4727,7 +4680,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.669757404625,
@@ -4748,7 +4701,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6507066049999998,
@@ -4769,7 +4722,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.7708447414999996,
@@ -4790,7 +4743,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6579271644999999,
@@ -4811,7 +4764,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.40664457137499976,
@@ -4832,7 +4785,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.39466053862500006,
@@ -4853,7 +4806,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.37408860512500003,
@@ -4874,7 +4827,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.3830421795000003,
@@ -4895,7 +4848,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.6806469831249999,
@@ -4916,7 +4869,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.539405687125,
@@ -4937,7 +4890,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.511919739625,
@@ -4958,7 +4911,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.35951537312499987,
@@ -4979,7 +4932,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.3757998381249999,
@@ -5000,7 +4953,7 @@
                             "split_samples": 20
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.39347427600000007,
@@ -5027,7 +4980,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.5260827543750002,
@@ -5046,7 +4999,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /items",
+                            "request": "GET \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.8861595922500007,
@@ -5065,7 +5018,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /items/1",
+                            "request": "GET \/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.686945959249999,
@@ -5084,7 +5037,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "POST /items",
+                            "request": "POST \/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.847356047875001,
@@ -5103,7 +5056,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /items-qb",
+                            "request": "GET \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.297764133375002,
@@ -5122,7 +5075,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /items-qb/1",
+                            "request": "GET \/items-qb\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.204667073124999,
@@ -5141,7 +5094,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "POST /items-qb",
+                            "request": "POST \/items-qb",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.323988085750001,
@@ -5160,7 +5113,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /api/items",
+                            "request": "GET \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.576897687125,
@@ -5179,7 +5132,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /api/items/1",
+                            "request": "GET \/api\/items\/1",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.5586545405000005,
@@ -5198,7 +5151,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "POST /api/items",
+                            "request": "POST \/api\/items",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.707677314125,
@@ -5217,7 +5170,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/aop",
+                            "request": "GET \/features\/aop",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.781641249625,
@@ -5236,7 +5189,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/cache",
+                            "request": "GET \/features\/cache",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.415612004125,
@@ -5255,7 +5208,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/log",
+                            "request": "GET \/features\/log",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.409381347625,
@@ -5274,7 +5227,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/retry",
+                            "request": "GET \/features\/retry",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.3951071186250004,
@@ -5293,7 +5246,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/pipeline",
+                            "request": "GET \/features\/pipeline",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.4062051637500004,
@@ -5312,7 +5265,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/db-events",
+                            "request": "GET \/features\/db-events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 2.643111914749999,
@@ -5331,7 +5284,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/events",
+                            "request": "GET \/features\/events",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.944015459250001,
@@ -5350,7 +5303,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/validation",
+                            "request": "GET \/features\/validation",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.8393019036250002,
@@ -5369,7 +5322,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/config",
+                            "request": "GET \/features\/config",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.4040416306249994,
@@ -5388,7 +5341,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/request-scoped",
+                            "request": "GET \/features\/request-scoped",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.4140575527500001,
@@ -5407,7 +5360,7 @@
                             "boot_ms": 0.7293
                         },
                         {
-                            "request": "GET /features/rate-limit",
+                            "request": "GET \/features\/rate-limit",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 1.5146125938749992,
@@ -5479,7 +5432,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.07240117437500002,
@@ -5508,7 +5461,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.15422361162499998,
@@ -5537,7 +5490,7 @@
                     "runs": 10,
                     "requests": [
                         {
-                            "request": "GET /",
+                            "request": "GET \/",
                             "iterations_per_run": 1000,
                             "runs": 10,
                             "trimmed_mean_ms": 0.19730051575000002,

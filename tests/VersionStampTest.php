@@ -202,6 +202,65 @@ final class VersionStampTest extends TestCase
     }
 
     /**
+     * The ref is STATED by the environment, not read from a checkout beside the
+     * measured source.
+     *
+     * Regression: the 2026-09-20 full run was launched from framework e55225e
+     * and published "azera-framework 6f57113" (2026-09-13). The VM has no .git
+     * (the sync excludes it), so the only .git could be a STALE one left from an
+     * earlier sync — frozen at the commit it was cloned from while the working
+     * tree above it was overwritten every run. A ref is a provenance claim, and
+     * a wrong one is worse than none, so the party that actually tars the tree
+     * (the host launcher) states it and that answer wins.
+     *
+     * Asserted against a scratch tree that HAS a .git, so the test proves the
+     * override takes PRECEDENCE rather than merely being the only source of an
+     * answer. Without that, a future edit could "helpfully" fall back to the
+     * checkout again and silently restore the bug.
+     */
+    public function testAzeraRefComesFromTheEnvironmentWhenTheLauncherStatesIt(): void
+    {
+        $scratch = self::scratchTree([
+            'vendor/composer/installed.json' => json_encode([
+                'packages' => [
+                    ['name' => 'sailantis/azera-framework', 'version' => 'dev-main'],
+                    ['name' => 'laravel/framework', 'version' => 'v12.69.2'],
+                ],
+            ], JSON_PRETTY_PRINT),
+        ]);
+
+        // A checkout that WOULD answer, with a ref that is NOT the stated one.
+        $sibling = dirname($scratch) . '/azera-framework';
+        @mkdir($sibling . '/.git', 0777, true);
+        file_put_contents(
+            $sibling . '/composer.json',
+            json_encode(['name' => 'sailantis/azera-framework', 'version' => '0.1.0'], JSON_PRETTY_PRINT)
+        );
+        // A real .git so azeraFrameworkRef()'s is_dir('.git') guard is satisfied
+        // and it would actually shell out to git.
+        file_put_contents($sibling . '/.git/HEAD', "ref: refs/heads/main\n");
+
+        $previous = getenv('AZERA_FRAMEWORK_REF');
+        putenv('AZERA_FRAMEWORK_REF=deadbee');
+        try {
+            $ref = azeraFrameworkRef($scratch);
+            self::assertSame(
+                'deadbee',
+                $ref,
+                'the LAUNCHER\'s ref must win: it alone knows which tree was tarred and shipped, '
+                    . 'while a .git on the measured side is a stale leftover that is never synced'
+            );
+        } finally {
+            if ($previous === false) { putenv('AZERA_FRAMEWORK_REF'); } else { putenv('AZERA_FRAMEWORK_REF=' . $previous); }
+            @unlink($sibling . '/.git/HEAD');
+            @rmdir($sibling . '/.git');
+            @unlink($sibling . '/composer.json');
+            @rmdir($sibling);
+            self::rmTree($scratch);
+        }
+    }
+
+    /**
      * A minimal scratch repository root for the library to read.
      *
      * @param array<string,string> $files relative path => contents

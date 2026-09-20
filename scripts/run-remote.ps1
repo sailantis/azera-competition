@@ -170,6 +170,18 @@ function Sync-Source {
     }
     if (Test-Path $tarFile) { Remove-Item $tarFile -Force }
     Assert-NoHostPathsLeaked
+
+    # Remove any .git that an OLD sync left on the VM.
+    #
+    # `.git` is (correctly) excluded from every sync, so a checkout that was ever
+    # shipped stays there forever, frozen at the commit it was cloned from, while
+    # the working tree above it is overwritten each run. azeraFrameworkRef()
+    # reads it and stamps that frozen commit as the measured build - which is how
+    # a run launched from e55225e published "azera-framework 6f57113" (2026-09-13).
+    # Deleting it leaves the question answerable only by the environment variable
+    # the launcher now provides, which is the one answer that is true.
+    ssh $SshTarget "rm -rf $RemoteDir/../azera-framework/.git $RemoteDir/vendor/sailantis/azera-framework/.git 2>/dev/null; true"
+
     Assert-SyncLanded 'boot-probe.php'
     # boot-probe.php is required (so it proves the sync mechanism works), but a
     # file the new probe needs and an OLD one would silently omit deserves its
@@ -198,6 +210,26 @@ function Assert-NoHostPathsLeaked {
         throw ("host-specific absolute paths reached the VM (add the source to " +
             "`$Excludes, then delete it there):`n" + ($leak -join "`n"))
     }
+}
+
+# The framework ref that the VM CANNOT know.
+#
+# `\.git` is excluded from the sync, so on the VM azeraFrameworkRef() either
+# finds no checkout at all (correctly null) or - worse - a STALE one left over
+# from before the exclude existed, whose HEAD froze the day it was cloned while
+# the source kept being overwritten. On 2026-09-20 that produced a published
+# page claiming azera-framework `6f57113` (2026-09-13) for a run launched from
+# e55225e. The host is the only party that knows which tree it tars, so it
+# states the ref here and the harness picks it up from the environment; a
+# stale checkout on the VM is removed as well, so there is nothing to misread.
+$FrameworkRef = ''
+$fwRepo = Join-Path $Sailantis 'azera-framework'
+if (Test-Path $fwRepo) {
+    $described = (& git -C $fwRepo describe --tags --exact-match 2>$null | Select-Object -First 1)
+    if (-not $described) {
+        $described = (& git -C $fwRepo rev-parse --short HEAD 2>$null | Select-Object -First 1)
+    }
+    if ($described) { $FrameworkRef = $described.Trim() }
 }
 
 function Install-Prereqs {
@@ -256,8 +288,21 @@ function Invoke-RemoteRun {
     if ($BootOnly) { $budgetArgs = '--boot-only' }
     if ($MemOnly) { $budgetArgs = "--mem-only --mem-repeats=$MemRepeats" }
     $log = "$RemoteDir/bench-run.log"
+
+    # State the measured build to the harness. The VM has no .git to read (see
+    # Sync-Source), so without this the ref is unanswerable there and the dataset
+    # would carry no build identity at all. Passed through env rather than as a
+    # CLI flag so it cannot be interleaved into run-http.php's argument list -
+    # getopt stops at the first positional token, and a stray one silently
+    # discards every option after it (including --out).
+    if ($FrameworkRef -eq '') {
+        Write-Warning 'could not determine the azera-framework ref; the dataset will stamp it as unknown'
+    } else {
+        Write-Host "==> azera-framework ref: $FrameworkRef" -ForegroundColor Cyan
+    }
+
     Write-Host "==> launching benchmark in tmux (log: bench-run.log, out: ${OutName}.json)..." -ForegroundColor Cyan
-    ssh $SshTarget "tmux kill-session -t bench 2>/dev/null; tmux new -d -s bench 'cd $RemoteDir && php scripts/run-http.php --apps=$Apps --servers=$Servers $budgetArgs --out=$OutPrefix > bench-run.log 2>&1'"
+    ssh $SshTarget "tmux kill-session -t bench 2>/dev/null; tmux new -d -s bench 'cd $RemoteDir && AZERA_FRAMEWORK_REF=$FrameworkRef php scripts/run-http.php --apps=$Apps --servers=$Servers $budgetArgs --out=$OutPrefix > bench-run.log 2>&1'"
     if ($LASTEXITCODE -ne 0) { throw 'tmux launch failed' }
     Write-Host '==> launched. Watch with: .\scripts\run-remote.ps1 -Status' -ForegroundColor Green
 }

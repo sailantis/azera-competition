@@ -189,14 +189,37 @@ function declaredVersion(string $composerJson): ?string
 
 if (!function_exists('azeraFrameworkRef')) {
     /**
-     * Git ref of the local azera-framework path repository.
+     * Git ref of the azera-framework build that was measured.
      *
      * Azera is not published on Packagist yet, so pinning the ref makes results
      * reproducible. Returns null (recorded as "unknown") when the repository is not
      * checked out beside this one.
+     *
+     * THE ENVIRONMENT WINS, and that is the whole point of the override below.
+     *
+     * Reading `.git` BESIDE THE MEASURED SOURCE only answers the question on the
+     * machine that HAS a checkout. On the bench VM there is none: run-remote.ps1
+     * excludes `.git` from the sync, so `~/workspace/azera-framework/.git` — when
+     * it exists at all — is a leftover from before that exclude, and its HEAD is
+     * frozen at whenever that checkout was made while the source keeps being
+     * overwritten by every sync. Reading it produces a ref that names a commit
+     * which is NOT the code that ran. That is not theoretical: the 2026-09-20 run
+     * was launched from framework e55225e and stamped `6f57113` (2026-09-13),
+     * because that is where the stale `.git` pointed. A wrong ref in a provenance
+     * block is worse than no ref, because it is a claim.
+     *
+     * The host that TARS the tree is the only party that knows which tree it
+     * shipped, so it states the ref in AZERA_FRAMEWORK_REF and that answer is
+     * authoritative. The override short-circuits even the memoisation below, so it
+     * is also independently testable.
      */
     function azeraFrameworkRef(string $root): ?string
     {
+        $declared = getenv('AZERA_FRAMEWORK_REF');
+        if (is_string($declared) && $declared !== '') {
+            return $declared;
+        }
+
         static $ref = false;
         if ($ref !== false) {
             return $ref;
