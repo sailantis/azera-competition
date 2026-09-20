@@ -1,6 +1,6 @@
-# Framework Competition — Real PHP-FPM
+# Framework Competition — PHP-FPM Summary
 
-Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool's worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.
+The headline numbers from the measured nginx + PHP-FPM deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and what one request costs in memory. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-http/floor-php in the dataset). The worker-recycling setting of the pool is stated with the server floor below, because it changes what each row contains.
 
 **Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache: yes · 1000 iterations per run over 10 runs, lower is better.
 
@@ -8,20 +8,11 @@ Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, w
 
 _Measured 2026-09-15T23:21:30+00:00_
 
-## Framework startup
-
-Time from PHP start until the framework is ready to serve, measured inside the FPM entry script — the boot every request waits for on this deployment, because nginx/PHP-FPM re-runs the entry script per request.
-
-- The fastest and slowest framework on this band are named by the chart below; the multiplier beside each row states how many times the fastest boot it needed.
-- Each framework's boot is reduced to one statistic (median of the probe samples), and the samples per framework are recorded in the dataset.
-
-![Framework startup — boot](svg/real-fpm/startup.svg)
-
 ## Total response times
 
 Total time to serve one pass over every benchmarked endpoint — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over every endpoint costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
 
-![Total response times](svg/real-fpm/speedup.svg)
+![Total response times](svg/summary-fpm/speedup.svg)
 
 ## Feature benchmarks
 
@@ -30,62 +21,17 @@ One race per framework feature, each run as a real request against a real databa
 ### Routing
  `GET /` — dispatches a plain request through the router and returns a rendered template — no database access.
 
-![Routing](svg/real-fpm/feature-routing.svg)
+![Routing](svg/summary-fpm/feature-routing.svg)
 
 ### ORM / Active Record
  `GET /items` — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total.
 
-![ORM / Active Record](svg/real-fpm/feature-orm.svg)
-
-### Query Builder
- `GET /items-qb` — builds the same page of 20 items with each framework's query builder instead of its ORM, so the two data-access styles can be compared directly.
-
-![Query Builder](svg/real-fpm/feature-query-builder.svg)
+![ORM / Active Record](svg/summary-fpm/feature-orm.svg)
 
 ### REST API (JSON)
  `GET /api/items` — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.
 
-![REST API (JSON)](svg/real-fpm/feature-rest-api.svg)
-
-### AOP (Aspect-Oriented)
- `GET /features/aop` — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.
-
-![AOP (Aspect-Oriented)](svg/real-fpm/feature-aop.svg)
-
-### Cache
- `GET /features/cache` — reads a COUNT(*) over the 1,000 rows through the framework's cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.
-
-![Cache](svg/real-fpm/feature-cache.svg)
-
-### Database Events
- `GET /features/db-events` — inserts one event row per request and lets the framework's database events fire around that write.
-
-![Database Events](svg/real-fpm/feature-db-events.svg)
-
-### Event Dispatcher
- `GET /features/events` — dispatches an in-process event to registered listeners.
-
-![Event Dispatcher](svg/real-fpm/feature-events.svg)
-
-### Validation
- `GET /features/validation` — validates a payload with the framework's own validator.
-
-![Validation](svg/real-fpm/feature-validation.svg)
-
-### Config
- `GET /features/config` — resolves a value from the framework's config repository.
-
-![Config](svg/real-fpm/feature-config.svg)
-
-### Request-Scoped Services
- `GET /features/request-scoped` — resolves a service scoped to the request from the container.
-
-![Request-Scoped Services](svg/real-fpm/feature-request-scoped.svg)
-
-### Rate Limiter
- `GET /features/rate-limit` — checks a cache-backed rate limiter.
-
-![Rate Limiter](svg/real-fpm/feature-rate-limiter.svg)
+![REST API (JSON)](svg/summary-fpm/feature-rest-api.svg)
 
 ## Per-request memory
 
@@ -97,7 +43,7 @@ All six frameworks are drawn on one shared MB axis. The **left cap** is the ligh
 
 Rows are ordered by the **median** request — a framework's typical cost — so one heavy route cannot reorder the table on its own. A row that stays flat and a row that reaches far right therefore say different things: the first is cheap on every route, the second is cheap on a typical request until one heavy route sets the worst case a pool has to be sized for.
 
-![Per-request memory](svg/real-fpm/resident-memory.svg)
+![Per-request memory](svg/summary-fpm/resident-memory.svg)
 
 ## Latency by endpoint
 
@@ -129,10 +75,16 @@ Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpo
 | `GET /features/request-scoped` | no DB — scoped service resolve | **0.773** | 4.50 | 1.96 | 8.10 | 1.91 | 1.35 |
 | `GET /features/rate-limit` | no DB — cache-backed limiter | **0.784** | 4.68 | 1.98 | 8.22 | 1.92 | 1.47 |
 
+**Full comparison** — this page is a summary. The complete report, with every feature chart and the endpoint table for all six frameworks, is published at:
+
+- The complete report (all six frameworks, every feature chart) — <https://sailantis.github.io/azera-competition/benchmarks/>
+- This model, measured end to end — <https://sailantis.github.io/azera-competition/benchmarks/view-real-fpm.html>
+- The RoadRunner summary — <https://sailantis.github.io/azera-competition/benchmarks/view-summary-roadrunner.html>
+
 ---
 
 > **Auto-generated.** This page and its charts are produced by the `azera-competition` repository:
 > `php run.php --apps=azera,laravel,symfony,spiral,codeigniter,cakephp --warm --cold --seed --out=results/free-for-all-opcache-iso`
-> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php`. Do not edit by hand — re-run the benchmark to update it.
+> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.
 
 Every chart is a plain SVG generated from the result JSON, so the numbers and the diagrams can never disagree.

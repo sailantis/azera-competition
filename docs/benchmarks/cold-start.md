@@ -2,11 +2,11 @@
 
 PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM's own worker management is not simulated — real FPM keeps its worker alive and adds nginx + FastCGI overhead on top of this boot, so these are lower bounds for real FPM latency (see the real-fpm view for the measured version).
 
-**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache (CLI): yes · 50 iterations per run over 30 runs, lower is better.
+**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache: yes · 50 iterations per run over 30 runs, lower is better.
 
 _Measured 2026-09-14T21:26:25+00:00 · azera-framework `6f57113`_
 
-## Framework startup GET /
+## Framework startup
 
 Three boot models, timed directly by the harness — each band shows boot + median teardown, because during both the worker cannot serve another request:
 
@@ -26,66 +26,65 @@ Total time to serve one pass over every benchmarked endpoint — each framework'
 
 ## Feature benchmarks
 
-One race per framework feature, each run as a real request against a real database. Every figure — the winner of each race and the margin over the runner-up — is in that feature's own chart below, which anchors each endpoint at its fastest framework.
-
-- **Routing** (`GET /`) — dispatches a plain request through the router and returns a rendered template — no database access.
-- **ORM / Active Record** (`GET /items`) — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total.
-- **Query Builder** (`GET /items-qb`) — builds the same page of 20 items with each framework's query builder instead of its ORM, so the two data-access styles can be compared directly.
-- **REST API (JSON)** (`GET /api/items`) — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.
-- **AOP (Aspect-Oriented)** (`GET /features/aop`) — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.
-- **Cache** (`GET /features/cache`) — reads a COUNT(*) over the 1,000 rows through the framework's cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.
-- **Database Events** (`GET /features/db-events`) — inserts one event row per request and lets the framework's database events fire around that write.
-- **Event Dispatcher** (`GET /features/events`) — dispatches an in-process event to registered listeners.
-- **Validation** (`GET /features/validation`) — validates a payload with the framework's own validator.
-- **Config** (`GET /features/config`) — resolves a value from the framework's config repository.
-- **Request-Scoped Services** (`GET /features/request-scoped`) — resolves a service scoped to the request from the container.
-- **Rate Limiter** (`GET /features/rate-limit`) — checks a cache-backed rate limiter.
+One race per framework feature, each run as a real request against a real database. Each feature states the request it measures under its own heading. Every figure — the winner of each race and the margin over the runner-up — is in that feature's own chart below, which anchors each endpoint at its fastest framework.
 
 ### Routing
+ `GET /` — dispatches a plain request through the router and returns a rendered template — no database access.
 
 ![Routing](svg/cold-start/feature-routing.svg)
 
 ### ORM / Active Record
+ `GET /items` — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total.
 
 ![ORM / Active Record](svg/cold-start/feature-orm.svg)
 
 ### Query Builder
+ `GET /items-qb` — builds the same page of 20 items with each framework's query builder instead of its ORM, so the two data-access styles can be compared directly.
 
 ![Query Builder](svg/cold-start/feature-query-builder.svg)
 
 ### REST API (JSON)
+ `GET /api/items` — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.
 
 ![REST API (JSON)](svg/cold-start/feature-rest-api.svg)
 
 ### AOP (Aspect-Oriented)
+ `GET /features/aop` — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.
 
 ![AOP (Aspect-Oriented)](svg/cold-start/feature-aop.svg)
 
 ### Cache
+ `GET /features/cache` — reads a COUNT(*) over the 1,000 rows through the framework's cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.
 
 ![Cache](svg/cold-start/feature-cache.svg)
 
 ### Database Events
+ `GET /features/db-events` — inserts one event row per request and lets the framework's database events fire around that write.
 
 ![Database Events](svg/cold-start/feature-db-events.svg)
 
 ### Event Dispatcher
+ `GET /features/events` — dispatches an in-process event to registered listeners.
 
 ![Event Dispatcher](svg/cold-start/feature-events.svg)
 
 ### Validation
+ `GET /features/validation` — validates a payload with the framework's own validator.
 
 ![Validation](svg/cold-start/feature-validation.svg)
 
 ### Config
+ `GET /features/config` — resolves a value from the framework's config repository.
 
 ![Config](svg/cold-start/feature-config.svg)
 
 ### Request-Scoped Services
+ `GET /features/request-scoped` — resolves a service scoped to the request from the container.
 
 ![Request-Scoped Services](svg/cold-start/feature-request-scoped.svg)
 
 ### Rate Limiter
+ `GET /features/rate-limit` — checks a cache-backed rate limiter.
 
 ![Rate Limiter](svg/cold-start/feature-rate-limiter.svg)
 
@@ -125,6 +124,6 @@ This dataset times cold requests END-TO-END: every iteration pays a fresh framew
 
 > **Auto-generated.** This page and its charts are produced by the `azera-competition` repository:
 > `php run.php --apps=azera,laravel,symfony,spiral,codeigniter,cakephp --warm --cold --seed --out=results/free-for-all-opcache-iso`
-> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.
+> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php`. Do not edit by hand — re-run the benchmark to update it.
 
 Every chart is a plain SVG generated from the result JSON, so the numbers and the diagrams can never disagree.

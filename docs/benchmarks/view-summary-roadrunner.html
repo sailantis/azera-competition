@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Framework Competition — Real RoadRunner</title>
+<title>Framework Competition — RoadRunner Summary</title>
 <style>
 :root{color-scheme:light dark;--bg:            #f8fafc;--card:#fff;--ink:#0f172a;--muted:#64748b;--edge:#e2e8f0;--accent:#3459e6}
 @media (prefers-color-scheme:dark){:root{--bg: #0b1120;--card:#111a2e;--ink:#e2e8f0;--muted:#94a3b8;--edge:#1e293b}}
@@ -57,24 +57,20 @@ main{padding-bottom:10px}
 <body>
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
-  <h1>Framework Competition — Real RoadRunner</h1>
-  <p class="lead">Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker&#039;s boot depends on the pool&#039;s max_jobs, which the dataset records: the boot is amortised across the jobs a worker serves between recycles, and a pool that never recycles puts no boot into a row at all. The deployment model actually measured is stated with the table.</p>
+  <h1>Framework Competition — RoadRunner Summary</h1>
+  <p class="lead">The headline numbers from the measured RoadRunner deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and the worker memory that survives a request. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-rr in the dataset). The deployment model actually measured is stated with the table.</p>
   <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; roadrunner mode &middot; OPcache: yes &middot; 1000 iterations per run over 10 runs &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
-  <p class="env">Boot model: the worker is never recycled (max_jobs=0), so no boot is added to these requests; the one-time recycle is measured in the startup chart</p>
+  <p class="env">Boot model: the worker is never recycled (max_jobs=0), so no boot is added to these requests; the one-time recycle is measured in the full report</p>
 </header>
 <main>
   <section class="figures">
 <figure>
-  <figcaption>Framework startup — worker re-init (RoadRunner)</figcaption>
-  <img src="svg/real-roadrunner/startup.svg" alt="Framework startup — worker re-init (RoadRunner)" loading="lazy">
-</figure>
-<figure>
   <figcaption>Total response times</figcaption>
-  <img src="svg/real-roadrunner/speedup.svg" alt="Total response times" loading="lazy">
+  <img src="svg/summary-roadrunner/speedup.svg" alt="Total response times" loading="lazy">
 </figure>
 <figure>
   <figcaption>Resident worker memory</figcaption>
-  <img src="svg/real-roadrunner/resident-memory.svg" alt="Resident worker memory" loading="lazy">
+  <img src="svg/summary-roadrunner/resident-memory.svg" alt="Resident worker memory" loading="lazy">
 </figure>
   </section>
   <h2>Feature benchmarks</h2>
@@ -82,62 +78,17 @@ main{padding-bottom:10px}
 <figure>
   <figcaption>Routing</figcaption>
   <p class="workload"><code>GET /</code> — dispatches a plain request through the router and returns a rendered template — no database access.</p>
-  <img src="svg/real-roadrunner/feature-routing.svg" alt="Routing" loading="lazy">
+  <img src="svg/summary-roadrunner/feature-routing.svg" alt="Routing" loading="lazy">
 </figure>
 <figure>
   <figcaption>ORM / Active Record</figcaption>
   <p class="workload"><code>GET /items</code> — loads one page of the 1,000 seeded rows through each framework&#039;s ORM / Active Record layer: 20 items plus a COUNT for the pagination total.</p>
-  <img src="svg/real-roadrunner/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Query Builder</figcaption>
-  <p class="workload"><code>GET /items-qb</code> — builds the same page of 20 items with each framework&#039;s query builder instead of its ORM, so the two data-access styles can be compared directly.</p>
-  <img src="svg/real-roadrunner/feature-query-builder.svg" alt="Query Builder" loading="lazy">
+  <img src="svg/summary-roadrunner/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
 </figure>
 <figure>
   <figcaption>REST API (JSON)</figcaption>
   <p class="workload"><code>GET /api/items</code> — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.</p>
-  <img src="svg/real-roadrunner/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
-</figure>
-<figure>
-  <figcaption>AOP (Aspect-Oriented)</figcaption>
-  <p class="workload"><code>GET /features/aop</code> — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.</p>
-  <img src="svg/real-roadrunner/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Cache</figcaption>
-  <p class="workload"><code>GET /features/cache</code> — reads a COUNT(*) over the 1,000 rows through the framework&#039;s cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.</p>
-  <img src="svg/real-roadrunner/feature-cache.svg" alt="Cache" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Database Events</figcaption>
-  <p class="workload"><code>GET /features/db-events</code> — inserts one event row per request and lets the framework&#039;s database events fire around that write.</p>
-  <img src="svg/real-roadrunner/feature-db-events.svg" alt="Database Events" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Event Dispatcher</figcaption>
-  <p class="workload"><code>GET /features/events</code> — dispatches an in-process event to registered listeners.</p>
-  <img src="svg/real-roadrunner/feature-events.svg" alt="Event Dispatcher" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Validation</figcaption>
-  <p class="workload"><code>GET /features/validation</code> — validates a payload with the framework&#039;s own validator.</p>
-  <img src="svg/real-roadrunner/feature-validation.svg" alt="Validation" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Config</figcaption>
-  <p class="workload"><code>GET /features/config</code> — resolves a value from the framework&#039;s config repository.</p>
-  <img src="svg/real-roadrunner/feature-config.svg" alt="Config" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Request-Scoped Services</figcaption>
-  <p class="workload"><code>GET /features/request-scoped</code> — resolves a service scoped to the request from the container.</p>
-  <img src="svg/real-roadrunner/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Rate Limiter</figcaption>
-  <p class="workload"><code>GET /features/rate-limit</code> — checks a cache-backed rate limiter.</p>
-  <img src="svg/real-roadrunner/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
+  <img src="svg/summary-roadrunner/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
 </figure>
 </section>
   <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span> <span class="unit">— the worker is never recycled (max_jobs=0), so each number is the measured request with no boot in it</span></h2>
@@ -168,6 +119,15 @@ main{padding-bottom:10px}
 </tbody>
 </table>
   <p class="floor"><strong>Server floor</strong> — real RoadRunner over loopback: a bare resident worker that renders a fixed string (<code>floor-rr</code>) measures the IPC + server floor every row below also pays. Only differences larger than this floor are framework differences.</p>
+  <section class="links">
+    <h2>Full comparison</h2>
+    <p>This page is a summary. The complete report, with every feature chart and the endpoint table for all six frameworks, is published at:</p>
+    <ul>
+    <li><a href="https://sailantis.github.io/azera-competition/benchmarks/">The complete report (all six frameworks, every feature chart)</a></li>
+    <li><a href="https://sailantis.github.io/azera-competition/benchmarks/view-real-roadrunner.html">This model, measured end to end</a></li>
+    <li><a href="https://sailantis.github.io/azera-competition/benchmarks/view-summary-fpm.html">The PHP-FPM summary</a></li>
+    </ul>
+  </section>
 </main>
 <footer>
   Generated from <code>results/</code> by <code>scripts/report.php</code>.

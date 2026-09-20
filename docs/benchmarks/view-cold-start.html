@@ -28,6 +28,8 @@ h3{font-size:17px;margin:0 0 6px}
 .figures{display:flex;flex-direction:column;gap:20px;margin:20px 0 8px}
 figure{margin:0;background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:16px}
 figcaption{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px}
+p.workload{margin:0 0 12px;color:var(--muted);font-size:13.5px;line-height:1.6;max-width:78ch}
+p.workload code{font-size:12.5px;color:var(--ink)}
 figure img{display:block;width:100%;height:auto}
 main img{background:#fff;border-radius:8px}
 table{border-collapse:collapse;width:100%;margin:14px 0 30px;font-size:14px}
@@ -41,6 +43,10 @@ td.win{font-weight:700;color:var(--accent);background:rgba(52,89,230,.10)}
 p.floor{margin:0 0 30px;padding:12px 16px;border-left:3px solid var(--accent);background:rgba(52,89,230,.06);font-size:13.5px;line-height:1.6;color:var(--muted);border-radius:0 6px 6px 0}
 p.floor strong{color:var(--ink)}
 p.floor code{font-size:12.5px}
+.links h2{font-size:18px;margin:28px 0 6px}
+.links p{color:var(--muted);font-size:13.5px;margin:0 0 10px}
+.links ul{margin:0 0 30px;padding-left:20px;font-size:14px;line-height:1.8}
+.links a{color:var(--accent)}
 td.muted{color:var(--muted)}
 .unit{font-weight:400;color:var(--muted);font-size:13px;text-transform:none;letter-spacing:0}
 footer{padding:32px 20px 56px;color:var(--muted);font-size:13px}
@@ -53,7 +59,7 @@ main{padding-bottom:10px}
 <header>
   <h1>Framework Competition — Cold Start</h1>
   <p class="lead">PHP-FPM simulation, fresh boot per request: the application boots for every request (harness cold mode, opcache retained). FPM&#039;s own worker management is not simulated — real FPM keeps its worker alive and adds nginx + FastCGI overhead on top of this boot, so these are lower bounds for real FPM latency (see the real-fpm view for the measured version).</p>
-  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; php-fpm mode &middot; 50 iterations per run over 30 runs &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; php-fpm mode &middot; OPcache: yes &middot; 50 iterations per run over 30 runs &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
   <p class="env">Boot model: boot included: a fresh framework rebuild is timed inside every request</p>
 </header>
 <main>
@@ -71,50 +77,62 @@ main{padding-bottom:10px}
 <section class="figures">
 <figure>
   <figcaption>Routing</figcaption>
+  <p class="workload"><code>GET /</code> — dispatches a plain request through the router and returns a rendered template — no database access.</p>
   <img src="svg/cold-start/feature-routing.svg" alt="Routing" loading="lazy">
 </figure>
 <figure>
   <figcaption>ORM / Active Record</figcaption>
+  <p class="workload"><code>GET /items</code> — loads one page of the 1,000 seeded rows through each framework&#039;s ORM / Active Record layer: 20 items plus a COUNT for the pagination total.</p>
   <img src="svg/cold-start/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
 </figure>
 <figure>
   <figcaption>Query Builder</figcaption>
+  <p class="workload"><code>GET /items-qb</code> — builds the same page of 20 items with each framework&#039;s query builder instead of its ORM, so the two data-access styles can be compared directly.</p>
   <img src="svg/cold-start/feature-query-builder.svg" alt="Query Builder" loading="lazy">
 </figure>
 <figure>
   <figcaption>REST API (JSON)</figcaption>
+  <p class="workload"><code>GET /api/items</code> — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.</p>
   <img src="svg/cold-start/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
 </figure>
 <figure>
   <figcaption>AOP (Aspect-Oriented)</figcaption>
+  <p class="workload"><code>GET /features/aop</code> — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.</p>
   <img src="svg/cold-start/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
 </figure>
 <figure>
   <figcaption>Cache</figcaption>
+  <p class="workload"><code>GET /features/cache</code> — reads a COUNT(*) over the 1,000 rows through the framework&#039;s cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.</p>
   <img src="svg/cold-start/feature-cache.svg" alt="Cache" loading="lazy">
 </figure>
 <figure>
   <figcaption>Database Events</figcaption>
+  <p class="workload"><code>GET /features/db-events</code> — inserts one event row per request and lets the framework&#039;s database events fire around that write.</p>
   <img src="svg/cold-start/feature-db-events.svg" alt="Database Events" loading="lazy">
 </figure>
 <figure>
   <figcaption>Event Dispatcher</figcaption>
+  <p class="workload"><code>GET /features/events</code> — dispatches an in-process event to registered listeners.</p>
   <img src="svg/cold-start/feature-events.svg" alt="Event Dispatcher" loading="lazy">
 </figure>
 <figure>
   <figcaption>Validation</figcaption>
+  <p class="workload"><code>GET /features/validation</code> — validates a payload with the framework&#039;s own validator.</p>
   <img src="svg/cold-start/feature-validation.svg" alt="Validation" loading="lazy">
 </figure>
 <figure>
   <figcaption>Config</figcaption>
+  <p class="workload"><code>GET /features/config</code> — resolves a value from the framework&#039;s config repository.</p>
   <img src="svg/cold-start/feature-config.svg" alt="Config" loading="lazy">
 </figure>
 <figure>
   <figcaption>Request-Scoped Services</figcaption>
+  <p class="workload"><code>GET /features/request-scoped</code> — resolves a service scoped to the request from the container.</p>
   <img src="svg/cold-start/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
 </figure>
 <figure>
   <figcaption>Rate Limiter</figcaption>
+  <p class="workload"><code>GET /features/rate-limit</code> — checks a cache-backed rate limiter.</p>
   <img src="svg/cold-start/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
 </figure>
 </section>

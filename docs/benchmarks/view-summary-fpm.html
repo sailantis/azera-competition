@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Framework Competition — Real PHP-FPM</title>
+<title>Framework Competition — PHP-FPM Summary</title>
 <style>
 :root{color-scheme:light dark;--bg:            #f8fafc;--card:#fff;--ink:#0f172a;--muted:#64748b;--edge:#e2e8f0;--accent:#3459e6}
 @media (prefers-color-scheme:dark){:root{--bg: #0b1120;--card:#111a2e;--ink:#e2e8f0;--muted:#94a3b8;--edge:#1e293b}}
@@ -57,24 +57,20 @@ main{padding-bottom:10px}
 <body>
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
-  <h1>Framework Competition — Real PHP-FPM</h1>
-  <p class="lead">Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool&#039;s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.</p>
+  <h1>Framework Competition — PHP-FPM Summary</h1>
+  <p class="lead">The headline numbers from the measured nginx + PHP-FPM deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and what one request costs in memory. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-http/floor-php in the dataset). The worker-recycling setting of the pool is stated with the server floor below, because it changes what each row contains.</p>
   <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; php-fpm mode &middot; OPcache: yes &middot; 1000 iterations per run over 10 runs &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
   
 </header>
 <main>
   <section class="figures">
 <figure>
-  <figcaption>Framework startup — per-request boot (PHP-FPM)</figcaption>
-  <img src="svg/real-fpm/startup.svg" alt="Framework startup — per-request boot (PHP-FPM)" loading="lazy">
-</figure>
-<figure>
   <figcaption>Total response times</figcaption>
-  <img src="svg/real-fpm/speedup.svg" alt="Total response times" loading="lazy">
+  <img src="svg/summary-fpm/speedup.svg" alt="Total response times" loading="lazy">
 </figure>
 <figure>
   <figcaption>Per-request memory — lightest, typical and heaviest endpoint</figcaption>
-  <img src="svg/real-fpm/resident-memory.svg" alt="Per-request memory — lightest, typical and heaviest endpoint" loading="lazy">
+  <img src="svg/summary-fpm/resident-memory.svg" alt="Per-request memory — lightest, typical and heaviest endpoint" loading="lazy">
 </figure>
   </section>
   <h2>Feature benchmarks</h2>
@@ -82,62 +78,17 @@ main{padding-bottom:10px}
 <figure>
   <figcaption>Routing</figcaption>
   <p class="workload"><code>GET /</code> — dispatches a plain request through the router and returns a rendered template — no database access.</p>
-  <img src="svg/real-fpm/feature-routing.svg" alt="Routing" loading="lazy">
+  <img src="svg/summary-fpm/feature-routing.svg" alt="Routing" loading="lazy">
 </figure>
 <figure>
   <figcaption>ORM / Active Record</figcaption>
   <p class="workload"><code>GET /items</code> — loads one page of the 1,000 seeded rows through each framework&#039;s ORM / Active Record layer: 20 items plus a COUNT for the pagination total.</p>
-  <img src="svg/real-fpm/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Query Builder</figcaption>
-  <p class="workload"><code>GET /items-qb</code> — builds the same page of 20 items with each framework&#039;s query builder instead of its ORM, so the two data-access styles can be compared directly.</p>
-  <img src="svg/real-fpm/feature-query-builder.svg" alt="Query Builder" loading="lazy">
+  <img src="svg/summary-fpm/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
 </figure>
 <figure>
   <figcaption>REST API (JSON)</figcaption>
   <p class="workload"><code>GET /api/items</code> — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.</p>
-  <img src="svg/real-fpm/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
-</figure>
-<figure>
-  <figcaption>AOP (Aspect-Oriented)</figcaption>
-  <p class="workload"><code>GET /features/aop</code> — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.</p>
-  <img src="svg/real-fpm/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Cache</figcaption>
-  <p class="workload"><code>GET /features/cache</code> — reads a COUNT(*) over the 1,000 rows through the framework&#039;s cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.</p>
-  <img src="svg/real-fpm/feature-cache.svg" alt="Cache" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Database Events</figcaption>
-  <p class="workload"><code>GET /features/db-events</code> — inserts one event row per request and lets the framework&#039;s database events fire around that write.</p>
-  <img src="svg/real-fpm/feature-db-events.svg" alt="Database Events" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Event Dispatcher</figcaption>
-  <p class="workload"><code>GET /features/events</code> — dispatches an in-process event to registered listeners.</p>
-  <img src="svg/real-fpm/feature-events.svg" alt="Event Dispatcher" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Validation</figcaption>
-  <p class="workload"><code>GET /features/validation</code> — validates a payload with the framework&#039;s own validator.</p>
-  <img src="svg/real-fpm/feature-validation.svg" alt="Validation" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Config</figcaption>
-  <p class="workload"><code>GET /features/config</code> — resolves a value from the framework&#039;s config repository.</p>
-  <img src="svg/real-fpm/feature-config.svg" alt="Config" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Request-Scoped Services</figcaption>
-  <p class="workload"><code>GET /features/request-scoped</code> — resolves a service scoped to the request from the container.</p>
-  <img src="svg/real-fpm/feature-request-scoped.svg" alt="Request-Scoped Services" loading="lazy">
-</figure>
-<figure>
-  <figcaption>Rate Limiter</figcaption>
-  <p class="workload"><code>GET /features/rate-limit</code> — checks a cache-backed rate limiter.</p>
-  <img src="svg/real-fpm/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
+  <img src="svg/summary-fpm/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
 </figure>
 </section>
   <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span></h2>
@@ -168,6 +119,15 @@ main{padding-bottom:10px}
 </tbody>
 </table>
   <p class="floor"><strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests=0</code>: the pool never recycles its worker, so no process is spawned per request — what remains is the FastCGI handshake plus a minimal script. A hello-world endpoint that boots nothing but PHP (<code>floor-php</code>) and a static file through nginx (<code>floor-http</code>) measure exactly that cost — the floor every row stands on. Subtracting that floor leaves the framework's own per-request boot, which FPM still pays for every request even though its worker survives.</p>
+  <section class="links">
+    <h2>Full comparison</h2>
+    <p>This page is a summary. The complete report, with every feature chart and the endpoint table for all six frameworks, is published at:</p>
+    <ul>
+    <li><a href="https://sailantis.github.io/azera-competition/benchmarks/">The complete report (all six frameworks, every feature chart)</a></li>
+    <li><a href="https://sailantis.github.io/azera-competition/benchmarks/view-real-fpm.html">This model, measured end to end</a></li>
+    <li><a href="https://sailantis.github.io/azera-competition/benchmarks/view-summary-roadrunner.html">The RoadRunner summary</a></li>
+    </ul>
+  </section>
 </main>
 <footer>
   Generated from <code>results/</code> by <code>scripts/report.php</code>.
