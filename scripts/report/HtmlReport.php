@@ -48,11 +48,16 @@ final class HtmlReport
             );
         }
 
-        $body = <<<HTML
+        // The clause is plain text now (it used to carry the directive in
+        // <code>), but it still escapes its own literal text, so it must NOT go
+        // through esc() — that would double-escape nothing today yet break the
+        // moment the clause carries markup again.
+        $opcache = $this->indexOpcacheClause();
+        $body    = <<<HTML
 <header>
   <h1>Azera Benchmark Results</h1>
   <p class="lead">PHP framework comparison across a full-stack request lifecycle: routing &rarr; controller &rarr; ORM query (SQLite) &rarr; template render &rarr; response.</p>
-  <p class="env">PHP {$env['php_version']} &middot; {$env['os']} &middot; OPcache (CLI): {$this->yesNo((bool)($env['opcache'] ?? false))} &middot; measured {$this->esc((string)($env['timestamp'] ?? '?'))}</p>
+  <p class="env">PHP {$env['php_version']} &middot; {$env['os']}{$opcache} &middot; measured {$this->esc((string)($env['timestamp'] ?? '?'))}</p>
 </header>
 <main>
   <div class="grid">
@@ -94,6 +99,11 @@ HTML;
             'real-fpm',        // real server, boot paid per request
             'warm-start',      // harness: the resident-worker model
             'cold-start',      // harness: the boot-per-request model
+            // The published summaries last: each is a SUBSET of the measured view
+            // above it, so a reader who wants the headline should meet the full
+            // pages first (see the summary views in views.php).
+            'summary-roadrunner',
+            'summary-fpm',
         ];
 
         $out = [];
@@ -163,21 +173,36 @@ HTML;
         // chart, so it is stated once in the header row below rather than
         // repeated on all fifteen captions. (The table restates it in its own
         // sub-line, where the numbers it qualifies actually appear.)
-        $bootBasis = $this->bootBasis($mode);
+        $bootBasis = $this->bootBasis($mode, $view['charts'] ?? []);
         $bootLine  = $bootBasis !== ''
             ? '<p class="env">Boot model: ' . self::esc(ltrim($bootBasis, ' —')) . '</p>'
             : '';
 
         // Feature charts.
+        //
+        // The workload sentence sits under the feature's OWN heading, above the
+        // chart it explains, matching the Markdown (where it is the blockquote
+        // under the same `###` heading). Stating it in a second list under the
+        // section intro — which is what both renderers used to do — made a
+        // reader measuring one feature find its entry in one place and its race
+        // in another. Both renderers read the sentence from
+        // BenchmarkConfig::featureDescription(), so the two pages can never
+        // describe a feature differently.
         $featureFigs = '';
         foreach (BenchmarkConfig::featureOrder() as $feature) {
             if (!isset($svgFiles['feature-' . $feature])) {
                 continue;
             }
             $label = BenchmarkConfig::featureLabel($feature);
+            $what  = BenchmarkConfig::featureDescriptionFor($feature);
+            $note  = $what !== ''
+                ? "\n  <p class=\"workload\"><code>" . self::esc(BenchmarkConfig::featurePrimaryRequest($feature))
+                    . '</code> — ' . self::esc($what) . "</p>"
+                : '';
             $featureFigs .= sprintf(
-                "<figure>\n  <figcaption>%s</figcaption>\n  <img src=\"%s\" alt=\"%s\" loading=\"lazy\">\n</figure>\n",
+                "<figure>\n  <figcaption>%s</figcaption>%s\n  <img src=\"%s\" alt=\"%s\" loading=\"lazy\">\n</figure>\n",
                 self::esc($label),
+                $note,
                 self::esc($svgFiles['feature-' . $feature]),
                 self::esc($label)
             );
@@ -190,14 +215,30 @@ HTML;
             : '';
         $featureBlock = $featureFigs !== ''
             ? "<h2>Feature benchmarks</h2>\n<section class=\"figures\">\n{$featureFigs}</section>"
-            : '';
+            : ''; // The same outbound links the Markdown carries, for a view that declares
 
+        $linkBlock = '';
+        /** @var array<string,string> $links */
+        $links = $view['links'] ?? [];
+        if ($links !== []) {
+            $items = '';
+            foreach ($links as $label => $url) {
+                $items .= sprintf(
+                    "\n    <li><a href=\"%s\">%s</a></li>",
+                    self::esc($url),
+                    self::esc((string) $label)
+                );
+            }
+            $linkBlock = "\n  <section class=\"links\">\n    <h2>Full comparison</h2>\n    <p>This page is a"
+                . " summary. The complete report, with every feature chart and the endpoint table for all six"
+                . " frameworks, is published at:</p>\n    <ul>{$items}\n    </ul>\n  </section>";
+        }
         $body = <<<HTML
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
   <h1>{$this->esc($title)}</h1>
   <p class="lead">{$this->esc((string)($view['subtitle'] ?? ''))}</p>
-  <p class="env">PHP {$env['php_version']} &middot; {$env['os']} &middot; {$mode} mode &middot; {$budget} &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
+  <p class="env">PHP {$env['php_version']} &middot; {$env['os']} &middot; {$mode} mode{$this->opcacheHtmlClause($mode)} &middot; {$budget} &middot; charts show the median as a faint bar + dot with the fastest&nbsp;&rarr;&nbsp;p95 range, lower is better</p>
   {$bootLine}
 </header>
 <main>
@@ -205,7 +246,7 @@ HTML;
 {$figures}  </section>
   {$featureBlock}
   {$matrixBlock}
-  {$floorBlock}
+  {$floorBlock}{$linkBlock}
 </main>
 <footer>
   Generated from <code>results/</code> by <code>scripts/report.php</code>.
@@ -232,7 +273,7 @@ HTML;
     private function startupCaption(string $mode): string
     {
         if (!$this->store->hasBoot()) {
-            return 'Framework startup (GET /)';
+            return 'Framework startup';
         }
         if ($this->store->isProbedBoot()) {
             return $mode === 'roadrunner'
@@ -255,11 +296,75 @@ HTML;
     }
 
     /**
+     * The dashboard's OPcache clause, or '' when it must state none.
+     *
+     * The dashboard is the one page that spans every view, so it cannot take a
+     * mode — which means a single value only summarises anything when the
+     * recorded servers AGREE. If they disagree, one value would be a true
+     * statement about one deployment printed beside cards for another, so the
+     * clause is omitted and each page states its own (same rule as "not
+     * recorded → say nothing").
+     *
+     * The clause is the PLAIN form (`OPcache: yes`), with no directive in
+     * parentheses — see MarkdownReport::opcacheClause() for why the per-mode
+     * directive no longer appears in the stamp, and where it still lives.
+     */
+    private function indexOpcacheClause(): string
+    {
+        if ($this->store->isRealDeployment()) {
+            $byMode = $this->store->opcacheByMode();
+            if ($byMode === []) {
+                return '';
+            }
+            $values = array_values($byMode);
+            if (count(array_unique($values)) > 1) {
+                return ''; // the servers disagree — no single value is a summary
+            }
+
+            return ' &middot; OPcache: ' . ($values[0] ? 'yes' : 'no');
+        }
+
+        $env = $this->store->env();
+        if (!array_key_exists('opcache', $env)) {
+            return '';
+        }
+
+        return ' &middot; OPcache: ' . (!empty($env['opcache']) ? 'yes' : 'no');
+    }
+
+    /**
+     * The OPcache clause for a view page, or '' when the page must not state
+     * one. Mirror of MarkdownReport::opcacheClause() — the same two questions
+     * (CLI harness vs real deployment), the same plain form, and the same rule
+     * that a missing field is "not recorded", not "off".
+     */
+    private function opcacheHtmlClause(string $mode): string
+    {
+        if ($this->store->isRealDeployment()) {
+            $on = $this->store->opcacheFor($mode);
+            if ($on === null) {
+                return '';
+            }
+
+            return ' &middot; OPcache: ' . ($on ? 'yes' : 'no');
+        }
+
+        $env = $this->store->env();
+        if (!array_key_exists('opcache', $env)) {
+            return '';
+        }
+
+        return ' &middot; OPcache: ' . (!empty($env['opcache']) ? 'yes' : 'no');
+    }
+
+    /**
      * One-line note naming the boot that every chart point and table cell of
      * this view carries, so a reader never has to guess whether a number is
      * bare request time or full per-request worker occupancy.
+     *
+     * @param list<string> $charts the chart keys this view draws
      */
-    private function bootBasis(string $mode): string
+    private function bootBasis(string $mode, array $charts = []): string
     {
         if (in_array($mode, ['cold', 'php-fpm'], true)) {
             if (!$this->store->coldBootIncluded()) {
@@ -270,10 +375,13 @@ HTML;
         if (in_array($mode, ['warm', 'roadrunner'], true)) {
             // The recycle's own duration is measured in the startup chart, so
             // the note states the MODEL only. A figure copied into this line
-            // would be a number a re-measure cannot keep in sync.
+            // would be a number a re-measure cannot keep in sync. Where that
+            // chart LIVES depends on the view: the summaries draw none, so the
+            // note must not cross-reference one they do not have.
+            $where = in_array('hero', $charts, true) ? 'the startup chart' : 'the full report';
             return match ($this->store->rrRecycleModel()) {
                 'never' => ' — the worker is never recycled (max_jobs=0), so no boot is '
-                    . 'added to these requests; the one-time recycle is measured in the startup chart',
+                    . 'added to these requests; the one-time recycle is measured in ' . $where,
                 'every' => ' — boot included: each request carries its share of the worker\'s recycle '
                     . 'divided by max_jobs',
                 default => ' — boot included: the worker\'s recycle cost is added to every request'
@@ -394,6 +502,8 @@ h3{font-size:17px;margin:0 0 6px}
 .figures{display:flex;flex-direction:column;gap:20px;margin:20px 0 8px}
 figure{margin:0;background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:16px}
 figcaption{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px}
+p.workload{margin:0 0 12px;color:var(--muted);font-size:13.5px;line-height:1.6;max-width:78ch}
+p.workload code{font-size:12.5px;color:var(--ink)}
 figure img{display:block;width:100%;height:auto}
 main img{background:#fff;border-radius:8px}
 table{border-collapse:collapse;width:100%;margin:14px 0 30px;font-size:14px}
@@ -407,6 +517,10 @@ td.win{font-weight:700;color:var(--accent);background:rgba(52,89,230,.10)}
 p.floor{margin:0 0 30px;padding:12px 16px;border-left:3px solid var(--accent);background:rgba(52,89,230,.06);font-size:13.5px;line-height:1.6;color:var(--muted);border-radius:0 6px 6px 0}
 p.floor strong{color:var(--ink)}
 p.floor code{font-size:12.5px}
+.links h2{font-size:18px;margin:28px 0 6px}
+.links p{color:var(--muted);font-size:13.5px;margin:0 0 10px}
+.links ul{margin:0 0 30px;padding-left:20px;font-size:14px;line-height:1.8}
+.links a{color:var(--accent)}
 td.muted{color:var(--muted)}
 .unit{font-weight:400;color:var(--muted);font-size:13px;text-transform:none;letter-spacing:0}
 footer{padding:32px 20px 56px;color:var(--muted);font-size:13px}

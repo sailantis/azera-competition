@@ -145,16 +145,132 @@ final class MarkdownReport
         $l[] = $tables->latencyMarkdown($mode, $apps);
         $l[] = '';
 
+        $links = $this->linksBlock();
+        if ($links !== '') {
+            $l[] = $links;
+            $l[] = '';
+        }
+
         $l[] = '---';
         $l[] = '';
         $l[] = '> **Auto-generated.** This page and its charts are produced by the `azera-competition` repository:';
         $l[] = '> `php run.php --apps=azera,laravel,symfony,spiral,codeigniter,cakephp --warm --cold --seed --out=results/free-for-all-opcache-iso`';
-        $l[] = '> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.';
+        // The publish step is named only where it actually applies. It used to
+        // be printed on every page, which read as an instruction to publish the
+        // page you were looking at — the full views publish nothing now (only
+        // the two summary views do), so the line was both stale and misleading.
+        $l[] = in_array('framework', $this->view['publish'] ?? [], true)
+            ? '> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.'
+            : '> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php`. Do not edit by hand — re-run the benchmark to update it.';
         $l[] = '';
         $l[] = 'Every chart is a plain SVG generated from the result JSON, so the numbers and the diagrams can never disagree.';
         $l[] = '';
 
         return implode("\n", $l);
+    }
+
+    /**
+     * Optional links a view asks to have printed with its numbers.
+     *
+     * Why the renderer prints an ABSOLUTE url instead of a relative one: this
+     * same .md is written to two places — this repo's docs/benchmarks and, for
+     * a publishing view, the framework repo's docs/ — and a relative path that
+     * resolves in one of them dangles in the other. The public dashboard page
+     * is reachable from both.
+     *
+     * The sentence names no measured figure, for the same reason every other
+     * sentence here does not: a copied reading is one no re-measure can keep in
+     * sync (see ChartManifestTest::testTheReportProseNamesNoMeasuredFigure).
+     */
+    private function linksBlock(): string
+    {
+        /** @var array<string,string> $links */
+        $links = $this->view['links'] ?? [];
+        if ($links === []) {
+            return '';
+        }
+
+        $out = [];
+        $out[] = '**Full comparison** — this page is a summary. The complete report, with every feature chart and the endpoint table for all six frameworks, is published at:';
+        $out[] = '';
+        foreach ($links as $label => $url) {
+            $out[] = '- ' . $label . ' — <' . $url . '>';
+        }
+
+        return implode("\n", $out);
+    }
+
+    /**
+     * The chart-footer form of the version stamp: names and numbers only.
+     *
+     * Compact on purpose. The chart has one line to work with and the ref is
+     * already on the page, where the environment block has room for it — a
+     * footer that grew to carry refs and labels would wrap on the memory
+     * charts, whose captions are the longest.
+     */
+    private function chartVersions(): string
+    {
+        $env = $this->store->env();
+        /** @var array<string,array{version:?string}> $frameworks */
+        $frameworks = $env['frameworks'] ?? [];
+        if ($frameworks === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($frameworks as $app => $entry) {
+            $parts[] = BenchmarkConfig::appLabel($app) . ' ' . ($entry['version'] ?? 'unknown');
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    /**
+     * The OPcache clause for a page, or '' when the page must not state one.
+     *
+     * TWO different questions hide behind "OPcache enabled":
+     *
+     *   CLI harness (run.php, in-process) — the process is cli, so the switch
+     *     that matters is `opcache.enable_cli`, and `env.opcache` records it.
+     *     OPcache is on by default everywhere EXCEPT cli, where it is opt-in,
+     *     which is why the harness documents `-d opcache.enable_cli=1`.
+     *   Real deployment (run-http.php) — two servers, two directives: php-fpm
+     *     (fpm-fcgi) reads `opcache.enable`; the RoadRunner worker is spawned
+     *     as cli and reads `opcache.enable_cli`. A scalar cannot describe both,
+     *     so the dataset carries `env.opcache_by_mode` and this renders the
+     *     value belonging to the PAGE's own mode.
+     *
+     * The clause prints the PLAIN form (`OPcache: yes`) — no directive in
+     * parentheses in the middle of the stamp (user decision, 2026-09-19: the
+     * label made the environment line hard to read). What the label was
+     * protecting is the per-mode DERIVATION above, and that is pinned by
+     * testing both pages against a dataset where the two modes DISAGREE; the
+     * directive itself stays in the dataset's provenance, where a reader who
+     * wants it can look it up.
+     *
+     * A dataset that records neither renders NO clause rather than "no": an
+     * absent field is not a disabled setting, and printing one was the bug —
+     * every real-deployment page claimed "OPcache (CLI): no" while the same
+     * dataset said "with Zend OPcache v8.3.33" and the pool set
+     * `opcache.enable = 1`.
+     */
+    private function opcacheClause(string $mode): string
+    {
+        if ($this->store->isRealDeployment()) {
+            $on = $this->store->opcacheFor($mode);
+            if ($on === null) {
+                return ''; // not establishable for this server — say nothing
+            }
+
+            return 'OPcache: ' . ($on ? 'yes' : 'no');
+        }
+
+        $env = $this->store->env();
+        if (!array_key_exists('opcache', $env)) {
+            return '';
+        }
+
+        return 'OPcache: ' . (!empty($env['opcache']) ? 'yes' : 'no');
     }
 
     private function envBlock(string $mode): string
@@ -171,15 +287,66 @@ final class MarkdownReport
             ?? $this->store->budgetLabel()
                 ?? 'multiple runs';
 
+        // An omitted clause leaves no orphan separator: the " · " before it is
+        // part of the clause, so an unknown OPcache setting shortens the line
+        // instead of ending it with a dangling bullet.
+        $opcache = $this->opcacheClause($mode);
+
+        // Order: what was measured (environment + builds), then WHEN. The
+        // timestamp goes LAST rather than between the two "what" lines: it is
+        // the one field that qualifies both of them, so splitting the
+        // environment from the frameworks with it made the block read as two
+        // unrelated stamps with a date wedged between them.
         return sprintf(
-            "**Environment** — PHP %s · %s · OPcache (CLI): %s · %s, lower is better.\n\n_Measured %s%s_",
+            '**Environment** — PHP %s · %s%s · %s, lower is better.',
             $env['php_version'] ?? '?',
             $env['os'] ?? '?',
-            !empty($env['opcache']) ? 'yes' : 'no',
-            $budget,
-            $env['timestamp'] ?? '?',
-            isset($env['azera_framework_ref']) ? ' · azera-framework `' . $env['azera_framework_ref'] . '`' : ''
-        );
+            $opcache === '' ? '' : ' · ' . $opcache,
+            $budget
+        ) . $this->versionsLine()
+            . "\n\n_Measured " . ($env['timestamp'] ?? '?')
+            . (isset($env['azera_framework_ref']) ? ' · azera-framework `' . $env['azera_framework_ref'] . '`' : '')
+            . '_';
+    }
+
+    /**
+     * The builds this run measured, as one line, or '' when the dataset
+     * predates version stamping.
+     *
+     * Printed here AND as the last note line of every chart. The chart copy is
+     * not redundancy: a chart is embedded as <img> in the README and travels on
+     * its own, so a copied or linked diagram has to say which builds it measured
+     * rather than depending on the page around it.
+     *
+     * Deliberately returns '' — an omitted line — for an old dataset instead of
+     * printing "unknown" six times. The absence is stated once, in the prose that
+     * explains the dataset predates the stamp, which is honest about WHY it is
+     * missing; six "unknown"s in a chart footer is noise that says less.
+     */
+    private function versionsLine(): string
+    {
+        $env = $this->store->env();
+        /** @var array<string,array{version:?string,ref?:?string}> $frameworks */
+        $frameworks = $env['frameworks'] ?? [];
+        if ($frameworks === []) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($frameworks as $app => $entry) {
+            $version = $entry['version'] ?? null;
+            // Azera is not on Packagist, so its version alone does not identify
+            // the build. The ref is shown on the page (where there is room);
+            // the chart footer stays compact.
+            $label = BenchmarkConfig::appLabel($app) . ' ' . ($version ?? 'unknown');
+            // The ref only where it adds information — see the note above.
+            if ($app === 'azera' && isset($entry['ref']) && $entry['ref'] !== '') {
+                $label .= ' (' . $entry['ref'] . ')';
+            }
+            $parts[] = $label;
+        }
+
+        return "\n\n**Frameworks** — " . implode(' · ', $parts) . '.';
     }
 
     /**
@@ -241,11 +408,15 @@ final class MarkdownReport
         }
         // A pool that never recycles puts no boot on a dot at all, so the
         // note must not claim one — the boot it would refer to is the one the
-        // startup chart measures, not a term inside these points.
+        // startup chart measures, not a term inside these points. On a view
+        // that draws no startup chart the note stops at the model, since there
+        // is nothing on that page to point at.
         if ($this->store->rrRecycleModel() === 'never') {
             return 'worker never recycled (max_jobs=0) — no boot inside these points';
         }
-        return 'boot included (worker recycle, sized in the startup chart)';
+        return $this->drawsStartupChart()
+            ? 'boot included (worker recycle, sized in the startup chart)'
+            : 'boot included (worker recycle)';
     }
 
     /**
@@ -363,17 +534,25 @@ final class MarkdownReport
             // schedule (or never). The recycle's own DURATION is deliberately
             // not quoted here: the startup chart measures it directly, and a
             // figure repeated in prose is the one thing a re-run cannot update.
+            //
+            // WHERE that chart lives depends on the view: the two SUMMARY
+            // pages draw no startup chart (see views.php), so pointing a reader
+            // there would be a dead cross-reference on the very page that
+            // dropped it. $where names the place the measurement actually is.
+            $where = $this->drawsStartupChart()
+                ? 'the startup chart'
+                : 'the full report linked at the foot of this page';
             return match ($this->store->rrRecycleModel()) {
                 'never' => "\n\nThese rows are end-to-end for a resident worker with a pool that never "
                     . 'recycles it (max_jobs=0): the worker booted once before the first request and '
                     . 'serves the whole run, so a cell is the measured request itself and carries no '
-                    . 'boot. The one-time recycle cost is measured in the startup chart — read that when '
+                    . 'boot. The one-time recycle cost is measured in ' . $where . ' — read that when '
                     . 'sizing a pool that is recycled or restarted, or when requests queue behind one worker.',
                 'every' => "\n\nThese rows are end-to-end for a resident worker whose pool recycles it "
                     . 'every ' . $this->store->rrMaxJobs() . ' jobs: the recycle is divided across those '
                     . 'jobs, so a cell is the measured request plus its share of the boot.',
                 default => "\n\nThese rows are end-to-end for a resident worker: every headline and every chart "
-                    . 'point adds the worker\'s boot (warm recycle, timed in the startup chart) to the '
+                    . 'point adds the worker\'s boot (warm recycle, measured in ' . $where . ') to the '
                     . 'measured request, so a cell is the time one request keeps that worker busy — the '
                     . 'number to read when workers are recycled per request or requests queue behind one '
                     . 'pool. This dataset does not record the pool\'s max_jobs, so the boot is charged per '
@@ -381,6 +560,20 @@ final class MarkdownReport
             };
         }
         return '';
+    }
+
+    /**
+     * Whether THIS view draws the startup chart.
+     *
+     * The boot notes below describe where a recycle is measured, and the two
+     * summary views deliberately carry no startup chart (only the `GET /`
+     * routing race, see views.php). Pointing at a chart the page does not have
+     * is a dead cross-reference, so the note follows the view's own chart list
+     * rather than assuming the full-report layout.
+     */
+    private function drawsStartupChart(): bool
+    {
+        return in_array('hero', $this->view['charts'] ?? [], true);
     }
 
     /**
@@ -570,7 +763,9 @@ final class MarkdownReport
             $probed
                 ? 'x = median ÷ the fastest boot on this server'
                 : 'x = median ÷ the fastest working boot of that kind (no-op re-boots excluded)',
-            true
+            true,
+            'median',
+            $this->chartVersions()
         );
         $file = 'startup.svg';
         $this->writeSvg($dir, $file, $svg);
@@ -633,7 +828,7 @@ final class MarkdownReport
                     . " They are left out of the chart's factor column.\n"
                 : '';
 
-            return "## Framework startup GET /\n\n"
+            return "## Framework startup\n\n"
                 . $intro . "\n\n"
                 . $rebuiltNote
                 . $noopNote
@@ -667,7 +862,7 @@ final class MarkdownReport
                 . 'the three terms in every row here.'
             : '';
 
-        return "## Framework startup GET /\n\n"
+        return "## Framework startup\n\n"
             . "Three boot models, timed directly by the harness — each band shows boot + median teardown, because "
             . "during both the worker cannot serve another request:\n\n"
             . '- **Cold boot** — the very first bootstrap in a fresh PHP process (autoloader + compile + FS cache): '
@@ -729,10 +924,13 @@ final class MarkdownReport
             $logScale,
             960,
             0,
-            'Framework startup — GET /',
+            'Framework startup',
             $this->spreadCaption($mode),
             $factors,
-            'x = median ÷ fastest (Azera = 1.0)'
+            'x = median ÷ fastest (Azera = 1.0)',
+            false,
+            'median',
+            $this->chartVersions()
         );
         $file = 'startup.svg';
         $this->writeSvg($dir, $file, $svg);
@@ -741,12 +939,12 @@ final class MarkdownReport
         // multiplier, so the prose states only WHAT this endpoint measures.
         // Reprinting the winner's number here would be a second copy of the
         // chart that a re-measure cannot keep in sync.
-        return "## Framework startup GET /\n\n"
+        return "## Framework startup\n\n"
             . 'Router + dispatcher + plain response, no database. This endpoint measures pure framework '
             . 'bootstrap and dispatch cost, with no ORM or template work to hide behind — the chart '
             . 'names the fastest framework and how many times longer each other one took.'
             . "\n\n"
-            . '![Framework startup — GET /](' . $rel . '/' . $file . ')';
+            . '![Framework startup](' . $rel . '/' . $file . ')';
     }
 
     /**
@@ -812,7 +1010,8 @@ final class MarkdownReport
             $factors,
             "x = total ÷ {$base}'s total · 1.0 = {$base}",
             false,
-            'total'
+            'total',
+            $this->chartVersions()
         );
         $file = 'speedup.svg';
         $this->writeSvg($dir, $file, $svg);
@@ -837,9 +1036,19 @@ final class MarkdownReport
      */
     private function features(string $dir, string $rel, array $apps, string $mode, bool $logScale): string
     {
-        $sections = [];
-        $charts   = [];
-        foreach (BenchmarkConfig::featureOrder() as $feature) {
+        $charts = [];
+        // A view may narrow this race to a subset (`'feature_keys' => ['orm', …]`).
+        // A summary page carries the whole endpoint table anyway, so drawing
+        // twelve more charts that restate its rows one feature at a time turns
+        // it into a wall; an ABSENT key keeps every feature, which is what the
+        // full views want. Unknown keys simply measure nothing and are skipped
+        // by the `count($reqs) === 0` guard below.
+        //
+        // The key is `feature_keys`, not `features`: `features` is the CHART
+        // name in a view's `charts` list, and without that chart named there
+        // this method is never called at all.
+        $features = $this->view['feature_keys'] ?? BenchmarkConfig::featureOrder();
+        foreach ($features as $feature) {
             $reqs = $this->store->requestsForFeature($feature, $mode);
             if (count($reqs) === 0) {
                 continue;
@@ -908,21 +1117,38 @@ final class MarkdownReport
                 $title,
                 $this->spreadCaption($mode),
                 $factors,
-                'x = median ÷ the fastest on that endpoint'
+                'x = median ÷ the fastest on that endpoint',
+                false,
+                'median',
+                $this->chartVersions()
             );
             $file = 'feature-' . $feature . '.svg';
             $this->writeSvg($dir, $file, $svg);
-            $charts[] = "### {$title}\n\n![{$title}](" . $rel . '/' . $file . ')';
 
-            // The feature's own WORKLOAD, stated once as static text. Every
-            // measured number — the winner, its median and the margin over the
-            // runner-up — is drawn in the chart below, which anchors each
-            // endpoint at its own fastest framework and prints the multiplier
-            // beside every row. A prose copy of those readings is the thing a
-            // re-measure leaves behind, so this section names no figures.
+            // The feature's WORKLOAD is stated under the feature's OWN heading,
+            // right above the chart it explains, rather than as a bullet list
+            // under the section intro — where a reader measuring one feature had
+            // to find its entry in a second list before reaching its race, and
+            // then look at a chart whose subject was named somewhere else on the
+            // page.
+            //
+            // The request is taken from featureMap(), NOT from $cats[0].
+            // $cats only holds the requests at least two frameworks MEASURED,
+            // so on a narrowed or partly-stale dataset $cats[0] can be a LATER
+            // endpoint of the same feature (e.g. `POST /items` under "ORM") —
+            // and this page would then name a different request than the HTML
+            // page for the same race, which reads the static value. Deriving
+            // both from featureMap() keeps the two renderers in step. The
+            // $cats[0] fallback is for a feature that has no map entry at all.
             $what = BenchmarkConfig::featureDescriptionFor($feature);
-            $sections[] = '- **' . $title . '** (`' . $cats[0] . '`) — '
-                . ($what !== '' ? $what : 'runs the feature\'s request against every framework that supports it.');
+            $anchor = BenchmarkConfig::featurePrimaryRequest($feature);
+            if ($anchor === '') {
+                $anchor = $cats[0];
+            }
+
+            $charts[] = "### {$title}\n `" . $anchor . '` — '
+                . ($what !== '' ? $what : 'runs the feature\'s request against every framework that supports it.')
+                . "\n\n![{$title}](" . $rel . '/' . $file . ')';
         }
 
         if ($charts === []) {
@@ -930,10 +1156,11 @@ final class MarkdownReport
         }
 
         return "## Feature benchmarks\n\n"
-            . "One race per framework feature, each run as a real request against a real database. "
-            . "Every figure — the winner of each race and the margin over the runner-up — is in that "
-            . "feature's own chart below, which anchors each endpoint at its fastest framework.\n\n"
-            . implode("\n", $sections) . "\n\n" . implode("\n\n", $charts);
+            . "One race per framework feature, each run as a real request against a real database. Each "
+            . "feature states the request it measures under its own heading. Every figure — the winner "
+            . "of each race and the margin over the runner-up — is in that feature's own chart below, "
+            . "which anchors each endpoint at its fastest framework.\n\n"
+            . implode("\n\n", $charts);
     }
 
     /**
@@ -1152,7 +1379,8 @@ final class MarkdownReport
             'low / median / high',
             ' · ',
             960,
-            'x = median ÷ the lightest median'
+            'x = median ÷ the lightest median',
+            $this->chartVersions()
         );
         $file = 'resident-memory.svg';
         $this->writeSvg($dir, $file, $svg);
@@ -1319,7 +1547,8 @@ final class MarkdownReport
             'boot / end / worst',
             ' → ',
             960,
-            'x = end state ÷ the lightest end state'
+            'x = end state ÷ the lightest end state',
+            $this->chartVersions()
         );
         $file = 'resident-memory.svg';
         $this->writeSvg($dir, $file, $svg);

@@ -73,7 +73,6 @@ return [
             'log_scale' => false,
             'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
             'charts'    => ['hero', 'speedup', 'features', 'memory'],
-            'publish'   => ['framework'],
         ],
 
         // The same benchmark as most PHP apps actually run it: PHP-FPM, a
@@ -114,9 +113,7 @@ return [
             //
             // Timing is unaffected by any of this (residue is unreachable;
             // boot_ms and run means stay flat).
-            'charts'     => ['hero', 'speedup', 'features'],
-            'publish'    => ['framework'],
-            'publish_md' => '19-BENCHMARKS-FPM.md',
+            'charts' => ['hero', 'speedup', 'features'],
         ],
 
         // REAL RoadRunner: actual RoadRunner server + resident worker over
@@ -141,9 +138,7 @@ return [
             // the memory question this deployment model actually raises.
             // peak_mem is 0 here — run-http.php refuses to present the
             // client's own footprint as the framework's.
-            'charts'     => ['hero', 'speedup', 'features', 'resident-memory'],
-            'publish'    => ['framework'],
-            'publish_md' => '19-BENCHMARKS-REAL.md',
+            'charts' => ['hero', 'speedup', 'features', 'resident-memory'],
         ],
 
         // REAL PHP-FPM + nginx: FPM runs the app's entry script for every
@@ -167,9 +162,88 @@ return [
             // resident for the whole block and does retain what it built. The
             // probe only existed on the RoadRunner side until 2026-09-17, so
             // these rows carried zeros and the chart rendered nothing.
-            'charts'     => ['hero', 'speedup', 'features', 'resident-memory'],
+            'charts' => ['hero', 'speedup', 'features', 'resident-memory'],
+        ],
+
+        // --- Published summaries ------------------------------------------
+        //
+        // These two are the ONLY views that publish, and each is a strict
+        // SUBSET of the full view it summarises: the headline chart, the races
+        // that answer "which framework do I pick", the endpoint table, and a
+        // link to the complete report.
+        //
+        // The startup section is deliberately ABSENT (2026-09-18) while the
+        // `GET /` race is present. A boot chart is the one figure that cannot
+        // be read on its own: it only means something next to the deployment
+        // model in the same page's prose, and its own note block carries the
+        // no-op rule ("several frameworks memoise their re-bootstrap"). The
+        // latency table states the same cost inline, in the unit a reader is
+        // choosing on. What replaces it is `routing` — the `GET /` race, the
+        // same endpoint the boot was measured on, drawn on the shared feature
+        // axis so the startup cost lands where a reader can compare it.
+        //
+        // Why a subset rather than the full view: `--publish=framework` copies a
+        // publishing view VERBATIM, so while all four full views declared
+        // `publish => ['framework']` a single run wrote four markdown files and
+        // 59 SVGs into the framework repository. The framework docs want one page
+        // per deployment model that carries the claim, not a second dashboard.
+        //
+        // Why TWO pages and never one: RoadRunner and PHP-FPM are different
+        // transports, and the memory chart measures a different THING in each (a
+        // retained worker heap vs a per-request peak). One page would have to
+        // caption both, which is the one thing the report never does — the models
+        // stay apart and cross-link instead (see `links`).
+        //
+        // `links` are printed at the foot of the page and must be ABSOLUTE: the
+        // same .md is written to this repo's docs/benchmarks and to the framework
+        // repo's docs/, so a relative path would resolve in one and dangle in the
+        // other.
+        'summary-roadrunner' => [
+            'title'     => 'Framework Competition — RoadRunner Summary',
+            'subtitle'  => 'The headline numbers from the measured RoadRunner deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and the worker memory that survives a request. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-rr in the dataset). The deployment model actually measured is stated with the table.',
+            'dataset'   => 'real-deployments',
+            'baseline'  => 'azera',
+            'mode'      => 'roadrunner',
+            'log_scale' => false,
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            // 'features' is the CHART (it draws the feature races); 'feature_keys'
+            // narrows which races it draws. Routing leads the list: it is the
+            // lightest workload in the suite and the one the dropped startup
+            // chart was measured on, so it is what keeps the boot question on
+            // the page — as a race to compare, not a chart to interpret. The
+            // two data-access races follow, since those are what a reader
+            // choosing a framework weighs.
+            'charts'       => ['speedup', 'features', 'resident-memory'],
+            'feature_keys' => ['routing', 'orm', 'rest-api'],
+            'links'        => [
+                'The complete report (all six frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
+                'This model, measured end to end'                               => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-roadrunner.html',
+                'The PHP-FPM summary'                                           => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-fpm.html',
+            ],
             'publish'    => ['framework'],
-            'publish_md' => '19-BENCHMARKS-REAL-FPM.md',
+            'publish_md' => '19-BENCHMARKS-SUMMARY-ROADRUNNER.md',
+        ],
+
+        'summary-fpm' => [
+            'title'        => 'Framework Competition — PHP-FPM Summary',
+            'subtitle'     => 'The headline numbers from the measured nginx + PHP-FPM deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and what one request costs in memory. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-http/floor-php in the dataset). The worker-recycling setting of the pool is stated with the server floor below, because it changes what each row contains.',
+            'dataset'      => 'real-deployments',
+            'baseline'     => 'azera',
+            'mode'         => 'php-fpm',
+            'log_scale'    => false,
+            'apps'         => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            // Same narrowing as the RoadRunner summary: the plain routing race
+            // first (the endpoint the dropped startup chart measured), then the
+            // two data-access races.
+            'charts'       => ['speedup', 'features', 'resident-memory'],
+            'feature_keys' => ['routing', 'orm', 'rest-api'],
+            'links'        => [
+                'The complete report (all six frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
+                'This model, measured end to end'                               => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-fpm.html',
+                'The RoadRunner summary'                                        => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-roadrunner.html',
+            ],
+            'publish'    => ['framework'],
+            'publish_md' => '19-BENCHMARKS-SUMMARY-FPM.md',
         ],
     ],
 ];

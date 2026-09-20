@@ -448,6 +448,8 @@ final class SvgChart
      *        class of error this chart family already paid for when the FPM page
      *        drew the RR shape. Printing the note beside the chart keeps it from
      *        drifting away from the labels it explains.
+     * @param string $versions one-line provenance of the builds measured, drawn
+     *        as the LAST note line in the smaller grey size. See dotRange().
      * @return string SVG, or '' when there is nothing to draw
      */
     public static function memoryRange(
@@ -459,7 +461,8 @@ final class SvgChart
         string $valueHeader = 'low / dot / high',
         string $midSeparator = ' · ',
         int $width = 960,
-        ?string $factorNote = null
+        ?string $factorNote = null,
+        string $versions = ''
     ): string {
         if ($series === []) {
             return '';
@@ -581,16 +584,25 @@ final class SvgChart
         if ($title !== '') {
             $y = 54.0;
             foreach (self::wrapNotes($subtitle, $noteMaxW, 12) as $ln) {
-                $noteRows[] = [$y, $ln];
+                $noteRows[] = [$y, $ln, 12];
                 $y += 22.0;
             }
             if ($captionTx !== '') {
                 foreach (self::wrapNotes($captionTx, $noteMaxW, 12) as $ln) {
-                    $noteRows[] = [$y, $ln];
+                    $noteRows[] = [$y, $ln, 12];
+                    $y += 22.0;
+                }
+            }
+            if ($versions !== '') {
+                // Last, and a size down: provenance, not a heading.
+                foreach (self::wrapNotes($versions, $noteMaxW, 11) as $ln) {
+                    $noteRows[] = [$y, $ln, 11];
                     $y += 22.0;
                 }
             }
         }
+        // The y column is taken explicitly: max() over a tuple list would
+        // compare the strings as well once two rows share a y.
         $padT = $title !== '' && $noteRows !== []
             ? max(array_column($noteRows, 0)) + 24.0
             : 54.0;
@@ -606,8 +618,8 @@ final class SvgChart
 
         if ($title !== '') {
             $out[] = self::text($padL, 32, $title, 17, self::INK, 700);
-            foreach ($noteRows as [$ny, $ln]) {
-                $out[] = self::text($padL, $ny, $ln, 12, self::INK_SOFT, 400, true);
+            foreach ($noteRows as [$ny, $ln, $nsize]) {
+                $out[] = self::text($padL, $ny, $ln, (float) $nsize, self::INK_SOFT, 400, true);
             }
         }
         $out[] = self::text($valRight, $padT - 10, $valueHeader, 11, self::INK_SOFT, 600, false, 'end');
@@ -814,6 +826,12 @@ final class SvgChart
      * @param string $valueHeader label of the left-hand value column
      *        ("median" by default; callers that print another aggregate in
      *        this column — the totals chart — rename it)
+     * @param string $versions one-line provenance of the builds measured ("Azera
+     *        0.1.0 · Laravel 12.69.2 · …"), drawn as the LAST note line in grey.
+     *        A chart is embedded as <img> in the README and can be copied or
+     *        linked on its own, so it has to identify the builds it measured
+     *        without relying on the page around it — the reason this lives in
+     *        the SVG rather than only in the page header.
      */
     public static function dotRange(
         array $categories,
@@ -828,7 +846,8 @@ final class SvgChart
         ?array $factors = null,
         string $factorNote = 'x = median ÷ the best in this chart',
         bool $labelAllFactors = false,
-        string $valueHeader = 'median'
+        string $valueHeader = 'median',
+        string $versions = ''
     ): string {
         unset($height);
 
@@ -869,8 +888,22 @@ final class SvgChart
         $padR       = $hasFactors ? 96 : 46;
         $nameRight  = $padL - 106;
         $valRight   = $padL - 12;
-        $padT       = $title !== '' ? ($caption !== '' ? 88 : 66) : 34;
-        $plotW      = $width - $padL - $padR;
+        // The version line is drawn as the LAST note line, and this block stays
+        // deliberately close to its original shape: the title at y=32, the
+        // scale note at 54, the caption at 74, then the versions.
+        //
+        // dotRange's spacing is +20 (memoryRange uses +22) and its caption was
+        // never wrapped. Unifying the two restyled every chart in the report,
+        // including the datasets that have no versions to show — so the change
+        // is ADDITIVE only: nothing moves unless a version line exists.
+        $versionLines = $versions !== ''
+            ? self::wrapNotes($versions, $width - $padL - 12.0, 11)
+            : [];
+        $padT = $title !== '' ? ($caption !== '' ? 88 : 66) : 34;
+        if ($title !== '' && $versionLines !== []) {
+            $padT += 20.0 * count($versionLines);
+        }
+        $plotW = $width - $padL - $padR;
 
         // Global bounds over every low/high so all groups share one axis.
         $max = 0.0;
@@ -903,9 +936,14 @@ final class SvgChart
         $rowH    = 26; // one framework row
         $groupH  = $headerH + $k * $rowH;
         $padT += $headerH;
-        $padB   = 56;
-        $plotH  = $n * $groupH;
-        $height = $padT + $plotH + $padB;
+        $padB  = 56;
+        $plotH = $n * $groupH;
+        // Rounded to int: the viewBox is whole pixels, and a note block whose
+        // lines carry a fractional 22.0 step (or a +24 gap) makes $padT a
+        // float. svgOpen()/card() take an int, so the fractional height threw a
+        // TypeError as soon as the version line lengthened the note block —
+        // memoryRange() already rounded for exactly this reason.
+        $height = (int) round($padT + $plotH + $padB);
 
         $out = [];
         $out[] = self::svgOpen($width, $height, $title);
@@ -921,8 +959,15 @@ final class SvgChart
             // per request for feature charts, across frameworks for memory.
             $note = $hasFactors ? ' · ' . $factorNote : '';
             $out[] = self::text($padL, 54, "{$scale} · lower is better{$note}", 12, self::INK_SOFT, 400, true);
+            $capY = 74.0;
             if ($caption !== '') {
-                $out[] = self::text($padL, 74, $caption, 12, self::INK_SOFT, 400, true);
+                $out[] = self::text($padL, $capY, $caption, 12, self::INK_SOFT, 400, true);
+                $capY += 20.0;
+            }
+            // Provenance last, a size down, so it does not compete with the
+            // title block. Only the charts of a VERSIONED dataset carry it.
+            foreach ($versionLines as $i => $ln) {
+                $out[] = self::text($padL, $capY + 20.0 * $i, $ln, 11, self::INK_SOFT, 400, true);
             }
         }
 

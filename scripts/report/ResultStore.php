@@ -320,6 +320,69 @@ final class ResultStore
     }
 
     /**
+     * The OPcache setting each REAL deployment's server ran under, per mode —
+     * or [] when the dataset does not say.
+     *
+     * A real deployment has two servers, and they do not read the same
+     * directive: php-fpm runs as `fpm-fcgi` and reads `opcache.enable`, while
+     * the RoadRunner worker runs `php deploy/rr/worker.php` (the CLI SAPI) and
+     * reads `opcache.enable_cli`. A single boolean cannot describe both, which
+     * is why this is a per-mode map rather than the CLI harness's scalar
+     * `env.opcache`.
+     *
+     * Keys are ABSENT when the answer was not establishable — never defaulted
+     * to false. The renderers read a missing key as "not recorded" and say
+     * nothing; conflating that with "disabled" is exactly the bug this
+     * replaces (every real-deployment page claimed "OPcache (CLI): no" because
+     * `!empty()` was applied to a key run-http.php never wrote).
+     *
+     * @return array<string,bool>
+     */
+    public function opcacheByMode(): array
+    {
+        $v = $this->env()['opcache_by_mode'] ?? null;
+        if (!is_array($v)) {
+            return [];
+        }
+
+        // Only booleans survive: a null/garbage entry means the field was
+        // written but not resolved, which must not read as an answer.
+        return array_filter(
+            array_map(static fn($x): ?bool => is_bool($x) ? $x : null, $v),
+            static fn(?bool $x): bool => $x !== null
+        );
+    }
+
+    /**
+     * The OPcache setting for ONE mode, or null when the dataset does not say.
+     *
+     * Null is the "not recorded" answer the callers must render as silence:
+     * see opcacheByMode().
+     */
+    public function opcacheFor(?string $mode): ?bool
+    {
+        if ($mode === null) {
+            return null;
+        }
+
+        return $this->opcacheByMode()[$mode] ?? null;
+    }
+
+    /**
+     * Whether the measured rows came from a real server deployment rather than
+     * the in-process CLI harness.
+     *
+     * run-http.php stamps `env.deployment = 'real'`. Used to decide whether the
+     * page may state a CLI SAPI fact at all: on a real deployment the CLI
+     * harness's `env.opcache` field describes the orchestrator process, not
+     * either server, so it must not be printed.
+     */
+    public function isRealDeployment(): bool
+    {
+        return ($this->env()['deployment'] ?? null) === 'real';
+    }
+
+    /**
      * The pm.max_requests the measured FPM pool ran with, or null when the
      * dataset does not say (every dataset written before this was stamped).
      *

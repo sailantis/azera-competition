@@ -162,6 +162,20 @@ foreach ($views as $key => $view) {
     $svgDir = $outDir . '/svg/' . $key;
     $relDir = 'svg/' . $key;
 
+    // The SVG directory persists between renders, so a chart a view has stopped
+    // drawing keeps sitting in it. Nothing embeds such a file any more (the
+    // chart list comes from the renderer's writtenCharts(), never from a
+    // directory listing — see the ChartManifestTest orphan guard), but it would
+    // still ship as stale clutter in the published tree. Clear this view's
+    // directory and let the renderer rewrite exactly what it draws. Only THIS
+    // view's directory: `--view=` renders a subset, and the others' charts are
+    // still current.
+    if (is_dir($svgDir)) {
+        foreach (glob($svgDir . '/*.svg') ?: [] as $stale) {
+            @unlink($stale);
+        }
+    }
+
     // Markdown first — it writes the SVGs.
     $md     = new MarkdownReport($viewStore, $key, $view);
     $mdBody = $md->render($svgDir, $relDir);
@@ -172,13 +186,14 @@ foreach ($views as $key => $view) {
     // Collect the SVG files that were produced — from the renderer's own
     // record of what it wrote, NOT by listing the directory.
     //
-    // Listing was wrong: $svgDir survives between runs, so a chart that a
-    // view has stopped drawing keeps sitting in it and is picked up as if it
-    // were current. That is how docs/benchmarks/view-cold-start.html came to
-    // embed a "Peak memory footprint" figure that cold-start.md never
-    // mentions — svg/cold-start/memory.svg is an orphan from an older render
-    // (707d495) and the glob resurrected it on every regeneration, so the
-    // HTML and the Markdown of one view disagreed about what it contains.
+    // Listing was wrong TWICE over: $svgDir survives between runs, so a chart
+    // that a view stopped drawing keeps sitting in it and gets picked up as if
+    // it were current. That is how docs/benchmarks/view-cold-start.html came to
+    // embed a "Peak memory footprint" figure that cold-start.md never mentions —
+    // svg/cold-start/memory.svg is an orphan from an older render (707d495), so
+    // the HTML and the Markdown of one view disagreed about what it contains.
+    // The stale-file sweep above removes the orphan's file; this list is what
+    // decides what may be EMBEDDED, and it comes from the renderer.
     $chartFiles = [];
     foreach ($md->writtenCharts() as $chartKey) {
         $rel = $relDir . '/' . $chartKey . '.svg';
@@ -194,7 +209,8 @@ foreach ($views as $key => $view) {
     $viewFiles[$key] = $htmlFile;
 
     echo "  ✓ {$key}: {$htmlFile}, {$mdFile}, " . count($chartFiles) . " charts [dataset: "
-        . ($viewStore === $store ? $dsLabel : ($view['dataset'] ?? '?')) . "]\n";
+        . ($viewStore === $store ? $dsLabel : ($view['dataset'] ?? '?')) . "]"
+        . (in_array('framework', $view['publish'] ?? [], true) ? " [publishes]" : '') . "\n";
 }
 
 // --- Index -----------------------------------------------------------------
@@ -280,6 +296,18 @@ function publish(
         if (!is_dir($imagesDir) && !mkdir($imagesDir, 0777, true) && !is_dir($imagesDir)) {
             $log[] = "cannot create {$imagesDir}";
             continue;
+        }
+        // Same stale-file sweep as the local SVG dir above, and for the same
+        // reason: this directory lives in ANOTHER repository and persists
+        // between publishes, so a chart the view has STOPPED drawing keeps
+        // sitting there for good. It is not merely clutter — it is a chart that
+        // contradicts the page beside it (dropping the startup chart from the
+        // two summaries left four startup.svg files in azera-framework that no
+        // page referenced any more, each of them a diagram of a section the
+        // page says nothing about). Clear the directory and let the copy below
+        // rewrite exactly what this view drew.
+        foreach (glob($imagesDir . '/*.svg') ?: [] as $stale) {
+            @unlink($stale);
         }
         // Copy this view's SVGs + markdown fragment into the framework docs.
         foreach ($svgByView[$key] ?? [] as $chart => $rel) {

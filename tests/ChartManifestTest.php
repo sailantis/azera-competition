@@ -304,8 +304,17 @@ final class ChartManifestTest extends TestCase
                 }
                 continue;
             }
-            // Dataset provenance: the environment stamp and measurement date.
-            if (str_starts_with($line, '**Environment**') || str_starts_with($line, '_Measured ')) {
+            // Dataset provenance: the environment stamp, the measurement date,
+            // and the version of every framework that was measured. All three
+            // are regenerated from the dataset on every render, so a figure in
+            // them cannot outlive the run — which is the whole reason the guard
+            // exists. `**Frameworks**` belongs here for exactly that reason: it
+            // is a stamp, not a sentence about a number.
+            if (
+                str_starts_with($line, '**Environment**')
+                    || str_starts_with($line, '**Frameworks**')
+                    || str_starts_with($line, '_Measured ')
+            ) {
                 continue;
             }
             // A markdown image is a chart reference, not a sentence.

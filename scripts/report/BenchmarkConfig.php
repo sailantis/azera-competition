@@ -253,4 +253,26 @@ final class BenchmarkConfig
     {
         return self::featureDescription()[$feature] ?? '';
     }
+
+    /**
+     * The request a feature is anchored on — the first one featureMap() assigns
+     * to it.
+     *
+     * Both renderers print this beside the feature's workload sentence, so the
+     * Markdown blockquote and the HTML figure caption name the SAME endpoint.
+     * Deriving it from featureMap() rather than from whatever a particular
+     * dataset happened to measure keeps the two pages identical by
+     * construction: a measured-aware lookup would let them disagree on a
+     * dataset that is missing the feature's first request.
+     */
+    public static function featurePrimaryRequest(string $feature): string
+    {
+        foreach (self::featureMap() as $request => $key) {
+            if ($key === $feature) {
+                return $request;
+            }
+        }
+
+        return '';
+    }
 }
