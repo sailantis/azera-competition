@@ -10,9 +10,9 @@ declare(strict_types=1);
  * only affects one framework (e.g. an azera-framework AppContext refactor)
  * does not invalidate the other frameworks' numbers. Re-running all six
  * apps costs ~1h on the VM; re-running one app costs minutes. This script
- * splices the fresh app block (and its boot block) into the canonical
- * dataset so the published report reflects the new code without discarding
- * unchanged rows.
+ * splices the fresh app block — including the boot blocks, which are keys OF
+ * that app array — into the canonical dataset so the published report reflects
+ * the new code without discarding unchanged rows.
  *
  * Usage:
  *   php scripts/merge-app.php <target-prefix> <source-prefix> <app-key>
@@ -27,6 +27,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/report/BenchmarkConfig.php';
 // budgetsByAppMode()/assertUniformBudget() — see bench-lib.php.
 require_once __DIR__ . '/bench-lib.php';
+// assertEnvComparable() — the shared runtime-comparability check.
+require_once __DIR__ . '/env-sanity.php';
 
 if ($argc < 4) {
     fwrite(STDERR, "Usage: php scripts/merge-app.php <target-prefix> <source-prefix> <app-key>\n");
@@ -79,20 +81,7 @@ if ($dstIndex === null) {
 
 // --- sanity checks: the two runs must be comparable -----------------------
 
-$san = static function (array $d): array {
-    $sanitized = [];
-    foreach (['php_version', 'opcache', 'sapi'] as $k) {
-        if (isset($d['env'][$k])) {
-            $sanitized[$k] = $d['env'][$k];
-        }
-    }
-
-    return $sanitized;
-};
-if ($san($target) !== $san($source)) {
-    fwrite(STDERR, "Env mismatch (php/opcache/sapi differ):\n");
-    fwrite(STDERR, '  target: ' . json_encode($san($target)) . "\n");
-    fwrite(STDERR, '  source: ' . json_encode($san($source)) . "\n");
+if (!assertEnvComparable($target, $source, 'a spliced app block')) {
     exit(1);
 }
 
@@ -147,6 +136,35 @@ if (!is_file($targetJson . '.bak')) {
 
 $target['apps'][$dstIndex] = $srcApp;
 
+// Boot blocks.
+//
+// These travel with the app block BY CONSTRUCTION — `boot_by_mode`,
+// `boot_samples_by_mode` and `boot_kind_by_mode` are keys OF the app array, so
+// replacing the array replaces them. Verified by splicing a copy and diffing:
+// the FPM boot moved 0.4561 -> 0.4548 alongside the fresh rows.
+//
+// That also means the stale-boot hazard needs no code: a source that spliced a
+// mode WITHOUT measuring its boot produces a target with no boot for that mode,
+// rather than the target's previous number sitting beside fresh latency rows.
+//
+// (An earlier revision of this script grew a "drop the orphaned boot" guard
+// for that case. It was dead code — the wholesale assignment had already
+// removed it — and dead code with a test asserting it is worse than no code,
+// so it was REMOVED. The invariant is pinned by a test instead, which is where
+// a structural guarantee belongs.)
+//
+// What is worth reporting is simply WHICH boot the spliced app ended up with,
+// because that is the number the report will pair with these rows.
+$bootFields = ['boot_by_mode', 'boot_samples_by_mode', 'boot_kind_by_mode'];
+$carried    = [];
+foreach (array_keys($srcApp['modes']) as $splicedMode) {
+    foreach ($bootFields as $field) {
+        if (isset($srcApp[$field][$splicedMode])) {
+            $carried[] = "{$field}[{$splicedMode}]";
+        }
+    }
+}
+
 // Track provenance: which app was refreshed, from which run.
 $target['env']['app_refresh'] = $target['env']['app_refresh'] ?? [];
 $target['env']['app_refresh'][$appKey] = [
@@ -167,6 +185,7 @@ echo '  requests per mode: ',
     $srcApp['modes']
 )),
     "\n";
+echo '  boot carried: ', $carried === [] ? '(none — the source measured no boot)' : implode(', ', $carried), "\n";
 
 // --- CSV + MD: hand off to the harness' own writers -------------------------
 // run.php --export re-emits the .csv/.md companions from the dataset on disk

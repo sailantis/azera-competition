@@ -384,6 +384,103 @@ function rrMaxJobsFromTemplate(string $root): ?int
 }
 
 /**
+ * The OPcache setting a REAL deployment's two servers actually run under, as
+ * a `{mode => bool}` map — keys absent when the answer is not knowable.
+ *
+ * WHY THIS IS NOT THE CLI HARNESS'S `env.opcache`: that field is
+ * `ini_get('opcache.enable_cli')` read by run.php under `PHP_SAPI === 'cli'`,
+ * and CLI is the ONE SAPI where `opcache.enable_cli` is the relevant switch —
+ * OPcache is on by default everywhere EXCEPT cli, where it is opt-in, so the
+ * CLI harness must ask the CLI-specific question. A real deployment has TWO
+ * servers reading TWO DIFFERENT directives:
+ *
+ *   nginx -> php-fpm   runs as `fpm-fcgi`, so it reads `opcache.enable` (1 by
+ *                      default) and NEVER reads `opcache.enable_cli`.
+ *   RoadRunner worker  runs `php deploy/rr/worker.php`, which is the CLI SAPI,
+ *                      so it reads `opcache.enable_cli` (0 by default).
+ *
+ * So "OPcache (CLI)" is not merely an odd label on an FPM page — it is a
+ * question that server cannot answer. run-http.php stamped no `opcache` key at
+ * all, and the renderers' `!empty($env['opcache'])` turned that ABSENCE into
+ * an affirmative "no". The published real-deployment pages therefore claimed
+ * OPcache was disabled while the same dataset's own `servers.php_fpm` string
+ * said "with Zend OPcache v8.3.33" and the pool template set
+ * `php_admin_value[opcache.enable] = 1`.
+ *
+ * Each half is answered the way it can actually be answered:
+ *
+ *   php-fpm — read from the pool TEMPLATE. run-http.php copies that file into
+ *             pool.d and reloads on every invocation, so the config that was
+ *             installed is the config that ran. Same discipline as
+ *             fpmMaxRequestsFromTemplate(): a template edit cannot silently
+ *             re-label an already-published number.
+ *   roadrunner — PROBED, with the same binary and the same absence of `-d`
+ *             overrides. deploy/rr/config-template.php's `server.command` is a
+ *             bare `php <root>/deploy/rr/worker.php`, and RoadRunner spawns it
+ *             itself: neither `rr serve` nor the worker ever receives a
+ *             `-d opcache.*` flag, so both the probe and the worker resolve
+ *             `opcache.enable_cli` from the host's php.ini alone. The probe
+ *             therefore reads exactly what the worker reads. (A `-d` on the
+ *             ORCHESTRATOR does not travel to the worker either, which is why
+ *             probing without one is the faithful choice rather than a
+ *             simplification.)
+ *
+ * A mode whose answer cannot be established is OMITTED, never defaulted to
+ * false: "not recorded" and "off" are different claims, and collapsing them is
+ * the exact bug this replaces.
+ *
+ * @param callable(string):string $runProcess launches a command and returns
+ *                                        its stdout; injected so tests can
+ *                                        drive this without a VM.
+ * @return array<string,bool>
+ */
+function deploymentOpcache(string $root, ?callable $runProcess = null): array
+{
+    $out = [];
+
+    // --- php-fpm: the directive fpm-fcgi actually reads ----------------------
+    $pool = @file_get_contents("{$root}/deploy/fpm/pool.conf.template");
+    if ($pool !== false) {
+        // php_admin_value[opcache.enable] = 1
+        // NOTE the sibling `opcache.enable_cli` in the same file is NOT read
+        // here: fpm ignores it, so it says nothing about this server.
+        if (preg_match('/^\s*php_admin_value\[opcache\.enable\]\s*=\s*(\S+)/m', $pool, $m) === 1) {
+            $out['php-fpm'] = iniTruthy($m[1]);
+        }
+    }
+
+    // --- roadrunner: the CLI SAPI's own switch, as the worker sees it --------
+    if ($runProcess !== null) {
+        // `-n` would SKIP php.ini and answer a different question; the worker
+        // loads php.ini, so the probe must too.
+        $probe = "php -r \"echo (int) ini_get('opcache.enable_cli');\"";
+        $val   = trim($runProcess($probe));
+        if ($val === '0' || $val === '1') {
+            $out['roadrunner'] = $val === '1';
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * Interpret a php.ini value the way PHP does, for the handful of literals that
+ * actually appear in the templates (`1`/`On`/`true` vs `0`/`Off`/`false`).
+ *
+ * Deliberately narrow: this reads a config FILE, and it must never turn an
+ * unrecognised token into `false` — "we do not know" and "off" are different
+ * answers, and conflating them is the exact bug this whole change is fixing.
+ * An unparseable value returns false here only because the caller has already
+ * decided the key exists; callers that cannot parse omit the key instead.
+ */
+function iniTruthy(string $value): bool
+{
+    $v = strtolower(trim($value, " \t\"'"));
+
+    return in_array($v, ['1', 'on', 'yes', 'true'], true);
+}
+
+/**
  * Install + start the stamped FPM pool and nginx vhost for all benchmark
  * apps (idempotent: overwrites configs, then reloads services).
  *

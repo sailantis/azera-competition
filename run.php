@@ -20,6 +20,7 @@
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/scripts/report/BenchmarkConfig.php';
+require_once __DIR__ . '/scripts/version-lib.php';
 
 // --- CLI options -----------------------------------------------------------
 
@@ -247,6 +248,10 @@ function envInfo(): array
         'sapi'                => PHP_SAPI,
         'timestamp'           => date('c'),
         'azera_framework_ref' => azeraFrameworkRef(),
+        // Every entrant's version, as this run saw it. Without it a published
+        // row cannot be reproduced and a comparison between frameworks
+        // released years apart is undetectable. See scripts/version-lib.php.
+        'frameworks' => frameworkVersions(__DIR__),
         // Cold-mode semantics: since this flag exists, cold-mode timings
         // include the per-iteration boot in the request clock (the FPM
         // story); older datasets timed the request only, boot separate.
@@ -351,19 +356,47 @@ function writeCsv(string $csvFile, array $results): void
 
 function writeReport(string $prefix, array $results, array $featureMap, array $adapterFeatures): void
 {
-    $lines = [
-        "# Benchmark report — {$results['env']['timestamp']}",
-        '',
-        '## Environment',
-        '',
+    // Environment lines are emitted ONLY for the keys this dataset actually
+    // records.
+    //
+    // This writer was written for run.php's own datasets, which stamp both
+    // `opcache` and `sapi`. A REAL-deployment dataset stamps neither (see
+    // run-http.php's env block for why: `opcache` is per-mode there, and the
+    // orchestrator's SAPI is not either server's). Reaching this function with
+    // one used to be impossible — `--export` died earlier on a redeclaration
+    // fatal — so the two missing keys only surfaced as warnings once that was
+    // fixed.
+    //
+    // `!empty($env['opcache'])` would have turned ABSENCE into an affirmative
+    // "OPcache (CLI): no", which is the exact false claim that was removed
+    // from the real-deployment pages (see OpcacheProvenanceTest): the pool sets
+    // `php_admin_value[opcache.enable] = 1`, so a dataset that does not say is
+    // not a dataset that said no. An omitted key therefore renders no line.
+    $envLines = [
         '- PHP: ' . $results['env']['php_version'],
         '- OS: ' . $results['env']['os'],
-        '- OPcache (CLI): ' . ($results['env']['opcache'] ? 'yes' : 'no'),
-        '- SAPI: ' . $results['env']['sapi'],
-        '',
-        '## Summary',
-        '',
     ];
+    if (array_key_exists('opcache', $results['env'])) {
+        $envLines[] = '- OPcache (CLI): ' . ($results['env']['opcache'] ? 'yes' : 'no');
+    }
+    if (array_key_exists('sapi', $results['env'])) {
+        $envLines[] = '- SAPI: ' . $results['env']['sapi'];
+    }
+
+    $lines = array_merge(
+        [
+            "# Benchmark report — {$results['env']['timestamp']}",
+            '',
+            '## Environment',
+            '',
+        ],
+        $envLines,
+        [
+            '',
+            '## Summary',
+            '',
+        ]
+    );
 
     foreach ($results['apps'] as $app) {
         $lines[] = "### {$app['app']}";

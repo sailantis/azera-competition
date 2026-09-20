@@ -100,6 +100,7 @@ $memRepeats = max(1, (int) ($opts['mem-repeats'] ?? 10));
 $budget = "{$itersPerRun}x{$runs}";
 
 require_once __DIR__ . '/deploy-lib.php';
+require_once __DIR__ . '/version-lib.php';
 
 $root = dirname(__DIR__);
 
@@ -120,9 +121,27 @@ $results = [
     'env' => [
         'php_version' => PHP_VERSION,
         'os'          => PHP_OS . ' ' . php_uname('r'),
-        'sapi'        => PHP_SAPI,
-        'timestamp'   => date('c'),
-        'deployment'  => 'real',
+        // NOTE: there is deliberately NO `sapi` and NO `opcache` key here.
+        //
+        // Both are CLI-harness fields. `sapi` would record THIS process's SAPI
+        // ('cli'), which is the orchestrator — neither of the servers whose
+        // numbers are in the file. And `opcache` (= opcache.enable_cli) is the
+        // switch only the CLI SAPI reads; php-fpm runs as fpm-fcgi and reads
+        // `opcache.enable` instead, so the field answers a question the FPM
+        // rows cannot use. Stamping either produces a dataset that describes
+        // the client rather than the deployment.
+        //
+        // The per-server truth is `opcache_by_mode` below. It used to be
+        // MISSING entirely, and the renderers' `!empty($env['opcache'])`
+        // turned that absence into an affirmative "OPcache (CLI): no" on every
+        // real-deployment page — contradicting the same dataset's own
+        // servers.php_fpm string ("with Zend OPcache v8.3.33") and the pool
+        // template's `php_admin_value[opcache.enable] = 1`.
+        'timestamp'  => date('c'),
+        'deployment' => 'real',
+        // What each server's requests actually ran under, per mode. Absent
+        // keys mean "not establishable", never "off" — see deploymentOpcache().
+        'opcache_by_mode' => deploymentOpcache($root, static fn(string $cmd): string => shellProcessOutput($cmd)),
         // The FPM deployment model as actually configured. The report reads
         // this to describe what it measured instead of assuming a value.
         'fpm_max_requests' => fpmMaxRequestsFromTemplate($root),
@@ -142,6 +161,12 @@ $results = [
         // so the report can tell a probed dataset from a legacy one and stop
         // rendering the warm-GET-/ startup proxy.
         'boot_probe' => 50,
+        // Every entrant's version, as THIS run saw it. The real-deployment
+        // dataset recorded the servers (rr/nginx/php-fpm) and the PHP version
+        // but no framework version at all, so the published pages described an
+        // environment in which none of the six measured things had an identity.
+        // Also stamped on the CLI side (run.php) through the same helper.
+        'frameworks' => frameworkVersions($root),
         'servers'    => [
             'roadrunner' => trim((string) shellProcessOutput("{$rrBinary} --version")),
             'nginx'      => trim((string) shellProcessOutput('nginx -v 2>&1')),

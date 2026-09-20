@@ -41,6 +41,8 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/bench-lib.php';
+// assertEnvComparable() — the shared runtime-comparability check.
+require_once __DIR__ . '/env-sanity.php';
 
 $args = array_slice($argv, 1);
 if (count($args) < 3) {
@@ -69,20 +71,7 @@ foreach ([[$target, $targetPath], [$fresh, $freshPath]] as [$data, $path]) {
 
 // --- sanity checks: the two runs must be comparable ------------------------
 
-$san = static function (array $d): array {
-    $out = [];
-    foreach (['php_version', 'opcache', 'sapi'] as $k) {
-        if (isset($d['env'][$k])) {
-            $out[$k] = $d['env'][$k];
-        }
-    }
-
-    return $out;
-};
-if ($san($target) !== $san($fresh)) {
-    fwrite(STDERR, "Env mismatch (php/opcache/sapi differ) — boot numbers would not be comparable:\n");
-    fwrite(STDERR, '  target: ' . json_encode($san($target)) . "\n");
-    fwrite(STDERR, '  fresh : ' . json_encode($san($fresh)) . "\n");
+if (!assertEnvComparable($target, $fresh, 'the spliced mode\'s boot numbers')) {
     exit(1);
 }
 

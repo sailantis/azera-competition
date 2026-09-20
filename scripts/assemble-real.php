@@ -34,16 +34,10 @@ $outPath = array_shift($args);
 
 // budgetOfMode()/budgetsByAppMode()/assertUniformBudget() — see bench-lib.php.
 require_once __DIR__ . '/bench-lib.php';
+// assertEnvComparable() — the shared runtime-comparability check.
+require_once __DIR__ . '/env-sanity.php';
 
-$san = static function (array $d): array {
-    $s = [];
-    foreach (['php_version', 'opcache', 'sapi'] as $k) {
-        if (isset($d['env'][$k])) {
-            $s[$k] = $d['env'][$k];
-        }
-    }
-    return $s;
-};
+$san = static fn(array $d): array => envSanity($d);
 
 $combined   = null;
 $refEnv     = null;
