@@ -12,48 +12,48 @@
 
 | Mode | Request | Iter/Run | Runs | Trimmed Mean (ms) | Handle (ms) | Cleanup (ms) | Min (ms) | Mean (ms) | Median (ms) | p95 (ms) | Peak mem |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| roadrunner | GET / | 1000 | 10 | 0.2674 |  |  | 0.1823 | 0.2691 | 0.2507 | 0.3715 | 0 |
-| roadrunner | GET /items | 1000 | 10 | 0.5007 |  |  | 0.3343 | 0.4972 | 0.4823 | 0.6542 | 0 |
-| roadrunner | GET /items/1 | 1000 | 10 | 0.3667 |  |  | 0.2218 | 0.3672 | 0.3524 | 0.4963 | 0 |
-| roadrunner | POST /items | 1000 | 10 | 0.4587 |  |  | 0.2985 | 0.4583 | 0.4450 | 0.5995 | 0 |
-| roadrunner | GET /items-qb | 1000 | 10 | 0.4438 |  |  | 0.2922 | 0.4404 | 0.4231 | 0.5813 | 0 |
-| roadrunner | GET /items-qb/1 | 1000 | 10 | 0.3790 |  |  | 0.2158 | 0.3802 | 0.3651 | 0.5040 | 0 |
-| roadrunner | POST /items-qb | 1000 | 10 | 0.4281 |  |  | 0.2634 | 0.4293 | 0.4124 | 0.5621 | 0 |
-| roadrunner | GET /api/items | 1000 | 10 | 0.3280 |  |  | 0.2045 | 0.3250 | 0.3106 | 0.4424 | 0 |
-| roadrunner | GET /api/items/1 | 1000 | 10 | 0.3126 |  |  | 0.1918 | 0.3150 | 0.3037 | 0.4293 | 0 |
-| roadrunner | POST /api/items | 1000 | 10 | 0.3189 |  |  | 0.2194 | 0.3184 | 0.3038 | 0.4322 | 0 |
-| roadrunner | GET /features/aop | 1000 | 10 | 0.4469 |  |  | 0.2904 | 0.4666 | 0.4381 | 0.6891 | 0 |
-| roadrunner | GET /features/cache | 1000 | 10 | 0.2417 |  |  | 0.1664 | 0.2418 | 0.2291 | 0.3239 | 0 |
-| roadrunner | GET /features/log | 1000 | 10 | 0.2551 |  |  | 0.1685 | 0.2560 | 0.2393 | 0.3450 | 0 |
-| roadrunner | GET /features/retry | 1000 | 10 | 0.2466 |  |  | 0.1722 | 0.2474 | 0.2326 | 0.3335 | 0 |
-| roadrunner | GET /features/pipeline | 1000 | 10 | 0.2533 |  |  | 0.1777 | 0.2537 | 0.2384 | 0.3423 | 0 |
-| roadrunner | GET /features/db-events | 1000 | 10 | 0.3659 |  |  | 0.2259 | 0.3646 | 0.3464 | 0.4811 | 0 |
-| roadrunner | GET /features/events | 1000 | 10 | 0.3266 |  |  | 0.2125 | 0.3256 | 0.3141 | 0.4349 | 0 |
-| roadrunner | GET /features/validation | 1000 | 10 | 0.2770 |  |  | 0.1953 | 0.2783 | 0.2662 | 0.3720 | 0 |
-| roadrunner | GET /features/config | 1000 | 10 | 0.2425 |  |  | 0.1527 | 0.2424 | 0.2298 | 0.3231 | 0 |
-| roadrunner | GET /features/request-scoped | 1000 | 10 | 0.2361 |  |  | 0.1610 | 0.2358 | 0.2227 | 0.3175 | 0 |
-| roadrunner | GET /features/rate-limit | 1000 | 10 | 0.2335 |  |  | 0.1597 | 0.2339 | 0.2223 | 0.3082 | 0 |
-| php-fpm | GET / | 1000 | 10 | 0.8214 |  |  | 0.6602 | 0.8218 | 0.7956 | 1.0382 | 0 |
-| php-fpm | GET /items | 1000 | 10 | 1.5775 |  |  | 1.3888 | 1.5770 | 1.5400 | 1.8327 | 0 |
-| php-fpm | GET /items/1 | 1000 | 10 | 1.4431 |  |  | 1.2817 | 1.4444 | 1.4143 | 1.6710 | 0 |
-| php-fpm | POST /items | 1000 | 10 | 1.6357 |  |  | 1.4489 | 1.6361 | 1.5891 | 1.9009 | 0 |
-| php-fpm | GET /items-qb | 1000 | 10 | 1.3996 |  |  | 1.2411 | 1.3990 | 1.3651 | 1.6381 | 0 |
-| php-fpm | GET /items-qb/1 | 1000 | 10 | 1.3486 |  |  | 1.1873 | 1.3483 | 1.3189 | 1.5749 | 0 |
-| php-fpm | POST /items-qb | 1000 | 10 | 1.4606 |  |  | 1.2841 | 1.4617 | 1.4134 | 1.6828 | 0 |
-| php-fpm | GET /api/items | 1000 | 10 | 1.3675 |  |  | 1.1863 | 1.3679 | 1.3352 | 1.6114 | 0 |
-| php-fpm | GET /api/items/1 | 1000 | 10 | 1.3955 |  |  | 1.2167 | 1.3957 | 1.3646 | 1.6380 | 0 |
-| php-fpm | POST /api/items | 1000 | 10 | 1.4664 |  |  | 1.2684 | 1.4673 | 1.4293 | 1.7183 | 0 |
-| php-fpm | GET /features/aop | 1000 | 10 | 2.5676 |  |  | 1.6940 | 2.5688 | 2.5233 | 2.9501 | 0 |
-| php-fpm | GET /features/cache | 1000 | 10 | 1.6501 |  |  | 1.4483 | 1.6495 | 1.6175 | 1.8936 | 0 |
-| php-fpm | GET /features/log | 1000 | 10 | 1.2335 |  |  | 1.0728 | 1.2324 | 1.2043 | 1.4389 | 0 |
-| php-fpm | GET /features/retry | 1000 | 10 | 1.2213 |  |  | 1.0560 | 1.2220 | 1.1946 | 1.4160 | 0 |
-| php-fpm | GET /features/pipeline | 1000 | 10 | 0.8139 |  |  | 0.6489 | 0.8116 | 0.7881 | 1.0105 | 0 |
-| php-fpm | GET /features/db-events | 1000 | 10 | 1.7699 |  |  | 1.5740 | 1.7693 | 1.7324 | 2.0541 | 0 |
-| php-fpm | GET /features/events | 1000 | 10 | 1.7337 |  |  | 1.5318 | 1.7351 | 1.6950 | 2.0280 | 0 |
-| php-fpm | GET /features/validation | 1000 | 10 | 0.8208 |  |  | 0.6752 | 0.8245 | 0.8014 | 1.0235 | 0 |
-| php-fpm | GET /features/config | 1000 | 10 | 0.7672 |  |  | 0.6138 | 0.7666 | 0.7429 | 0.9634 | 0 |
-| php-fpm | GET /features/request-scoped | 1000 | 10 | 0.7733 |  |  | 0.6177 | 0.7741 | 0.7517 | 0.9759 | 0 |
-| php-fpm | GET /features/rate-limit | 1000 | 10 | 0.7842 |  |  | 0.6192 | 0.7827 | 0.7610 | 0.9748 | 0 |
+| roadrunner | GET / | 1000 | 10 | 0.2704 |  |  | 0.1861 | 0.2700 | 0.2559 | 0.3592 | 0 |
+| roadrunner | GET /items | 1000 | 10 | 0.4781 |  |  | 0.3325 | 0.4809 | 0.4682 | 0.6258 | 0 |
+| roadrunner | GET /items/1 | 1000 | 10 | 0.3635 |  |  | 0.2221 | 0.3612 | 0.3461 | 0.4859 | 0 |
+| roadrunner | POST /items | 1000 | 10 | 0.4842 |  |  | 0.3059 | 0.4850 | 0.4659 | 0.6067 | 0 |
+| roadrunner | GET /items-qb | 1000 | 10 | 0.4347 |  |  | 0.2925 | 0.4330 | 0.4189 | 0.5628 | 0 |
+| roadrunner | GET /items-qb/1 | 1000 | 10 | 0.3737 |  |  | 0.2470 | 0.3742 | 0.3593 | 0.4901 | 0 |
+| roadrunner | POST /items-qb | 1000 | 10 | 0.4365 |  |  | 0.2691 | 0.4342 | 0.4208 | 0.5696 | 0 |
+| roadrunner | GET /api/items | 1000 | 10 | 0.3283 |  |  | 0.2418 | 0.3279 | 0.3116 | 0.4394 | 0 |
+| roadrunner | GET /api/items/1 | 1000 | 10 | 0.3060 |  |  | 0.1998 | 0.3057 | 0.2928 | 0.4114 | 0 |
+| roadrunner | POST /api/items | 1000 | 10 | 0.3454 |  |  | 0.2265 | 0.3460 | 0.3303 | 0.4726 | 0 |
+| roadrunner | GET /features/aop | 1000 | 10 | 0.4588 |  |  | 0.3449 | 0.4797 | 0.4466 | 0.6929 | 0 |
+| roadrunner | GET /features/cache | 1000 | 10 | 0.2465 |  |  | 0.1672 | 0.2467 | 0.2324 | 0.3313 | 0 |
+| roadrunner | GET /features/log | 1000 | 10 | 0.2486 |  |  | 0.1749 | 0.2498 | 0.2380 | 0.3318 | 0 |
+| roadrunner | GET /features/retry | 1000 | 10 | 0.2479 |  |  | 0.1744 | 0.2475 | 0.2351 | 0.3252 | 0 |
+| roadrunner | GET /features/pipeline | 1000 | 10 | 0.2459 |  |  | 0.1661 | 0.2477 | 0.2341 | 0.3242 | 0 |
+| roadrunner | GET /features/db-events | 1000 | 10 | 0.3419 |  |  | 0.2252 | 0.3417 | 0.3282 | 0.4632 | 0 |
+| roadrunner | GET /features/events | 1000 | 10 | 0.3298 |  |  | 0.2081 | 0.3299 | 0.3143 | 0.4501 | 0 |
+| roadrunner | GET /features/validation | 1000 | 10 | 0.2684 |  |  | 0.1811 | 0.2681 | 0.2526 | 0.3591 | 0 |
+| roadrunner | GET /features/config | 1000 | 10 | 0.2298 |  |  | 0.1574 | 0.2302 | 0.2170 | 0.3076 | 0 |
+| roadrunner | GET /features/request-scoped | 1000 | 10 | 0.2325 |  |  | 0.1536 | 0.2327 | 0.2194 | 0.3108 | 0 |
+| roadrunner | GET /features/rate-limit | 1000 | 10 | 0.2385 |  |  | 0.1649 | 0.2383 | 0.2263 | 0.3114 | 0 |
+| php-fpm | GET / | 1000 | 10 | 0.8179 |  |  | 0.6794 | 0.8178 | 0.7957 | 1.0009 | 0 |
+| php-fpm | GET /items | 1000 | 10 | 1.5658 |  |  | 1.4073 | 1.5655 | 1.5328 | 1.7946 | 0 |
+| php-fpm | GET /items/1 | 1000 | 10 | 1.4488 |  |  | 1.2559 | 1.4484 | 1.4168 | 1.6693 | 0 |
+| php-fpm | POST /items | 1000 | 10 | 1.6304 |  |  | 1.4632 | 1.6323 | 1.5842 | 1.8477 | 0 |
+| php-fpm | GET /items-qb | 1000 | 10 | 1.4005 |  |  | 1.2320 | 1.4015 | 1.3669 | 1.6440 | 0 |
+| php-fpm | GET /items-qb/1 | 1000 | 10 | 1.3429 |  |  | 1.1708 | 1.3441 | 1.3082 | 1.5840 | 0 |
+| php-fpm | POST /items-qb | 1000 | 10 | 1.4426 |  |  | 1.2869 | 1.4434 | 1.3979 | 1.6514 | 0 |
+| php-fpm | GET /api/items | 1000 | 10 | 1.3543 |  |  | 1.2001 | 1.3587 | 1.3244 | 1.5547 | 0 |
+| php-fpm | GET /api/items/1 | 1000 | 10 | 1.3915 |  |  | 1.2239 | 1.3907 | 1.3636 | 1.5973 | 0 |
+| php-fpm | POST /api/items | 1000 | 10 | 1.4740 |  |  | 1.2777 | 1.4745 | 1.4398 | 1.7037 | 0 |
+| php-fpm | GET /features/aop | 1000 | 10 | 2.5438 |  |  | 1.6067 | 2.5660 | 2.5050 | 2.9335 | 0 |
+| php-fpm | GET /features/cache | 1000 | 10 | 1.6208 |  |  | 1.4341 | 1.6202 | 1.5877 | 1.8607 | 0 |
+| php-fpm | GET /features/log | 1000 | 10 | 1.2183 |  |  | 1.0568 | 1.2262 | 1.1889 | 1.4728 | 0 |
+| php-fpm | GET /features/retry | 1000 | 10 | 1.2322 |  |  | 1.0646 | 1.2341 | 1.2031 | 1.4478 | 0 |
+| php-fpm | GET /features/pipeline | 1000 | 10 | 0.8150 |  |  | 0.6816 | 0.8147 | 0.7905 | 0.9895 | 0 |
+| php-fpm | GET /features/db-events | 1000 | 10 | 1.7370 |  |  | 1.5563 | 1.7375 | 1.7020 | 1.9960 | 0 |
+| php-fpm | GET /features/events | 1000 | 10 | 1.7148 |  |  | 1.5283 | 1.7158 | 1.6788 | 1.9681 | 0 |
+| php-fpm | GET /features/validation | 1000 | 10 | 0.8155 |  |  | 0.6752 | 0.8169 | 0.7946 | 0.9950 | 0 |
+| php-fpm | GET /features/config | 1000 | 10 | 0.7607 |  |  | 0.6131 | 0.7603 | 0.7364 | 0.9524 | 0 |
+| php-fpm | GET /features/request-scoped | 1000 | 10 | 0.7653 |  |  | 0.6175 | 0.7665 | 0.7476 | 0.9340 | 0 |
+| php-fpm | GET /features/rate-limit | 1000 | 10 | 0.7786 |  |  | 0.6325 | 0.7800 | 0.7587 | 0.9631 | 0 |
 
 ### laravel
 
@@ -299,103 +299,103 @@ Winner = lowest trimmed mean (ms) for that request.
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET / (roadrunner) | **azera** | 0.2674 | symfony | 0.4149 | 0.1475 | 1.6x |
-| GET / (php-fpm) | **azera** | 0.8214 | cakephp | 1.4798 | 0.6584 | 1.8x |
+| GET / (roadrunner) | **azera** | 0.2704 | symfony | 0.4149 | 0.1445 | 1.5x |
+| GET / (php-fpm) | **azera** | 0.8179 | cakephp | 1.4798 | 0.6619 | 1.8x |
 
 ### orm
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /items (roadrunner) | **azera** | 0.5007 | cakephp | 0.9443 | 0.4435 | 1.9x |
-| GET /items (php-fpm) | **azera** | 1.5775 | codeigniter | 2.6890 | 1.1115 | 1.7x |
-| GET /items/1 (roadrunner) | **azera** | 0.3667 | symfony | 0.5781 | 0.2114 | 1.6x |
-| GET /items/1 (php-fpm) | **azera** | 1.4431 | codeigniter | 2.5731 | 1.1301 | 1.8x |
-| POST /items (roadrunner) | **azera** | 0.4587 | symfony | 0.7902 | 0.3315 | 1.7x |
-| POST /items (php-fpm) | **azera** | 1.6357 | codeigniter | 2.6781 | 1.0425 | 1.6x |
+| GET /items (roadrunner) | **azera** | 0.4781 | cakephp | 0.9443 | 0.4662 | 2.0x |
+| GET /items (php-fpm) | **azera** | 1.5658 | codeigniter | 2.6890 | 1.1232 | 1.7x |
+| GET /items/1 (roadrunner) | **azera** | 0.3635 | symfony | 0.5781 | 0.2146 | 1.6x |
+| GET /items/1 (php-fpm) | **azera** | 1.4488 | codeigniter | 2.5731 | 1.1243 | 1.8x |
+| POST /items (roadrunner) | **azera** | 0.4842 | symfony | 0.7902 | 0.3059 | 1.6x |
+| POST /items (php-fpm) | **azera** | 1.6304 | codeigniter | 2.6781 | 1.0477 | 1.6x |
 
 ### query-builder
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /items-qb (roadrunner) | **azera** | 0.4438 | symfony | 0.6689 | 0.2251 | 1.5x |
-| GET /items-qb (php-fpm) | **azera** | 1.3996 | cakephp | 2.2575 | 0.8579 | 1.6x |
-| GET /items-qb/1 (roadrunner) | **azera** | 0.3790 | symfony | 0.4776 | 0.0986 | 1.3x |
-| GET /items-qb/1 (php-fpm) | **azera** | 1.3486 | cakephp | 2.1746 | 0.8260 | 1.6x |
-| POST /items-qb (roadrunner) | **azera** | 0.4281 | symfony | 0.6983 | 0.2702 | 1.6x |
-| POST /items-qb (php-fpm) | **azera** | 1.4606 | cakephp | 2.2649 | 0.8043 | 1.6x |
+| GET /items-qb (roadrunner) | **azera** | 0.4347 | symfony | 0.6689 | 0.2342 | 1.5x |
+| GET /items-qb (php-fpm) | **azera** | 1.4005 | cakephp | 2.2575 | 0.8570 | 1.6x |
+| GET /items-qb/1 (roadrunner) | **azera** | 0.3737 | symfony | 0.4776 | 0.1039 | 1.3x |
+| GET /items-qb/1 (php-fpm) | **azera** | 1.3429 | cakephp | 2.1746 | 0.8317 | 1.6x |
+| POST /items-qb (roadrunner) | **azera** | 0.4365 | symfony | 0.6983 | 0.2619 | 1.6x |
+| POST /items-qb (php-fpm) | **azera** | 1.4426 | cakephp | 2.2649 | 0.8224 | 1.6x |
 
 ### rest-api
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /api/items (roadrunner) | **azera** | 0.3280 | symfony | 0.6705 | 0.3426 | 2.0x |
-| GET /api/items (php-fpm) | **azera** | 1.3675 | cakephp | 2.5180 | 1.1505 | 1.8x |
-| GET /api/items/1 (roadrunner) | **azera** | 0.3126 | symfony | 0.5124 | 0.1998 | 1.6x |
-| GET /api/items/1 (php-fpm) | **azera** | 1.3955 | codeigniter | 2.4904 | 1.0950 | 1.8x |
-| POST /api/items (roadrunner) | **azera** | 0.3189 | symfony | 0.7143 | 0.3954 | 2.2x |
-| POST /api/items (php-fpm) | **azera** | 1.4664 | codeigniter | 2.6237 | 1.1573 | 1.8x |
+| GET /api/items (roadrunner) | **azera** | 0.3283 | symfony | 0.6705 | 0.3422 | 2.0x |
+| GET /api/items (php-fpm) | **azera** | 1.3543 | cakephp | 2.5180 | 1.1637 | 1.9x |
+| GET /api/items/1 (roadrunner) | **azera** | 0.3060 | symfony | 0.5124 | 0.2063 | 1.7x |
+| GET /api/items/1 (php-fpm) | **azera** | 1.3915 | codeigniter | 2.4904 | 1.0989 | 1.8x |
+| POST /api/items (roadrunner) | **azera** | 0.3454 | symfony | 0.7143 | 0.3689 | 2.1x |
+| POST /api/items (php-fpm) | **azera** | 1.4740 | codeigniter | 2.6237 | 1.1497 | 1.8x |
 
 ### aop
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/aop (roadrunner) | **azera** | 0.4469 | symfony | 0.5960 | 0.1492 | 1.3x |
-| GET /features/aop (php-fpm) | **azera** | 2.5676 | symfony | 3.2568 | 0.6892 | 1.3x |
-| GET /features/log (roadrunner) | **azera** | 0.2551 | symfony | 0.3538 | 0.0987 | 1.4x |
-| GET /features/log (php-fpm) | **azera** | 1.2335 | symfony | 1.9276 | 0.6942 | 1.6x |
-| GET /features/retry (roadrunner) | **azera** | 0.2466 | symfony | 0.3670 | 0.1203 | 1.5x |
-| GET /features/retry (php-fpm) | **azera** | 1.2213 | symfony | 1.9600 | 0.7386 | 1.6x |
-| GET /features/pipeline (roadrunner) | **azera** | 0.2533 | symfony | 0.3627 | 0.1094 | 1.4x |
-| GET /features/pipeline (php-fpm) | **azera** | 0.8139 | symfony | 1.9470 | 1.1331 | 2.4x |
+| GET /features/aop (roadrunner) | **azera** | 0.4588 | symfony | 0.5960 | 0.1372 | 1.3x |
+| GET /features/aop (php-fpm) | **azera** | 2.5438 | symfony | 3.2568 | 0.7130 | 1.3x |
+| GET /features/log (roadrunner) | **azera** | 0.2486 | symfony | 0.3538 | 0.1051 | 1.4x |
+| GET /features/log (php-fpm) | **azera** | 1.2183 | symfony | 1.9276 | 0.7093 | 1.6x |
+| GET /features/retry (roadrunner) | **azera** | 0.2479 | symfony | 0.3670 | 0.1190 | 1.5x |
+| GET /features/retry (php-fpm) | **azera** | 1.2322 | symfony | 1.9600 | 0.7277 | 1.6x |
+| GET /features/pipeline (roadrunner) | **azera** | 0.2459 | symfony | 0.3627 | 0.1168 | 1.5x |
+| GET /features/pipeline (php-fpm) | **azera** | 0.8150 | symfony | 1.9470 | 1.1321 | 2.4x |
 
 ### cache
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/cache (roadrunner) | **azera** | 0.2417 | symfony | 0.3724 | 0.1307 | 1.5x |
-| GET /features/cache (php-fpm) | **azera** | 1.6501 | cakephp | 2.3881 | 0.7381 | 1.4x |
+| GET /features/cache (roadrunner) | **azera** | 0.2465 | symfony | 0.3724 | 0.1259 | 1.5x |
+| GET /features/cache (php-fpm) | **azera** | 1.6208 | cakephp | 2.3881 | 0.7673 | 1.5x |
 
 ### db-events
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/db-events (roadrunner) | **azera** | 0.3659 | symfony | 0.6174 | 0.2515 | 1.7x |
-| GET /features/db-events (php-fpm) | **azera** | 1.7699 | cakephp | 2.5861 | 0.8162 | 1.5x |
+| GET /features/db-events (roadrunner) | **azera** | 0.3419 | symfony | 0.6174 | 0.2755 | 1.8x |
+| GET /features/db-events (php-fpm) | **azera** | 1.7370 | cakephp | 2.5861 | 0.8491 | 1.5x |
 
 ### events
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/events (roadrunner) | **azera** | 0.3266 | symfony | 0.4678 | 0.1412 | 1.4x |
-| GET /features/events (php-fpm) | **azera** | 1.7337 | cakephp | 1.9199 | 0.1862 | 1.1x |
+| GET /features/events (roadrunner) | **azera** | 0.3298 | symfony | 0.4678 | 0.1381 | 1.4x |
+| GET /features/events (php-fpm) | **azera** | 1.7148 | cakephp | 1.9199 | 0.2051 | 1.1x |
 
 ### validation
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/validation (roadrunner) | **azera** | 0.2770 | symfony | 0.5102 | 0.2331 | 1.8x |
-| GET /features/validation (php-fpm) | **azera** | 0.8208 | cakephp | 1.8311 | 1.0104 | 2.2x |
+| GET /features/validation (roadrunner) | **azera** | 0.2684 | symfony | 0.5102 | 0.2417 | 1.9x |
+| GET /features/validation (php-fpm) | **azera** | 0.8155 | cakephp | 1.8311 | 1.0156 | 2.2x |
 
 ### config
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/config (roadrunner) | **azera** | 0.2425 | symfony | 0.3516 | 0.1091 | 1.5x |
-| GET /features/config (php-fpm) | **azera** | 0.7672 | cakephp | 1.3832 | 0.6160 | 1.8x |
+| GET /features/config (roadrunner) | **azera** | 0.2298 | symfony | 0.3516 | 0.1218 | 1.5x |
+| GET /features/config (php-fpm) | **azera** | 0.7607 | cakephp | 1.3832 | 0.6225 | 1.8x |
 
 ### request-scoped
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/request-scoped (roadrunner) | **azera** | 0.2361 | symfony | 0.3551 | 0.1190 | 1.5x |
-| GET /features/request-scoped (php-fpm) | **azera** | 0.7733 | cakephp | 1.3546 | 0.5813 | 1.8x |
+| GET /features/request-scoped (roadrunner) | **azera** | 0.2325 | symfony | 0.3551 | 0.1227 | 1.5x |
+| GET /features/request-scoped (php-fpm) | **azera** | 0.7653 | cakephp | 1.3546 | 0.5893 | 1.8x |
 
 ### rate-limiter
 
 | Request | Winner | Trimmed Mean (ms) | Runner-up | Trimmed Mean (ms) | Margin (ms) | Speed-up |
 |---|---|---:|---|---:|---:|---:|
-| GET /features/rate-limit (roadrunner) | **azera** | 0.2335 | symfony | 0.3645 | 0.1310 | 1.6x |
-| GET /features/rate-limit (php-fpm) | **azera** | 0.7842 | cakephp | 1.4670 | 0.6829 | 1.9x |
+| GET /features/rate-limit (roadrunner) | **azera** | 0.2385 | symfony | 0.3645 | 0.1260 | 1.5x |
+| GET /features/rate-limit (php-fpm) | **azera** | 0.7786 | cakephp | 1.4670 | 0.6885 | 1.9x |
 
 ## Win Count
 
