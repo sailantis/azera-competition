@@ -251,7 +251,11 @@ final class VersionStampTest extends TestCase
                     . 'while a .git on the measured side is a stale leftover that is never synced'
             );
         } finally {
-            if ($previous === false) { putenv('AZERA_FRAMEWORK_REF'); } else { putenv('AZERA_FRAMEWORK_REF=' . $previous); }
+            if ($previous === false) {
+                putenv('AZERA_FRAMEWORK_REF');
+            } else {
+                putenv('AZERA_FRAMEWORK_REF=' . $previous);
+            }
             @unlink($sibling . '/.git/HEAD');
             @rmdir($sibling . '/.git');
             @unlink($sibling . '/composer.json');
@@ -315,7 +319,11 @@ PHP);
                 "run.php's azeraFrameworkRef() must return the LAUNCHER's ref, not read .git:\n{$text}"
             );
         } finally {
-            if ($previous === false) { putenv('AZERA_FRAMEWORK_REF'); } else { putenv('AZERA_FRAMEWORK_REF=' . $previous); }
+            if ($previous === false) {
+                putenv('AZERA_FRAMEWORK_REF');
+            } else {
+                putenv('AZERA_FRAMEWORK_REF=' . $previous);
+            }
             @unlink($driver);
         }
     }

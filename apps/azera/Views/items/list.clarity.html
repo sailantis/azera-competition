@@ -16,7 +16,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for item, idx in items %}
+        {% for idx, item in items %}
             <tr {% if idx % 2 == 0 %}class="even"{% endif %}>
                 <td><a href="{{ baseUrl }}/{{ item.id }}">{{ item.id }}</a></td>
                 <td>{{ item.title }}</td>

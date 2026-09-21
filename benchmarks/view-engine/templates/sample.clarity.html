@@ -3,7 +3,7 @@
 {% block content %}
   {% include "partials/header" %}
   <ul>
-    {% for item, idx in items %}
+    {% for idx, item in items %}
       <li {% if idx % 2 == 0 %}class="even"{% endif %}>
         {{ item |> upper }}
         <div class="extras">
