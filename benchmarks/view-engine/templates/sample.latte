@@ -1,0 +1,24 @@
+{layout 'layouts/main.latte'}
+
+{block content}
+  {include 'partials/header.latte'}
+  <ul>
+    {foreach $items as $item}
+      <li
+        {if $iterator->counter0 % 2 == 0}
+          class="even"
+        {/if}>
+        {* Latte's `upper` is declared `string|Stringable|null` and Latte compiles
+           with strict types, so `{$item|upper}` on the integer `sample` items
+           throws. Every other engine's upper casts internally; `$item . ''`
+           performs the same cast explicitly, so the work stays equivalent. *}
+        {($item . '')|upper}
+        <div class="extras">
+          {for $j = 0; $j < 10; $j++}
+            <span>{$item . '-' . $j}</span>
+          {/for}
+        </div>
+      </li>
+    {/foreach}
+  </ul>
+{/block}

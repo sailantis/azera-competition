@@ -1,0 +1,19 @@
+{% extends "layouts/main" %}
+
+{% block content %}
+    {% include "partials/header" %}
+    <ul>
+        {% for idx, item in items %}
+            <li {% if idx % 2 == 0 %}class="even"{% endif %}>
+                <span class="name">{{ item : label |> upper }}</span>
+                <span class="id" data-id="{{ item:id }}">{{ user?:nickname ?? 'anonymous' }}</span>
+            </li>
+        {% endfor %}
+    </ul>
+    <p class="city">{{ user : address : city }}, {{ user : address : country }}</p>
+    <p class="roles">
+        {% for role in user : roles %}
+            <span class="role">{{ role }}</span>
+        {% endfor %}
+    </p>
+{% endblock %}

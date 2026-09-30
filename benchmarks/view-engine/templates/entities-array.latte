@@ -1,0 +1,21 @@
+{layout 'layouts/main.latte'}
+
+{block content}
+  {include 'partials/header.latte'}
+<ul>
+    {foreach $items as $item}
+    <li
+        {if $iterator->counter0 % 2 == 0}
+        class="even"
+        {/if}>
+        <span class="name">{$item['label']|upper}</span>
+        <span class="id" data-id="{$item['id']}">{$user['nickname'] ?? 'anonymous'}</span>
+    </li>
+    {/foreach}
+</ul>
+<p class="city">{$user['address']['city']}, {$user['address']['country']}</p>
+<p class="roles">
+    {foreach $user['roles'] as $role}
+    <span class="role">{$role}</span>{/foreach}
+</p>
+{/block}

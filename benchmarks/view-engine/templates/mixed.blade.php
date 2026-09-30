@@ -1,0 +1,57 @@
+@extends('layouts.main')
+
+@section('content')
+    @include('partials.header', ['title' => $title, 'items' => $items])
+<dl class="settings">
+    <dt>theme</dt>
+    <dd data-value="{{ $theme }}">{{ $theme }}</dd>
+    <dt>locale</dt>
+    <dd data-value="{{ $locale }}">{{ $locale }}</dd>
+    <dt>region</dt>
+    <dd data-value="{{ $region }}">{{ $region }}</dd>
+    <dt>currency</dt>
+    <dd data-value="{{ $currency }}">{{ $currency }}</dd>
+    <dt>plan</dt>
+    <dd data-value="{{ $plan }}">{{ $plan }}</dd>
+    <dt>channel</dt>
+    <dd data-value="{{ $channel }}">{{ $channel }}</dd>
+    <dt>tier</dt>
+    <dd data-value="{{ $tier }}">{{ $tier }}</dd>
+    <dt>status</dt>
+    <dd data-value="{{ $status }}">{{ $status }}</dd>
+    <dt>build</dt>
+    <dd data-value="{{ $build }}">{{ $build }}</dd>
+    <dt>stage</dt>
+    <dd data-value="{{ $stage }}">{{ $stage }}</dd>
+    <dt>cluster</dt>
+    <dd data-value="{{ $cluster }}">{{ $cluster }}</dd>
+    <dt>node</dt>
+    <dd data-value="{{ $node }}">{{ $node }}</dd>
+    <dt>release</dt>
+    <dd data-value="{{ $release }}">{{ $release }}</dd>
+    <dt>subtitle</dt>
+    <dd data-value="{{ $subtitle }}">{{ $subtitle }}</dd>
+    <dt>tagline</dt>
+    <dd data-value="{{ $tagline }}">{{ $tagline }}</dd>
+    <dt>generated</dt>
+    <dd data-value="{{ $generated }}">{{ $generated }}</dd>
+    <dt>owner</dt>
+    <dd data-value="{{ $owner }}">{{ $owner }}</dd>
+    <dt>checksum</dt>
+    <dd data-value="{{ $checksum }}">{{ $checksum }}</dd>
+</dl>
+<p class="total" data-value="{{ $total }}">{{ $total }}</p>
+<p class="count" data-value="{{ $rowCount }}">{{ $rowCount }}</p>
+<table>
+    @foreach($items as $idx => $row)
+    <tr @if($idx % 2 == 0) class="even" @endif>
+        <td>{{ $row['id'] }}</td>
+        <td>{{ mb_strtoupper($row['label']) }}</td>
+        <td data-sku="{{ $row['sku'] }}">{{ $row['sku'] }}</td>
+        <td>{{ $row['city'] }}</td>
+        <td>{{ $row['category'] }}</td>
+        <td>{{ $row['status'] }}</td>
+    </tr>
+    @endforeach
+</table>
+@endsection

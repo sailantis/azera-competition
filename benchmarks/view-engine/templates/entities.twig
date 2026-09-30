@@ -1,0 +1,21 @@
+{% extends 'layouts/main.twig' %}
+
+{% block content %}
+  {% include 'partials/header.twig' %}
+<ul>
+    {% for item in items %}
+    <li
+        {% if loop.index0 is defined and loop.index0 % 2 == 0 %}
+        class="even"
+        {% endif %}>
+        <span class="name">{{ item.label | upper }}</span>
+        <span class="id" data-id="{{ item.id }}">{{ user.nickname | default('anonymous') }}</span>
+    </li>
+    {% endfor %}
+</ul>
+<p class="city">{{ user.address.city }}, {{ user.address.country }}</p>
+<p class="roles">
+    {% for role in user.roles %}
+    <span class="role">{{ role }}</span>{% endfor %}
+</p>
+{% endblock %}
