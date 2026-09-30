@@ -38,6 +38,24 @@ shorter string.
 | `blade`    | `templates/sample.blade.php`    | Laravel Blade (`laravel/framework`)                 |
 | `twig`     | `templates/sample.twig`         | Twig                                                |
 | `stempler` | `templates/sample.dark.php`     | Spiral Stempler                                     |
+| `latte`    | `templates/sample.latte`        | Nette Latte                                         |
+
+### Latte: the one entrant that is stricter than the rest
+
+`latte` is the only engine in the set whose default posture is **strict types**,
+and it showed up immediately rather than subtly: Latte's `upper` filter is
+declared `string|Stringable|null`, so `{$item|upper}` over `sample`'s integer
+items throws a `TypeError` where every other engine's uppercaser casts
+internally. The template writes `{($item . '')|upper}` — the same cast, spelled
+explicitly — so the engine still does the same work rather than being handed
+friendlier data.
+
+The sandbox is deliberately **not** enabled. Latte ships a `SandboxExtension`
+and a `SecurityPolicy`, but both are inert until `setPolicy()` is called, and
+enabling it changes the compiled template — so a `latte` arm with the sandbox on
+would not be measuring the engine its name denotes. Turn it on explicitly through
+`LatteAdapter::getDriver()` if a sandboxed arm is ever wanted (it would need its
+own cache directory, for the same reason `clarity-open` has one).
 
 ### The two Clarity modes, and why only one is on the page
 
