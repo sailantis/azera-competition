@@ -23,6 +23,13 @@ apps/**/tmp/
 # Results (keep committed baselines if desired; ignore transient runs)
 results/transient/
 
+# Bench-harness scratch. The root-anchored `/temp/` above does not reach this,
+# and this directory is scratch by definition: dump.php writes the rendered HTML
+# here, run.php's --out=temp/... writes probe datasets here, and run-remote.ps1
+# excludes `temp` from every VM sync for the same reason. Committing it would
+# add ~50 KB of regenerated HTML to every diff.
+benchmarks/view-engine/temp/
+
 # OS / IDE
 .idea/
 .vscode/
