@@ -32,7 +32,12 @@ $opts = getopt('', ['engines::', 'iterations-per-run::', 'runs::', 'out::', 'no-
 // Clarity and states in prose that the open mode was measured and does not
 // differ. The key stays so that claim can be re-run and re-checked rather than
 // taken on faith: `--engines=clarity,clarity-open`.
-$engines         = isset($opts['engines']) ? explode(',', $opts['engines']) : ['native', 'clarity', 'plates', 'blade', 'twig', 'stempler'];
+//
+// `latte` IS in the default list. It is a full peer of the other engines (the
+// same pages, layouts and partials, rendered by its own templates), unlike
+// `clarity-open`, which is the same engine under a second policy and so cannot
+// support a comparison the noise floor does not already decide.
+$engines         = isset($opts['engines']) ? explode(',', $opts['engines']) : ['native', 'clarity', 'plates', 'blade', 'twig', 'stempler', 'latte'];
 $itersPerRun     = isset($opts['iterations-per-run']) ? (int) $opts['iterations-per-run'] : 10000;
 $runs            = isset($opts['runs']) ? (int) $opts['runs'] : 30;
 $itemsCount      = isset($opts['items']) ? (int) $opts['items'] : 200; // number of items passed to templates (was 50)

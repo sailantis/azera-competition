@@ -606,7 +606,7 @@ final class ViewEngineHarnessTest extends TestCase
         // changes the compiled output.
         $factory = (string) file_get_contents("$dir/engines.php");
         self::assertStringContainsString("case 'clarity-open':", $factory);
-        self::assertStringContainsString('setSandboxMode(false)', $factory);
+        self::assertStringContainsString('setPolicy(ClarityPolicy::open())', $factory);
         self::assertStringContainsString(
             'setCachePath(sys_get_temp_dir() . \'/clarity-bench-open\')',
             $factory,
@@ -713,11 +713,18 @@ final class ViewEngineHarnessTest extends TestCase
     {
         $src = self::source();
 
-        // Not in the default list...
+        // Not in the default list. `latte` IS, because it is a full peer (its own
+        // templates and layouts), unlike `clarity-open`, which cannot support a
+        // comparison the noise floor does not already decide.
         self::assertStringContainsString(
-            "\$engines         = isset(\$opts['engines']) ? explode(',', \$opts['engines']) : ['native', 'clarity', 'plates', 'blade', 'twig', 'stempler'];",
+            "\$engines         = isset(\$opts['engines']) ? explode(',', \$opts['engines']) : ['native', 'clarity', 'plates', 'blade', 'twig', 'stempler', 'latte'];",
             $src,
             'the default run must publish ONE Clarity, not two'
+        );
+        self::assertStringNotContainsString(
+            "'stempler', 'latte', 'clarity-open'",
+            $src,
+            'the open-mode arm stays opt-in, never in the default list'
         );
 
         // ...but still constructible, in the right MODE, and routed to its own
@@ -727,7 +734,7 @@ final class ViewEngineHarnessTest extends TestCase
         // it there (see testEveryConsumerBuildsEnginesThroughTheSharedFactory).
         $factory = (string) file_get_contents(dirname(__DIR__) . '/benchmarks/view-engine/engines.php');
         self::assertStringContainsString("case 'clarity-open':", $factory, 'the open-mode arm must remain buildable');
-        self::assertStringContainsString('setSandboxMode(false)', $factory);
+        self::assertStringContainsString('setPolicy(ClarityPolicy::open())', $factory);
         self::assertStringContainsString(
             "sys_get_temp_dir() . '/clarity-bench-open'",
             $factory,
