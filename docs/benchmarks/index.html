@@ -58,7 +58,7 @@ main{padding-bottom:10px}
 <header>
   <h1>Azera Benchmark Results</h1>
   <p class="lead">PHP framework comparison across a full-stack request lifecycle: routing &rarr; controller &rarr; ORM query (SQLite) &rarr; template render &rarr; response.</p>
-  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; OPcache: yes &middot; measured 2026-09-20T11:44:35+00:00</p>
+  <p class="env">PHP 8.3.33 &middot; Linux 6.8.0-139-generic &middot; OPcache: yes &middot; measured 2026-09-29T12:55:05+00:00</p>
 </header>
 <main>
   <div class="grid">
@@ -91,6 +91,11 @@ main{padding-bottom:10px}
   <h3>Framework Competition — PHP-FPM Summary</h3>
   <p>The headline numbers from the measured nginx + PHP-FPM deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and what one request costs in memory. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-http/floor-php in the dataset). The worker-recycling setting of the pool is stated with the server floor below, because it changes what each row contains.</p>
   <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span></div>
+</a>
+<a class="card" href="view-engine.html">
+  <h3>Template engine benchmark</h3>
+  <p>Six template engines rendering one identical page. Not the full-stack suite: this isolates the template layer, comparing Clarity and Native against Twig, Blade, Plates and Stempler.</p>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Clarity</span><span class="chip" style="--c:#777bb3">Native</span><span class="chip" style="--c:#8044db">Twig</span><span class="chip" style="--c:#e5484d">Blade</span><span class="chip" style="--c:#e8590c">Plates</span><span class="chip" style="--c:#0b7285">Stempler</span></div>
 </a>
   </div>
 </main>
