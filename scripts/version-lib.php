@@ -118,15 +118,44 @@ function normaliseVersion(?string $version): ?string
 /**
  * package name => version, from the composer install manifests.
  *
+ * THE MEASURING REPOSITORY'S MANIFEST IS AUTHORITATIVE, and this ordering is
+ * the whole point of the function.
+ *
+ * A second manifest is read so that a package which only the SIBLING installs
+ * can still be resolved — Azera is consumed through a Composer `path`
+ * repository, so a dataset must be readable in a checkout whose own vendor tree
+ * does not carry every entrant. But that sibling manifest describes the
+ * FRAMEWORK'S development tree, not the run: it is built from
+ * azera-framework/composer.json, whose require-dev pins
+ * `illuminate/view ^10.49` and `twig/twig ^3.8`.
+ *
+ * Merging the sibling SECOND let those dev pins overwrite the real ones, and
+ * the 2026-09-22 view-engine dataset was published with both of them wrong:
+ * the page stated "Blade 10.49.0 · Twig 3.28.0" while the run had used
+ * laravel/framework 12.69.2 and twig 3.27.0. `illuminate/view` is not installed
+ * on the VM AT ALL, so the page named a package that was not there beside a
+ * version nothing ran. A version stamp is the one artefact whose entire purpose
+ * is to be traceable to the run; one that reports a DIFFERENT tree's resolution
+ * is worse than a missing one, because it is reproducible-looking and false.
+ *
+ * So a version is taken from the measuring repo when it has one. The sibling is
+ * consulted only for packages that repo does not have — where an answer is
+ * still better than none — and it can never replace an answer for a package
+ * that was actually installed and measured.
+ *
  * @return array<string,string>
  */
 function installedVersions(string $root): array
 {
-    $out = [];
-    foreach ([
+    $files = [
+        // Authoritative: what this repository installed, i.e. what RAN.
         $root . '/vendor/composer/installed.json',
+        // Fallback only: the sibling framework's dev tree.
         dirname($root) . '/azera-framework/vendor/composer/installed.json',
-    ] as $file) {
+    ];
+
+    $out = [];
+    foreach ($files as $file) {
         if (!is_file($file)) {
             continue;
         }
@@ -137,9 +166,16 @@ function installedVersions(string $root): array
         // Composer 2 wraps the list as {"packages": [...]}; Composer 1 writes a
         // bare array. Both shapes occur in the wild, so both are handled.
         foreach ($json['packages'] ?? $json as $pkg) {
-            if (is_array($pkg) && isset($pkg['name'], $pkg['version'])) {
-                $out[(string) $pkg['name']] = (string) $pkg['version'];
+            if (!is_array($pkg) || !isset($pkg['name'], $pkg['version'])) {
+                continue;
             }
+            $name = (string) $pkg['name'];
+            // ALREADY RESOLVED => keep it. This is the guard, not a nicety: the
+            // sibling manifest is only here to fill gaps.
+            if (isset($out[$name])) {
+                continue;
+            }
+            $out[$name] = (string) $pkg['version'];
         }
     }
 
