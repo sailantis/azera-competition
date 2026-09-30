@@ -30,6 +30,18 @@ results/transient/
 # add ~50 KB of regenerated HTML to every diff.
 benchmarks/view-engine/temp/
 
+# Probe and smoke datasets. A run meant for publication writes a
+# `<date>-<label>`-prefixed dataset; a probe or a local smoke run writes a
+# throwaway one, and those were accumulating untracked. Named `view-engine-*`
+# runs are NOT ignored here: a published dataset keeps its real name.
+benchmarks/view-engine/*-smoke.*
+benchmarks/view-engine/ve-probe-*
+results/ve-probe-*
+results/*-smoke.*
+results/*-local-*
+results/view-engine-*-r[0-9]-*
+results/view-engine-*-r[0-9][0-9]-*
+
 # OS / IDE
 .idea/
 .vscode/
