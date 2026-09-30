@@ -316,11 +316,21 @@ final class OpcacheProvenanceTest extends TestCase
     {
         $env = self::realStore()->env();
 
-        self::assertArrayHasKey(
-            'opcache_derived',
-            $env,
-            'a value established after the run must be stamped as reconstructed'
-        );
+        // The block is only needed when a value was established AFTER the run.
+        // A dataset measured with the current harness records its per-mode
+        // setting directly (see opcache_by_mode), so no reconstruction happened
+        // and there is nothing to annotate. The RULE is what is pinned here: if
+        // a reconstruction block exists, it must be complete. Asserting its
+        // presence unconditionally would fail the moment the data got better —
+        // exactly the trap the neighbouring test already documents.
+        if (!array_key_exists('opcache_derived', $env)) {
+            self::assertNotSame(
+                [],
+                self::realStore()->opcacheByMode(),
+                'with no reconstruction block the per-mode setting must have been recorded directly'
+            );
+            self::markTestSkipped('this dataset recorded the per-mode setting directly; no reconstruction block');
+        }
 
         $d = $env['opcache_derived'];
         foreach (['at', 'reason', 'evidence', 'limit', 'scope'] as $key) {

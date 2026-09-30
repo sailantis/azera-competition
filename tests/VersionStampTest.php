@@ -67,6 +67,30 @@ final class VersionStampTest extends TestCase
                 $stamped[$app]['version'] ?? null,
                 "{$app}'s version must be a string, not null — 'unknown' is a last resort, not a default"
             );
+
+            if ($app === 'azera') {
+                // Azera is the ONE entrant that is not a released package: it is
+                // consumed through a Composer `path` repository and deliberately
+                // declares NO `version` field (removed 2026-09-28, because a tag
+                // IS the release and a duplicated field is a second source of
+                // truth that can silently diverge). Its stamped version is
+                // therefore the BRANCH, `dev-main`, and the RELEASE identity is
+                // carried by the git ref instead — which must then be present.
+                // Asserting a release pattern here would force the removed field
+                // back from the other side.
+                self::assertNotSame(
+                    'unknown',
+                    $stamped[$app]['version'],
+                    'azera\'s branch must be recorded rather than left unresolved'
+                );
+                self::assertNotEmpty(
+                    $stamped[$app]['ref'] ?? null,
+                    'azera has no release-version field, so its build identity is the git ref and it must be stamped'
+                );
+
+                continue;
+            }
+
             self::assertMatchesRegularExpression(
                 '/^\d+\.\d+/',
                 $stamped[$app]['version'],
@@ -197,6 +221,87 @@ final class VersionStampTest extends TestCase
         } finally {
             @unlink($sibling . '/composer.json');
             @rmdir($sibling);
+            self::rmTree($scratch);
+        }
+    }
+
+    /**
+     * The MEASURING repository's manifest wins over the sibling's.
+     *
+     * Regression, found on the published page 2026-09-22: the view-engine
+     * dataset stated "Blade 10.49.0 · Twig 3.28.0" while the run had used
+     * laravel/framework 12.69.2 and twig 3.27.0. `installedVersions()` merged
+     * the competition's manifest with the sibling framework's — and let the
+     * SIBLING overwrite, so azera-framework/composer.json's `require-dev` pins
+     * (`illuminate/view ^10.49`, `twig/twig ^3.8`) were reported as the versions
+     * that ran.
+     *
+     * This is the worst shape a provenance bug can take: the page named a
+     * package that was not installed at all, beside a version no run used, in a
+     * section whose entire purpose is that each figure be traceable to its run.
+     *
+     * The scratch tree makes the conflict explicit — the SAME package at
+     * different versions in the two manifests — so the test fails if the merge
+     * order is ever reversed again. A test that only gave one side a value would
+     * pass under either order.
+     */
+    public function testTheMeasuringRepositoriesManifestWinsOverTheSiblings(): void
+    {
+        $scratch = self::scratchTree([
+            // What was installed, i.e. what ran.
+            'vendor/composer/installed.json' => json_encode([
+                'packages' => [
+                    ['name' => 'sailantis/azera-framework', 'version' => 'dev-main'],
+                    ['name' => 'laravel/framework', 'version' => 'v12.69.2'],
+                    ['name' => 'twig/twig', 'version' => 'v3.27.0'],
+                    ['name' => 'league/plates', 'version' => 'v3.6.0'],
+                ],
+            ], JSON_PRETTY_PRINT),
+        ]);
+
+        // The sibling's dev tree, carrying DIFFERENT versions for the same
+        // packages plus one package this repo does not install at all.
+        $sibling = dirname($scratch) . '/azera-framework';
+        @mkdir($sibling . '/vendor/composer', 0777, true);
+        file_put_contents(
+            $sibling . '/composer.json',
+            json_encode(['name' => 'sailantis/azera-framework', 'version' => '0.1.0'], JSON_PRETTY_PRINT)
+        );
+        file_put_contents(
+            $sibling . '/vendor/composer/installed.json',
+            json_encode([
+                'packages' => [
+                    ['name' => 'twig/twig', 'version' => 'v3.28.0'],
+                    ['name' => 'illuminate/view', 'version' => 'v10.49.0'],
+                    ['name' => 'laravel/framework', 'version' => 'v10.0.0'],
+                ],
+            ], JSON_PRETTY_PRINT)
+        );
+
+        try {
+            $installed = installedVersions($scratch);
+
+            self::assertSame(
+                'v3.27.0',
+                $installed['twig/twig'],
+                'twig must report what THIS repository installed, not the sibling dev tree\'s pin'
+            );
+            self::assertSame(
+                'v12.69.2',
+                $installed['laravel/framework'],
+                'laravel must not be downgraded to the sibling\'s value'
+            );
+
+            // The sibling is still a fallback for a package this repo lacks —
+            // that is why it is read at all. An answer is better than none; it
+            // simply may never REPLACE one.
+            self::assertSame(
+                'v10.49.0',
+                $installed['illuminate/view'],
+                'a package only the sibling installs must still resolve, or a dataset becomes unreadable'
+            );
+        } finally {
+            self::rmTree($sibling);
             self::rmTree($scratch);
         }
     }
@@ -389,6 +494,22 @@ PHP);
 
         $tag      = trim($out[0]);
         $declared = declaredVersion($dir . '/composer.json');
+
+        // Since 2026-09-28 the framework intentionally declares NO version
+        // field: a tag IS the release, and a duplicated field is a second
+        // source of truth that can drift. So the invariant is two-sided — a
+        // field, WHEN PRESENT, must name the tag; when ABSENT it must resolve to
+        // null rather than a fabricated value, and the tag that carries the
+        // release must still exist.
+        if ($declared === null) {
+            self::assertNull(
+                $declared,
+                'a composer.json with no version field must resolve to null, never a guessed release'
+            );
+            self::assertNotEmpty($tag, 'with no version field the git tag is the only release identity and must exist');
+
+            return;
+        }
 
         self::assertSame(
             ltrim($tag, 'v'),

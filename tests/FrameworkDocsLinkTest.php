@@ -60,11 +60,18 @@ final class FrameworkDocsLinkTest extends TestCase
      *    into a hypothetical app (`../public/index.php`, `../app/Models/User.php`,
      *    …). They were never files in THIS repository — it is the framework, not
      *    an application — so there is nothing to point them at.
-     *  - `docs/03b-CLARITY-ENGINE.md` references a Clarity logo SVG and the
-     *    view-engine benchmark's JSON/CSV/SVG, all of which were REMOVED from the
-     *    repository on purpose (commit 6f78b70, "Remove benchmark from repo").
+     *  - `docs/03b-CLARITY-ENGINE.md` references a Clarity logo SVG, which was
+     *    REMOVED from the repository on purpose (commit 6f78b70, "Remove
+     *    benchmark from repo").
      *
-     * Listing them keeps the assertion strict in both directions: a NEW dead
+     * The same page used to dead-link the view-engine benchmark's SVG. That one
+     * is GONE from this list rather than added to it: the section is now a
+     * generated region whose image is written into `docs/images/benchmarks/`
+     * by `azera-competition`'s `--publish=framework`, so the link resolves. Had
+     * its entry been left here, the "repairing an entry must delete it" rule
+     * would now be failing on purpose.
+     *
+     * Listing the rest keeps the assertion strict in both directions: a NEW dead
      * link fails because it is not in this list, and REPAIRING one of these
      * fails until its entry is deleted — so the list cannot quietly rot.
      *
@@ -77,7 +84,6 @@ final class FrameworkDocsLinkTest extends TestCase
         'docs/00-GETTING-STARTED.md -> ../public/index.php',
         'docs/00-GETTING-STARTED.md -> ../views/home/index.php',
         'docs/00-GETTING-STARTED.md -> ../views/layouts/main.php',
-        'docs/03b-CLARITY-ENGINE.md -> ../benchmarks/view-engine/results-2026-03-07-01.svg',
         'docs/03b-CLARITY-ENGINE.md -> images/clarity-dsl-logo-opt.svg',
     ];
 
