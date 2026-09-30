@@ -16,7 +16,7 @@ Each framework implements the **same benchmark endpoints** against a shared SQLi
 | `POST /items`     | Router + controller + ORM upsert (write path) + item detail template render with flash message (HTML) |
 | `POST /api/items` | Router + controller + ORM upsert (write path) → JSON response with new id                             |
 
-The harness dispatches synthetic requests **in-process** (no real HTTP socket) so we measure framework overhead, not PHP-FPM / web server cost. This mirrors the approach used by `azera-framework/benchmarks/view-engine`.
+The harness dispatches synthetic requests **in-process** (no real HTTP socket) so we measure framework overhead, not PHP-FPM / web server cost. This mirrors the approach used by the template-engine harness in this repository, `benchmarks/view-engine/`.
 
 ## Frameworks
 
@@ -74,7 +74,7 @@ Run `php run.php --help` for all options.
 
 ## Fairness caveats
 
-- **Idiomatic usage** — each framework uses its own ORM and template engine (not raw PDO / plain PHP), so results reflect real-world usage. Switching all to raw PDO would reduce this to the routing+template case already covered by the view-engine benchmark.
+- **Idiomatic usage** — each framework uses its own ORM and template engine (not raw PDO / plain PHP), so results reflect real-world usage. Switching all to raw PDO would reduce this to the routing+template case already covered by the `benchmarks/view-engine/` harness in this repository.
 - **Template caching** — compiled templates (Twig, Blade, Stempler) use a persistent cache dir so warm runs reflect cached compiled templates. Use `--clear-cache` to measure cold-from-scratch compilation.
 - **In-process dispatch** — no real HTTP socket; we measure framework kernel overhead, not web server / FPM / Swoole cost.
 - **SQLite** — a single-file embedded database keeps the DB cost comparable across frameworks and avoids external server variance. It favours frameworks with thin DB abstraction layers.

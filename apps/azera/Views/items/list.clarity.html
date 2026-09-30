@@ -37,18 +37,18 @@
 
     <div class="pagination">
         <span class="page-info">
-            Showing {{ pagination.firstItem }}–{{ pagination.lastItem }}
-            of {{ pagination.totalItems }} items
+            Showing {{ pagination:firstItem }}–{{ pagination:lastItem }}
+            of {{ pagination:totalItems }} items
         </span>
         <span class="page-nav">
-            {% if pagination.hasPrevious %}
-                <a href="{{ baseUrl }}?page={{ pagination.previousPage }}">← Previous</a>
+            {% if pagination:hasPrevious %}
+                <a href="{{ baseUrl }}?page={{ pagination:previousPage }}">← Previous</a>
             {% else %}
                 <span class="disabled">← Previous</span>
             {% endif %}
-            <span class="page-current">Page {{ pagination.currentPage }} / {{ pagination.lastPage }}</span>
-            {% if pagination.hasNext %}
-                <a href="{{ baseUrl }}?page={{ pagination.nextPage }}">Next →</a>
+            <span class="page-current">Page {{ pagination:currentPage }} / {{ pagination:lastPage }}</span>
+            {% if pagination:hasNext %}
+                <a href="{{ baseUrl }}?page={{ pagination:nextPage }}">Next →</a>
             {% else %}
                 <span class="disabled">Next →</span>
             {% endif %}
