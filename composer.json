@@ -54,7 +54,8 @@
     "cakephp/cakephp": "5.4",
     "spiral/roadrunner": "^2025.1",
     "spiral/roadrunner-http": "^3.5",
-    "nyholm/psr7": "^1.8"
+    "nyholm/psr7": "^1.8",
+    "latte/latte": "~3.0"
   },
   "license": "MIT",
   "minimum-stability": "dev",
