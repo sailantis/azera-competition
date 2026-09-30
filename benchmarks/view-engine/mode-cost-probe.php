@@ -8,8 +8,9 @@ declare(strict_types=1);
  *
  * WHY THIS IS COMMITTED
  *
- * Clarity has two modes: sandboxed (the default) and open (`setSandboxMode(false)`,
- * full PHP, for Blade / Stempler / Plates parity). They compile the SAME template
+ * Clarity has two modes: sandboxed (the default) and open (`Policy::open()`,
+ * the former `setSandboxMode(false)`, which grants templates full PHP for
+ * Blade / Stempler / Plates parity). They compile the SAME template
  * differently — open mode seeds the render scope with one `extract($__c_va,
  * EXTR_SKIP)` and then reads PHP locals, where the sandbox reads
  * `$__c_va['name']` at every access. That is a real trade (one `extract()` against
@@ -54,6 +55,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Azera\Core\Engines\ClarityEngine;
+use Clarity\Engine\Policy as ClarityPolicy;
 
 $accesses   = (int) ($argv[1] ?? 200);
 $iterations = (int) ($argv[2] ?? 20000);
@@ -117,7 +119,7 @@ function armCost(string $tplDir, bool $sandboxed, array $vars, int $iterations):
 
     $e = new ClarityEngine();
     $e->setExtension('.clarity.html');
-    $e->setSandboxMode($sandboxed);
+    $e->setPolicy($sandboxed ? ClarityPolicy::sandboxed() : ClarityPolicy::open());
     $e->setViewPath($tplDir)->addNamespace('benchmarks', $tplDir);
     $e->setCachePath($cache);
 

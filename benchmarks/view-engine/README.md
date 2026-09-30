@@ -60,10 +60,10 @@ own cache directory, for the same reason `clarity-open` has one).
 ### The two Clarity modes, and why only one is on the page
 
 Clarity has two modes: **sandboxed** (the default) and **open**
-(`setSandboxMode(false)`, which grants templates full PHP for Blade / Stempler /
-Plates parity). `clarity-open` is a supported engine key and was measured in a
-full run — every page, same machine, same code — with one result: **no
-measurable difference.**
+(`Policy::open()`, the former `setSandboxMode(false)`, which grants templates
+full PHP for Blade / Stempler / Plates parity). `clarity-open` is a supported
+engine key and was measured in a full run — every page, same machine, same code —
+with one result: **no measurable difference.**
 
 | Page             | open vs sandboxed (median) |
 | ---------------- | -------------------------- |

@@ -40,6 +40,7 @@ use Azera\Core\Engines\Adapters\StemplerAdapter;
 use Azera\Core\Engines\Adapters\TwigAdapter;
 use Azera\Core\Engines\ClarityEngine;
 use Azera\Core\Engines\NativeEngine;
+use Clarity\Engine\Policy as ClarityPolicy;
 
 /**
  * Build one engine by key.
@@ -71,22 +72,22 @@ function benchmarkEngine(string $key, string $template, bool $withPenalty = true
             break;
 
         case 'clarity-open':
-            // Identical to the `clarity` arm in every respect but the sandbox,
-            // so the compiled body differs ONLY in the mode-dependent parts
-            // (open mode seeds the render scope with extract() and reads PHP
+            // Identical to the `clarity` arm in every respect but the policy, so
+            // the compiled body differs ONLY in the policy-dependent parts (an
+            // open policy seeds the render scope with extract() and reads PHP
             // locals instead of `$__c_va['name']` on every access — verified by
             // diffing both modes' generated class).
             //
             // Its compiled templates go to a SEPARATE cache directory. The cache
-            // file is named after the template alone, so two mode engines
+            // file is named after the template alone, so two policy engines
             // rendering the same page would otherwise overwrite each other's
             // class and each would invalidate and recompile on every visit — a
-            // class that is mode-specific by design being rebuilt twice per run.
+            // class that is policy-specific by design being rebuilt twice per run.
             // Only this arm is redirected; `clarity` keeps the default location
             // its published figures were measured with.
             $engine = (new ClarityEngine())
                 ->setExtension('.clarity.html')
-                ->setSandboxMode(false)
+                ->setPolicy(ClarityPolicy::open())
                 ->setCachePath(sys_get_temp_dir() . '/clarity-bench-open');
             break;
 
