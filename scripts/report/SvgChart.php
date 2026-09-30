@@ -129,7 +129,13 @@ final class SvgChart
             $out[] = self::text($padL, 30, $title, 16, self::INK, 700);
             $subtitle = $logScale ? 'logarithmic scale' : 'linear scale';
             $unit     = trim($valueSuffix) !== '' ? ' · unit: ' . trim($valueSuffix) : '';
-            $out[] = self::text($padL, 50, "{$subtitle} · lower is better{$unit}", 11, self::INK_SOFT, 400, true);
+            // The unit trails the FIRST line rather than sitting on a line of
+            // its own: it belongs to the subtitle's own sentence —
+            // "logarithmic scale · lower is better · unit: ms" reads as one
+            // statement — and it costs no vertical space. The line is measured
+            // against the card before it is drawn, so a caller with a long
+            // suffix wraps instead of clipping.
+            $out[] = self::text($padL, 50, self::wrapOne("{$subtitle} · lower is better{$unit}", $width - $padL - 12.0, 11), 11, self::INK_SOFT, 400, true);
         }
         // Legend (laid out above the plot so it can never clip).
         foreach ($legendItems as [$lx, $ly, $label, $color]) {
@@ -233,8 +239,22 @@ final class SvgChart
      * startup time, peak memory). Use groupedBars() when several series share
      * the same categories.
      *
+     * `$caption` and `$versions` are the two note lines the report's own charts
+     * carry, added here so a chart drawn OUTSIDE the framework report reads the
+     * same way as one inside it: a standalone figure gets copied or linked on
+     * its own, so it has to state what its bars measure and which builds were
+     * measured, without relying on the page around it. Both default to '' and
+     * reserve no space, and the top padding is computed from the lines that are
+     * ACTUALLY drawn — a fixed reserve would move every existing chart's
+     * geometry, and a wrapped line would otherwise be clipped (single <text>
+     * elements do not wrap; see wrapNotes()).
+     *
      * @param array<string,float>  $values category label => value
      * @param array<string,string> $colors category label => fill colour
+     * @param string $caption small line under the title explaining what the
+     *        bars measure (what the value IS, not how big it is)
+     * @param string $versions one-line provenance of the builds measured, drawn
+     *        as the LAST note line in the smaller grey size (see dotRange())
      */
     public static function singleBars(
         array $values,
@@ -244,17 +264,20 @@ final class SvgChart
         bool $logScale = false,
         int $width = 960,
         int $height = 340,
-        bool $showValues = true
+        bool $showValues = true,
+        string $caption = '',
+        string $versions = ''
     ): string {
         if ($values === []) {
             return '';
         }
         $padL  = 70;
         $padR  = 16;
-        $padT  = $title !== '' ? 78 : 44;
         $padB  = 52;
         $plotW = $width - $padL - $padR;
-        $plotH = $height - $padT - $padB;
+        // $padT and $plotH are resolved further down: the title block depends on
+        // the note lines actually drawn, and the canvas grows to fit them (see
+        // the noteRows block), so neither can be fixed before the notes exist.
 
         $max = 0.0;
         $min = INF;
@@ -272,6 +295,45 @@ final class SvgChart
         if (!is_finite($min) || $min <= 0) {
             $min = $max / 10;
         }
+
+        // The note lines, laid out BEFORE the tick closures exist: the title
+        // block has to be whatever the lines actually occupy, and the chart then
+        // GROWS by that much, so $padT/$plotH must be final before a closure
+        // captures them by value. They are wrapped first, because a single
+        // <text> element does not wrap and the card would silently clip the end
+        // of a long sentence.
+        //
+        // They start at 62 rather than 78: the subtitle at y=50 now CARRIES the
+        // unit, so the separate unit line that used to sit at y=66 is gone and
+        // its 16px row is not left as a blank gap under the subtitle. $basePadT
+        // below moves with it, so the plot keeps its exact height and the bars
+        // keep their exact scale — only the ~16px of empty header is reclaimed.
+        $noteMaxW = $width - $padL - 12.0;
+        $noteRows = [];
+        if ($title !== '') {
+            $y = 62.0;
+            if ($caption !== '') {
+                foreach (self::wrapNotes($caption, $noteMaxW, 11) as $ln) {
+                    $noteRows[] = [$y, $ln, 11];
+                    $y += 16.0;
+                }
+            }
+            if ($versions !== '') {
+                // Last, and a size down: provenance, not a heading.
+                foreach (self::wrapNotes($versions, $noteMaxW, 11) as $ln) {
+                    $noteRows[] = [$y, $ln, 11];
+                    $y += 16.0;
+                }
+            }
+        }
+        // With no note lines this is 62/44, so the plot height is unchanged by
+        // the unit line's removal: the header simply ends 16px higher. An extra
+        // note line grows the CANVAS rather than eating the plot, so a two-line
+        // note cannot squash the bars it annotates.
+        $basePadT = $title !== '' ? 62 : 44;
+        $padT     = $noteRows === [] ? $basePadT : max(array_column($noteRows, 0)) + 4.0;
+        $height += (int) round($padT - $basePadT);
+        $plotH = $height - $padT - $padB;
 
         $ticks = [];
         if ($logScale) {
@@ -307,9 +369,20 @@ final class SvgChart
         if ($title !== '') {
             $out[] = self::text($padL, 30, $title, 16, self::INK, 700);
             $scale = $logScale ? 'logarithmic scale' : 'linear scale';
-            $out[] = self::text($padL, 50, "{$scale} · lower is better", 11, self::INK_SOFT, 400, true);
-            if ($unit !== '') {
-                $out[] = self::text($padL, 66, "unit: {$unit}", 10, self::INK_SOFT, 400, true);
+            // The unit is part of the FIRST line, not a line of its own: the
+            // block's notes (caption, versions) start at y=78, so a separate
+            // line would either collide with them or force every chart's
+            // geometry to move. Appending it keeps the note block where it is,
+            // and the line is measured against the card so a long suffix wraps
+            // rather than being clipped. The unit is still stated
+            // INDEPENDENTLY of the values: a reader is not required to infer ms
+            // from the axis ticks.
+            $subtitle = "{$scale} · lower is better" . ($unit !== '' ? " · unit: {$unit}" : '');
+            foreach (self::wrapNotes($subtitle, $width - $padL - 12.0, 11) as $si => $sline) {
+                $out[] = self::text($padL, 50 + 16 * $si, $sline, 11, self::INK_SOFT, 400, true);
+            }
+            foreach ($noteRows as [$ny, $ln, $nsize]) {
+                $out[] = self::text($padL, $ny, $ln, (float) $nsize, self::INK_SOFT, 400, true);
             }
         }
 
@@ -462,7 +535,8 @@ final class SvgChart
         string $midSeparator = ' · ',
         int $width = 960,
         ?string $factorNote = null,
-        string $versions = ''
+        string $versions = '',
+        string $axisNote = 'MB of PHP heap · opcache bytecode lives in shared memory and is excluded'
     ): string {
         if ($series === []) {
             return '';
@@ -576,7 +650,15 @@ final class SvgChart
         // measured 11.7px past the card edge at 960px — single <text> elements
         // do not wrap, so the card silently clipped the end of the sentence.
         $noteMaxW = $width - $padL - 12.0;
-        $subtitle = 'linear scale · MB of PHP heap · opcache bytecode lives in shared memory and is excluded'
+        // The axis note is the CALLER's, and it is a parameter rather than a
+        // constant because the same chart answers two different questions on the
+        // two pages that use it. The framework pages measure FPM/RR workers, where
+        // the compiled template sits in the shared OPcache segment and is excluded
+        // from every worker's heap. The view-engine chart also runs its probes with
+        // OPcache ON (since 2026-09-29), but there the CLI segment is per-process,
+        // so the engine compile IS in the process heap — which is why it passes its
+        // own wording; the basis is the dataset's to declare, never a constant.
+        $subtitle = 'linear scale · ' . $axisNote
             . ($caption === '' ? $factorNoteText : '');
         $captionTx = $caption === '' ? '' : $caption . $factorNoteText;
 
@@ -957,6 +1039,12 @@ final class SvgChart
             // could be read against any other row in the chart. The wording
             // comes from the caller because the anchor genuinely differs —
             // per request for feature charts, across frameworks for memory.
+            //
+            // NO unit suffix here, unlike the two bar primitives: this chart's
+            // values and every axis tick already carry the unit ("0.4196 ms",
+            // "0.2 ms"), and its first line ends with the factor note rather
+            // than "lower is better", so a trailing "unit: ms" would repeat the
+            // unit and lengthen an already long note for nothing.
             $note = $hasFactors ? ' · ' . $factorNote : '';
             $out[] = self::text($padL, 54, "{$scale} · lower is better{$note}", 12, self::INK_SOFT, 400, true);
             $capY = 74.0;
@@ -1176,9 +1264,28 @@ final class SvgChart
      * zero. Callers turn the ratio into pixels themselves (horizontal charts
      * use it directly, vertical charts invert it).
      *
-     * Log axes are bounded by the next 1/2/5×10ⁿ step above the maximum rather
-     * than the next whole decade — with a 1.1 ms maximum a decade-aligned axis
-     * would waste nine tenths of the plot.
+     * LOG DOMAIN — ROUNDED TO 1/2/5 AT **BOTH** ENDS. This is the difference
+     * between an axis that shows the data and one that only contains it:
+     *
+     *   - the low end used to be a whole DECADE (`10^floor(log10(min))`). For the
+     *     published render-time chart the data starts at 0.4287 ms, so the axis
+     *     started at 0.1 and the LEFT 48.6% OF THE PLOT WAS EMPTY — every dot
+     *     landed in the right half (measured: 48.6%..84.5% of the width), which
+     *     is what made the chart read as "all the engines are similar" and let a
+     *     2.9x difference collapse to a few pixels.
+     *   - rounding the low end DOWN to the nearest 1/2/5×10ⁿ (`logFloor`) spends
+     *     at most a factor of 2.5 of empty plot instead of a whole decade, and
+     *     the axis is still built from round numbers.
+     *
+     * A candidate recorded earlier — `10^floor(log10(min * 0.9))` — was WRONG and
+     * was not applied: `min * 0.9` stays inside the same decade's mantissa for
+     * every value in [0.1, 1), so `floor(log10(...))` is unchanged and the axis
+     * is bit-identical. Measured on the real numbers it moved nothing
+     * (48.6%..84.5% before and after). The mantissa has to be rounded, not the
+     * magnitude nudged.
+     *
+     * The high end keeps `logCeil` (1/2/5×10ⁿ, not the next whole decade): with a
+     * 1.1 ms maximum a decade-aligned axis would waste nine tenths of the plot.
      *
      * @return array{0:callable(float):float,1:list<float>}
      */
@@ -1197,10 +1304,16 @@ final class SvgChart
 
         $ticks = [];
         if ($logScale) {
-            $lo = 10 ** (int) floor(log10($min));
+            $lo = self::logFloor($min);
             $hi = self::logCeil($max);
+            // Guard on the BOUNDS, not on the decade exponents: two different
+            // 1/2/5 values can share a decade (0.5 and 1 are both 10^-1..10^0),
+            // which is exactly the case a decade-based guard let through.
             if ($hi <= $lo) {
-                $hi = $lo * 10;
+                $hi = self::logCeil($lo * 1.0000001);
+                if ($hi <= $lo) {
+                    $hi = $lo * 2;
+                }
             }
             $logLo = log10($lo);
             $span  = log10($hi) - $logLo;
@@ -1283,6 +1396,33 @@ final class SvgChart
             }
         }
         return 10 * $base;
+    }
+
+    /**
+     * LARGEST 1/2/5×10ⁿ value <= $v — logCeil()'s counterpart, and the reason
+     * the log axis starts near its data instead of at the bottom of a decade.
+     *
+     * Deliberately NOT "the previous decade": for 0.4287 ms the previous decade
+     * is 0.1, which leaves the left 48.6% of the plot empty (see axisMap()). This
+     * returns 0.2, so the same data spans 33.1%..79.9% of the width.
+     *
+     * `$v` below 1 is the ordinary case (milliseconds), where `floor(log10())`
+     * is negative and the mantissa is what carries the refinement: 0.4287 ->
+     * base 0.1, mantissa 4.287 -> largest 1/2/5 below it is 2 -> 0.2.
+     */
+    private static function logFloor(float $v): float
+    {
+        if ($v <= 0 || !is_finite($v)) {
+            return 0.1;
+        }
+        $base = 10 ** floor(log10($v));
+        $best = $base; // the 1x candidate is always <= $v by construction
+        foreach ([2, 5] as $m) {
+            if ($m * $base <= $v) {
+                $best = $m * $base;
+            }
+        }
+        return $best;
     }
 
     private static function svgOpen(int $w, int $h, string $title): string
@@ -1386,6 +1526,21 @@ final class SvgChart
         }
 
         return $lines;
+    }
+
+    /**
+     * wrapNotes() for a line drawn at a FIXED y rather than stacked.
+     *
+     * The subtitle is joined for the same reason the notes are: SVG does not
+     * wrap, and a line wider than the card is drawn and then clipped by the card
+     * edge, losing its ending with no other symptom. A caller that draws the
+     * line on its own simply has nowhere to put the overflow, so the pieces are
+     * returned as ONE string — SVG's own line breaking, which every renderer
+     * applies, handles them wherever the card actually is.
+     */
+    private static function wrapOne(string $s, float $maxW, float $size): string
+    {
+        return implode(' ', self::wrapNotes($s, $maxW, $size));
     }
 
     /**

@@ -805,11 +805,12 @@ final class ViewEngineHarnessTest extends TestCase
             $src,
             'the private cache must be removed before use, so a recycled PID cannot inherit it'
         );
-        // OPcache is ON for the probe children — the basis moved from cold to
-        // warm on 2026-09-29 (a real deployment runs with it on, and the cold
-        // basis counted bytecode in the heap that a deployment keeps in shared
-        // memory). Determinism is kept by PRIMING the shared segment, not by
-        // disabling it, so the flag AND the priming call must both be present.
+        // OPcache is ON for the probe children, matching a real deployment. That
+        // is about what the figures MEAN, not about sharing: the CLI opcode
+        // segment is per-process (not shared across shell_exec children), so each
+        // child compiles the engine's own source itself. The priming call is kept
+        // as a no-op hook for a future `opcache.file_cache` basis, so both it and
+        // the flag must be present.
         self::assertStringContainsString(
             'opcache.enable_cli=1',
             $src,
@@ -823,8 +824,8 @@ final class ViewEngineHarnessTest extends TestCase
         self::assertStringContainsString(
             'primeOpcodeCache($engineKey',
             $src,
-            'the shared opcode segment must be primed before the measured child, '
-                . 'or the reading depends on measurement order'
+            'the priming hook must exist and be called (a no-op today, but the hook '
+                . 'for an opcache.file_cache basis)'
         );
         self::assertMatchesRegularExpression(
             '/function primeOpcodeCache\s*\(/',

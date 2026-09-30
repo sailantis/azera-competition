@@ -329,14 +329,13 @@ function primeOpcodeCache(string $engineKey, int $itemsCount, string $pageKey, i
  * can be linted, run by hand and covered by a test.
  *
  * OPcache is ON for the child, matching measureIsolatedPeak() and the real
- * deployments these figures describe. The bench VM runs a SHARED CLI opcache
- * segment, so a child's compile cost depends on whether earlier children already
- * cached those scripts — the first child to load an engine's files pays to
- * compile them and later ones read hits — which would make the column a function
- * of measurement ORDER. `primeOpcodeCache()` removes that without turning the
- * cache off: the segment is warmed for this engine first, so every measured
- * reading is a cache hit and therefore comparable. The TEMPLATE cache, which is
- * the other temperature, stays cold (see the basis string).
+ * deployments these figures describe. Note that ON does NOT mean the engine
+ * source is served from a shared cache here: the CLI opcode segment is
+ * PER-PROCESS (not shared across shell_exec children), so each child compiles the
+ * engine's files itself. `primeOpcodeCache()` is therefore a no-op for the
+ * measured child, kept only because it would matter under `opcache.file_cache`.
+ * The TEMPLATE cache, which is the other temperature, is cold (see the basis
+ * string).
  *
  * The cache directory is PRIVATE, keyed by engine+page+PID, and deleted before
  * and after use â€” so a recycled PID cannot inherit a populated cache, and a
@@ -845,9 +844,9 @@ function viewEngineEnv(int $itemsCount, int $itersPerRun, int $runs, array $engi
         // memory columns mean — and it CHANGED on 2026-09-29 from cold to warm.
         // A reading is only comparable with another reading taken the same way,
         // so this belongs in the environment rather than in a comment. A dataset
-        // carrying the old value was measured with bytecode in the heap; one
-        // carrying the new value was measured with it in the shared segment, and
-        // its figures are the LOWER ones (compiled code left the heap).
+        // carrying the old value was measured with bytecode in the heap. Note
+        // that "opcache on" does NOT mean shared here: the CLI segment is
+        // per-process, so the engine source is still compiled in each child.
         'opcache_probe'       => 'a fresh process with opcache.enable_cli=1 but a per-process CLI segment, so engine source is compiled in that process',
         'azera_framework_ref' => azeraFrameworkRef($root),
         // Which Clarity MODE each Clarity row measured. The row key states it

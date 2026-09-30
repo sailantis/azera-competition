@@ -207,9 +207,10 @@ function veMemoryBasis(array $env): string
  * This is not trivia: the memory bars are only comparable with another dataset's
  * bars if both were taken the same way. The basis itself CHANGED on 2026-09-29:
  * the probe children moved from `opcache.enable_cli=0` (bytecode counted in the
- * process heap, so every figure was HIGHER) to OPcache ON with a primed shared
- * segment (bytecode in shared memory, excluded — matching the framework pages and
- * a real deployment). A dataset carrying the old wording and one carrying the new
+ * process heap, so every figure was HIGHER) to OPcache ON. Note that ON does NOT
+ * mean the engine source is served from a shared cache here: the CLI opcode
+ * segment is per-process, so each probe child compiles the engine source itself.
+ * A dataset carrying the old wording and one carrying the new
  * are NOT comparable, so a chart that silently carried one beside the other would
  * invite a wrong conclusion. The value is read from the dataset rather than
  * assumed, so a re-render of an old dataset keeps describing that old run.
@@ -797,7 +798,7 @@ function veWarmCostChart(array $rows, array $env, string $dir, ?string $page = n
         960,
         340,
         true,
-        'Measured once per engine, each in its own fresh process: engine boot, template compile, cache write and one render. The opcode cache is ON and primed; the TEMPLATE cache is cold',
+        'Measured once per engine, each in its own fresh process: engine boot, template compile, cache write and one render. OPcache is on, but the CLI segment is per-process, so the engine source is compiled in that process; the TEMPLATE cache is cold',
         veVersionsLine($env, $rows)
     );
 
@@ -1113,8 +1114,9 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
         $l[] = 'The cost of the first request after a deploy: the engine\'s classes load, the template '
             . 'compiles, the cache is written and the page renders once. It is measured in a FRESH '
             . 'process per engine, so no engine can be measured against a template cache or a bootstrap another '
-            . 'engine already paid for. OPcache is ON and primed — as on a real deployment — so the engine\'s '
-            . 'own PHP files are served from the shared opcode cache; only the TEMPLATE is cold. That makes it '
+            . 'engine already paid for. OPcache is ON — as on a real deployment — but the CLI opcode segment ' 
+            . 'is PER-PROCESS (not shared across shell_exec children), so the engine\'s own PHP files are ' 
+            . 'compiled in that process; only the TEMPLATE cache is cold by construction. That makes it '
             . 'comparable across engines, and it is why the '
             . 'leading bar is a non-compiling engine: `native` has no compile step at all, so its first '
             . 'render is just a render. Engines that compile to a cached PHP class pay this once per '
@@ -1180,7 +1182,7 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
 
     $l[] = '### What the columns are';
     $l[] = '';
-    $l[] = '- **First render** — the first request after a deploy, measured in a fresh process per engine: engine boot, template compile, cache write and one render. The TEMPLATE cache is cold; the opcode cache is on and primed, as on a real deployment. Comparable across engines because no engine inherits another\'s warm template cache or loaded classes.';
+    $l[] = '- **First render** — the first request after a deploy, measured in a fresh process per engine: engine boot, template compile, cache write and one render. The TEMPLATE cache is cold; OPcache is on but its CLI segment is per-process, so the engine source is compiled in that process. Comparable across engines because no engine inherits another\'s warm template cache or loaded classes.';
     $l[] = '- **Mean / Median / Min / p95** — computed over every individual render across all runs.';
     $l[] = '- **Retained** — PHP heap still held after a whole run of renders, with `gc_collect_cycles()` called before the reading, in a fresh process. This is what a process carries while serving.';
     $l[] = '- **Peak** — the same run\'s PHP heap high-water mark, where the transient allocation of the first compile lives. It sits above Retained and is not a second measurement of it.';
@@ -1840,8 +1842,9 @@ function veShapesRegion(array $shapes, array $env): string
     $l[] = '## What the columns are';
     $l[] = '';
     $l[] = '- **First render** — the first request after a deploy, measured in a fresh process per engine: '
-        . 'engine boot, template compile, cache write and one render. The TEMPLATE cache is cold; the '
-        . 'opcode cache is on and primed, as on a real deployment. Comparable across engines because no '
+        . 'engine boot, template compile, cache write and one render. The TEMPLATE cache is cold; OPcache is '
+        . 'on but its CLI segment is per-process, so the engine source is compiled in that process. '
+        . 'Comparable across engines because no '
         . 'engine inherits another\'s warm template cache or loaded classes.';
     $l[] = '- **Mean / Median / Min / p95** — computed over every individual render across all runs.';
     $l[] = '- **Retained** — PHP heap still held after a whole run of renders, with `gc_collect_cycles()` '

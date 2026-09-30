@@ -26,7 +26,7 @@ The dot is the median render and the caps bound the fastest observation and p95,
 
 ![First render](svg/view-engine/warm-cost.svg)
 
-The cost of the first request after a deploy: the engine's classes load, the template compiles, the cache is written and the page renders once. It is measured in a FRESH process per engine, so no engine can be measured against a template cache or a bootstrap another engine already paid for. OPcache is ON and primed — as on a real deployment — so the engine's own PHP files are served from the shared opcode cache; only the TEMPLATE is cold. That makes it comparable across engines, and it is why the leading bar is a non-compiling engine: `native` has no compile step at all, so its first render is just a render. Engines that compile to a cached PHP class pay this once per deploy and nothing on later requests, which is what the render-time chart measures.
+The cost of the first request after a deploy: the engine's classes load, the template compiles, the cache is written and the page renders once. It is measured in a FRESH process per engine, so no engine can be measured against a template cache or a bootstrap another engine already paid for. OPcache is ON — as on a real deployment — but the CLI opcode segment is PER-PROCESS (not shared across shell_exec children), so the engine's own PHP files are compiled in that process; only the TEMPLATE cache is cold by construction. That makes it comparable across engines, and it is why the leading bar is a non-compiling engine: `native` has no compile step at all, so its first render is just a render. Engines that compile to a cached PHP class pay this once per deploy and nothing on later requests, which is what the render-time chart measures.
 
 ## Memory per run
 
@@ -124,7 +124,7 @@ Measured on the same machine with the same engines, rendering the same content i
 
 ### What the columns are
 
-- **First render** — the first request after a deploy, measured in a fresh process per engine: engine boot, template compile, cache write and one render. The TEMPLATE cache is cold; the opcode cache is on and primed, as on a real deployment. Comparable across engines because no engine inherits another's warm template cache or loaded classes.
+- **First render** — the first request after a deploy, measured in a fresh process per engine: engine boot, template compile, cache write and one render. The TEMPLATE cache is cold; OPcache is on but its CLI segment is per-process, so the engine source is compiled in that process. Comparable across engines because no engine inherits another's warm template cache or loaded classes.
 - **Mean / Median / Min / p95** — computed over every individual render across all runs.
 - **Retained** — PHP heap still held after a whole run of renders, with `gc_collect_cycles()` called before the reading, in a fresh process. This is what a process carries while serving.
 - **Peak** — the same run's PHP heap high-water mark, where the transient allocation of the first compile lives. It sits above Retained and is not a second measurement of it.
