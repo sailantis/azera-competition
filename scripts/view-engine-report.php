@@ -1190,7 +1190,7 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
     $l[] = '---';
     $l[] = '';
     $l[] = '> **Auto-generated.** Reproduce with:';
-    $l[] = '> `php -d opcache.enable_cli=1 benchmarks/view-engine/run.php --engines=native,clarity,plates,blade,twig,stempler --iterations-per-run=10000 --runs=30 --items=200 --out=results/<date>`';
+    $l[] = '> `php -d opcache.enable_cli=1 benchmarks/view-engine/run.php --engines=native,clarity,plates,blade,twig,stempler,latte --iterations-per-run=10000 --runs=30 --items=200 --out=results/<date>`';
     $l[] = '> then `php scripts/view-engine-report.php --dataset=benchmarks/view-engine/results-<date>.json`. '
         . 'Do not edit by hand — re-run the harness to update it.';
     $l[] = '';

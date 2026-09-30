@@ -180,7 +180,7 @@ php benchmarks/view-engine/show-compiled.php clarity  sample --out=temp/compiled
 #    there is no --page flag, because a run that silently measured a subset
 #    would publish a dataset that cannot say which shapes it covers.
 php -d opcache.enable_cli=1 benchmarks/view-engine/run.php \
-  --engines=native,clarity,plates,blade,twig,stempler \
+  --engines=native,clarity,plates,blade,twig,stempler,latte \
   --iterations-per-run=10000 \
   --runs=30 \
   --items=200 \

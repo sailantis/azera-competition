@@ -53,8 +53,10 @@ param(
     # measurement noise of the sandboxed engine (sign flipping between pages), and
     # a controlled probe found the two indistinguishable. The published comparison
     # therefore shows one Clarity; the mode is mentioned in prose. Re-measure both
-    # with -VeEngines 'native,clarity,clarity-open,plates,blade,twig,stempler'.
-    [string]$VeEngines = 'native,clarity,plates,blade,twig,stempler',
+    # with -VeEngines 'native,clarity,clarity-open,plates,blade,twig,stempler,latte'.
+    # `latte` IS in the default list: it is a full peer with its own templates,
+    # unlike `clarity-open`, which is the same engine under a second policy.
+    [string]$VeEngines = 'native,clarity,plates,blade,twig,stempler,latte',
     # Tag inserted into the dataset filename, e.g. 'r7-observguard' ->
     # results/view-engine-2026-09-22-r7-observguard-10000x30-items200.json.
     #

@@ -1240,7 +1240,7 @@ final class ViewEngineHarnessTest extends TestCase
         // call the same factory, so what has to hold is that neither builds an
         // engine any other way — the class list lives in engines.php alone.
         $factory = (string) file_get_contents($dir . '/engines.php');
-        foreach (['ClarityEngine', 'NativeEngine', 'TwigAdapter', 'PlatesAdapter', 'BladeAdapter', 'StemplerAdapter'] as $class) {
+        foreach (['ClarityEngine', 'NativeEngine', 'TwigAdapter', 'PlatesAdapter', 'BladeAdapter', 'StemplerAdapter', 'LatteAdapter'] as $class) {
             self::assertStringContainsString($class, $factory, "the factory must construct $class");
         }
         self::assertStringContainsString("setExtension('.clarity.html')", $factory);
