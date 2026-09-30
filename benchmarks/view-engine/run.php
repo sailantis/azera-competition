@@ -688,6 +688,10 @@ function viewEnginePackages(): array
         // spiral/stempler-bridge â€” so there is no separate package to name, just
         // as Blade ships inside laravel/framework.
         'stempler' => ['package' => 'spiral/framework', 'label' => 'Stempler'],
+        // Latte is its own package (unlike Blade/Stempler, which ship inside a
+        // framework), so the version lookup resolves from the installed
+        // manifest directly.
+        'latte'    => ['package' => 'latte/latte', 'label' => 'Latte'],
     ];
 }
 

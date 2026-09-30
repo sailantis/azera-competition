@@ -743,6 +743,45 @@ final class ViewEngineHarnessTest extends TestCase
     }
 
     /**
+     * Every engine key the harness can measure must have a PROVENANCE entry.
+     *
+     * The engine list, the package map and the ref map are separate literals, and
+     * adding an engine to one but not the others is SILENT: the run measures the
+     * engine, the row is correct, and only the caption suffers — it reads
+     * `<engine> unknown`, presenting a measured engine as an unknown package.
+     * That is exactly what happened when Latte joined the default list: the
+     * package map had no entry, so `viewEngineVersions()` skipped the lookup and
+     * stamped `{package: '', version: null}`.
+     *
+     * The keys are pinned as a GROUP rather than by engine, so a future entrant
+     * cannot be added to the list alone.
+     */
+    public function testEveryMeasuredEngineKeyHasAProvenanceEntry(): void
+    {
+        $src = self::source();
+
+        // The keys a run records: the default list plus the supported-but-opt-in
+        // open-mode arm.
+        foreach (['native', 'clarity', 'clarity-open', 'plates', 'blade', 'twig', 'stempler', 'latte'] as $engine) {
+            self::assertMatchesRegularExpression(
+                "/^[ \\t]*'" . preg_quote($engine, '/') . "'[ \\t]*=>[ \\t]*\\['package'/m",
+                $src,
+                "engine '{$engine}' needs a viewEnginePackages() entry, or its version stamps as unknown"
+            );
+        }
+
+        // A path-repo engine's ref lives in a SECOND literal (`$refs`), so the
+        // same key must appear there too, or the ref silently drops to null.
+        foreach (['native', 'clarity', 'clarity-open'] as $engine) {
+            self::assertMatchesRegularExpression(
+                "/^[ \\t]*'" . preg_quote($engine, '/') . "'[ \\t]*=>[ \\t]*(?:azeraFrameworkRef|pathRepoRef)/m",
+                $src,
+                "engine '{$engine}' needs a \$refs entry, or its ref stamps as null"
+            );
+        }
+    }
+
+    /**
      * A path-prefix must resolve where the operator expects, and a missing
      * directory must be created rather than truncating the run.
      */

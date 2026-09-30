@@ -120,6 +120,7 @@ function veEngineMeta(): array
         'blade'        => ['label' => 'Blade', 'color' => '#e5484d', 'what' => 'Laravel Blade (laravel/framework)'],
         'twig'         => ['label' => 'Twig', 'color' => '#8044db', 'what' => 'Twig'],
         'stempler'     => ['label' => 'Stempler', 'color' => '#0b7285', 'what' => 'Spiral Stempler'],
+        'latte'        => ['label' => 'Latte', 'color' => '#d6336c', 'what' => 'Nette Latte'],
     ];
 }
 
