@@ -1138,6 +1138,18 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
             . 'process, so none of the three inherits another engine\'s footprint. Rows are sorted by '
             . 'the dot, lightest first.';
         $l[] = '';
+        $l[] = '**One right cap stands well above the rest, and it is the engine rather than the '
+            . 'harness.** Latte\'s `{block}`/layout rendering builds objects that reference each '
+            . 'other, so PHP reclaims them with the cycle collector rather than by refcounting — '
+            . 'about 4 KB of garbage per render. The collector runs in batches, so that garbage is '
+            . 'held until a batch is released, and the high-water mark records the moment just '
+            . 'before a release: a few megabytes above base, not a leak. A long-lived server sees '
+            . 'exactly that sawtooth (this suite\'s RoadRunner pool never recycles a worker); '
+            . 'PHP-FPM tears request state down after every request and does not carry it. The '
+            . 'RETAINED figure — the dot — is unaffected on every engine, so that is the '
+            . 'like-for-like comparison; Latte is the only engine where the two readings differ at '
+            . 'all.';
+        $l[] = '';
     }
 
     $l[] = '## Results';

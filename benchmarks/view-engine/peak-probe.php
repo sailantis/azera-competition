@@ -89,15 +89,36 @@ declare(strict_types=1);
  * megabytes for one that does. Reported per-engine so the chart can state that
  * instead of anchoring every bar at zero.
  *
- * gc_collect_cycles() IS CALLED, AND CURRENTLY COLLECTS NOTHING. On this
- * workload it returns 0 at both 1,000 and 10,000 renders, because these renders
- * create no reference cycles and PHP's own collector already drains the root
- * buffer as it fills. It is called anyway so the reading is DEFINED as
- * post-collection rather than left to depend on when the buffer last overflowed
- * — and so the day an adapter caches a closure or a compiled template captures
- * `$this`, the figure does not silently acquire a garbage component. `cycles` is
- * reported beside it so a reader can see whether it did any work; it is a
- * diagnostic, not a measurement of the engine.
+ * gc_collect_cycles() IS CALLED AND NOW COLLECTS SOMETHING — FOR ONE ENGINE.
+ *
+ * Corrected 2026-10-01. This section said the call "collects nothing", which was
+ * true of the six engines measured at the time and is FALSE for Latte, the
+ * seventh: on the sample page it returns a few hundred cycles per run. The cause
+ * is Latte's own `{block}`/layout rendering, which builds objects that reference
+ * each other, so PHP reclaims them with the cycle collector rather than by
+ * refcounting — measured at ~4 KB of garbage per render, and reproduced with a
+ * bare engine and no template cache, i.e. WITHOUT this harness. A single
+ * template with no layout produced none at all.
+ *
+ * WHY THE PEAK IS STILL THE HONEST SERVER NUMBER, NOT A LOOP ARTIFACT. PHP frees
+ * cyclic garbage in BATCHES — the collector runs when the root buffer fills (on
+ * the order of 10,000 roots), so up to a batch's worth is live at once and
+ * `memory_get_peak_usage()` records exactly that instant. A long-lived worker
+ * sees the same sawtooth: the batch is reclaimed automatically, so the peak is a
+ * real transient of a few megabytes above base rather than a cost invented by
+ * looping. PHP-FPM does not carry it, because `php_request_shutdown` frees
+ * request-scoped garbage at the end of every request. This workspace's
+ * RoadRunner pool is configured `max_jobs: 0` (never recycled), so the peak is
+ * the figure that describes it.
+ *
+ * WHY THE CALL IS STILL MADE BEFORE READING useN. The batch makes a raw
+ * `memory_get_usage()` depend on where the run stopped in the sawtooth, and the
+ * published figure must not. Collecting first is what makes "retained" mean what
+ * it says. It is NOT a way to hide the garbage: a collection cannot lower a peak
+ * that has already been recorded, and `peakN` is read BEFORE this call.
+ *
+ * `cycles` is reported beside it so a reader can see whether it did any work; it
+ * is a diagnostic, not a measurement of the engine.
  */
 
 require_once __DIR__ . '/engines.php';
@@ -169,9 +190,17 @@ $base = memory_get_usage(false);
 // to read as a PEAK, and the difference matters: the peak here is the transient
 // allocation high-water mark of compiling and writing the cache, while the
 // retained figure is what survives it. The engine, its compiler and the compiled
-// class are all loaded by now and are retained, so use1 == useN on this
-// workload — which is why the harness publishes ONE retained figure and reports
-// growth separately rather than drawing a second mark that cannot move.
+// class are all loaded by now and are retained, so use1 and useN agree on every
+// engine that creates no garbage — which is why the harness publishes ONE
+// retained figure and reports growth separately rather than drawing a second
+// mark that cannot move.
+//
+// `use1` is taken WITHOUT a gc call, so on an engine whose render leaves
+// collectable cycles (Latte) it reads high by whatever the buffer happened to
+// hold at that moment — on the sample page 1682 KB against a post-collection
+// 1472 KB, a -12% "growth" that is really the collector's backlog. That is why
+// `useN`, the post-collection reading, is the published figure and this one is
+// not.
 $view->render($template, $vars);
 $use1 = memory_get_usage(false);
 

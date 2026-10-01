@@ -480,11 +480,14 @@ Two consequences worth knowing before reading the numbers:
   hundred kilobytes rather than a couple of megabytes. The memory chart draws a
   range from `base_mem` to `peak_mem` with `retained_mem` as the dot, rather than
   bars anchored at zero.
-- `gc_collect_cycles()` is called before every retained reading and currently
-  collects **nothing** on this workload. It is called so the figure is DEFINED as
-  post-collection rather than left to depend on when PHP's root buffer last
-  overflowed, and so a future adapter that caches a closure cannot silently add a
-  garbage component to the number.
+- `gc_collect_cycles()` is called before every retained reading. It collects
+  **nothing** for six of the seven engines, but it does collect for Latte: its
+  `{block}`/layout rendering creates reference cycles (~4 KB of garbage per
+  render) that only the cycle collector reclaims. The call is what makes the
+  figure DEFINED as post-collection rather than left to depend on when PHP's root
+  buffer last overflowed. It does **not** touch the peak, which is read before
+  the call: a cyclically-allocating engine's peak is genuinely higher, because the
+  collector frees in batches and the high-water mark records the last batch.
 
 ## Publishing
 
