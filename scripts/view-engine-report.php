@@ -202,6 +202,42 @@ function veMemoryBasis(array $env): string
 }
 
 /**
+ * The PROSE that belongs under the memory chart.
+ *
+ * Everything the diagram used to spell out longhand lives here instead: the three
+ * marks in words, the retained reading's exact basis, and the probe's OPcache
+ * context. An SVG <text> cannot wrap, cannot be selected, and is read at whatever
+ * size the page renders it — so the image keeps only its title, axis, bar, dot
+ * and reference labels, each of which now fits ONE line.
+ *
+ * Built once and shared by the page note, the figure caption and the shapes
+ * region, so the three renderings of the same chart cannot drift apart — and so
+ * the basis and the probe are quoted from the dataset rather than typed.
+ *
+ * PLAIN TEXT, no markup: these sentences quote dataset identifiers
+ * (`iterations_per_run`, `opcache.enable_cli`) whose bare underscores Markdown
+ * emphasis and the env block's own mini-renderer would mangle into `<em>`. A
+ * sentence is also not a code span — monospacing a whole clause reads as a
+ * quotation of code rather than as the method it describes.
+ */
+function veMemoryNote(array $env): string
+{
+    $note = 'Reads the PHP heap. Left cap: what the engine costs to have loaded, nothing rendered. '
+        . 'Dot: what a whole run still holds, after a gc pass — ' . veMemoryBasis($env) . '. '
+        . 'Right cap: the run\'s high-water mark.';
+
+    $probe = veProbeValue($env);
+    if ($probe !== null) {
+        // Quoted rather than paraphrased: an OPcache-off dataset and an OPcache-on
+        // one are NOT comparable, so which basis produced a bar is a property of
+        // the figure, and the dataset is where it is recorded.
+        $note .= ' Memory probe: ' . $probe . '.';
+    }
+
+    return $note;
+}
+
+/**
  * The probe's OPcache context, as a caption suffix — or '' when the dataset does
  * not record one.
  *
@@ -579,6 +615,13 @@ function veVersionsLine(array $env, array $rows): string
 /**
  * The budget/provenance line for the page header, all of it read from the env
  * block so a caption cannot describe a run other than the one behind it.
+ *
+ * The probe's OPcache context is deliberately NOT repeated here. It used to be
+ * printed twice on the published page — once in this Environment line and once
+ * inside the memory chart — and once in the memory prose after the diagram. The
+ * memory prose is where it belongs: it is the thing that decides what a memory
+ * FIGURE means, so it is stated beside the figure, and a reader who follows
+ * veMemoryNote() to the region a consumer doc embeds still gets it.
  */
 function veEnvBlock(array $env, array $rows): string
 {
@@ -593,13 +636,11 @@ function veEnvBlock(array $env, array $rows): string
         $budget .= ', ' . (int) $items . ' items per render';
     }
 
-    $lines      = [];
-    $probeValue = veProbeValue($env);
+    $lines = [];
     $lines[] = '**Environment** — PHP ' . (string) ($env['php_version'] ?? '?')
         . ' · ' . (string) ($env['os'] ?? '?')
         . ' · SAPI ' . (string) ($env['sapi'] ?? '?')
-        . ' · OPcache (`opcache.enable_cli`): ' . (($env['opcache'] ?? false) ? 'yes' : 'no')
-        . ($probeValue !== null ? ' · Memory probe: `' . $probeValue . '`' : '');
+        . ' · OPcache (`opcache.enable_cli`): ' . (($env['opcache'] ?? false) ? 'yes' : 'no');
     $lines[] = '**Budget** — ' . $budget;
 
     // HOW the numbers were produced, not just what they measure. Three figures on
@@ -714,11 +755,11 @@ function veRenderTimeChart(array $rows, array $env, string $dir, ?string $page =
         ['' => $metrics],
         $colors,
         'ms',
-        true,
+        false,
         960,
         360,
         $title,
-        'Lower is better · dot: median of every render · caps: fastest → p95',
+        'Dot: median of every render · caps: fastest → p95',
         ['' => $factors],
         'x = median ÷ the fastest',
         false,
@@ -790,6 +831,12 @@ function veWarmCostChart(array $rows, array $env, string $dir, ?string $page = n
         $title .= ' — ' . vePageLabel($page);
     }
 
+    // NO caption line inside the image. "Measured once per engine, each in its
+    // own fresh process: engine boot, ..." used to be drawn there, which turned
+    // a chart into a paragraph: an SVG <text> cannot wrap, cannot be selected
+    // and is not read at the size the page renders it. The image keeps what a
+    // chart says — title, axis, unit, bars, versions — and the method lives in
+    // the prose under it (see veMarkdown() / veChartCaptions()).
     $svg = SvgChart::singleBars(
         $values,
         $colors,
@@ -799,7 +846,7 @@ function veWarmCostChart(array $rows, array $env, string $dir, ?string $page = n
         960,
         340,
         true,
-        'Measured once per engine, each in its own fresh process: engine boot, template compile, cache write and one render. OPcache is on, but the CLI segment is per-process, so the engine source is compiled in that process; the TEMPLATE cache is cold',
+        '',
         veVersionsLine($env, $rows)
     );
 
@@ -880,16 +927,21 @@ function veMemoryChart(array $rows, array $env, string $dir, ?string $page = nul
         $title .= ' — ' . vePageLabel($page);
     }
 
-    $probeValue = veProbeValue($env);
-
+    // ONE short legend line, and nothing else. The three marks are already
+    // named on their own reference labels (`floor` / `peak`) and in the
+    // `floor / retained / peak` value header, so the caption only has to say what
+    // the BAR and the DOT are. The retained reading's basis
+    // (`memory_get_usage(false) after a whole run …`) AND the probe's OPcache
+    // context are method sentences — both moved to the prose under the diagram
+    // (see veMemoryNote()), which is the only place either can wrap or be read at
+    // the page's own size. The version line stays: it names the BUILDS, which is
+    // what a chart read on its own still has to say.
     $svg = SvgChart::memoryRange(
         $ordered,
         $title,
-        'bar spans the floor the engine costs to have loaded (left cap) → the run\'s peak (right cap) '
-            . '· dot = heap retained after the run, gc collected · '
-            . veMemoryBasis($env) . ($probeValue !== null ? ' · ' . $probeValue : ''),
-        'engine loaded, nothing rendered',
-        'peak during the run',
+        'bar spans floor → peak · dot = heap retained after the run, gc collected',
+        'floor',
+        'peak',
         'floor / retained / peak',
         ' · ',
         960,
@@ -994,24 +1046,31 @@ function veChartOrder(): array
  * exists to prevent. The page name is what distinguishes them, and on a
  * single-page dataset it is omitted so the published wording does not change.
  *
+ * `$env` is passed in because the memory note quotes the RETAINED-READING BASIS
+ * the dataset recorded. That sentence describes how the figures were TAKEN, so a
+ * hardcoded copy would describe whichever run it was written against on every
+ * later one — see veMemoryBasis().
+ *
  * @return array<string,array{0:string,1:string}>
  */
-function veChartCaptions(bool $withPage = false, string $page = ''): array
+function veChartCaptions(array $env, bool $withPage = false, string $page = ''): array
 {
     $suffix = $withPage && $page !== '' ? ' — ' . vePageLabel($page) : '';
 
     return [
         'render-time' => [
             'Time per render' . $suffix,
-            'Lower is better. Span: fastest observation → p95; dot: median of every render.',
+            'Dot: median render · caps: fastest observation and p95.',
         ],
         'warm-cost' => [
             'First render (fresh process, cold template cache)' . $suffix,
-            'The one-off cost the first request pays.',
+            'The one-off cost of the first request after a deploy: engine boot, template compile, cache '
+                . 'write and one render. Measured once per engine, each in its own fresh process; OPcache is '
+                . 'on but its CLI segment is per-process, so the engine source is compiled there too.',
         ],
         'memory' => [
             'Memory per run' . $suffix,
-            'Range: the engine loaded with nothing rendered → the run\'s peak. Dot: heap retained after the run.',
+            veMemoryNote($env),
         ],
     ];
 }
@@ -1062,13 +1121,11 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
     // makes 'did this run change anything?' unanswerable from the diff.
     $l[] = $extra === []
         ? $entrants . ' render **the same page** — a layout, an included partial, a loop over '
-            . 'the items and nested loops inside it — so the numbers compare engines rather than '
-            . 'templates. `Clarity` and `Native` are engines inside the Azera framework; the others are '
-            . 'the template languages Azera adapts via its view adapter layer.'
+            . 'the items and nested loops inside it — so the numbers compare engines rather than templates. '
+            . '`Clarity` and `Native` are Azera engines; the others are the template languages Azera adapts.'
         : $entrants . ' render **the same pages** — a layout, an included partial, a loop over '
-            . 'the items and nested loops inside it — so the numbers compare engines rather than '
-            . 'templates. `Clarity` and `Native` are engines inside the Azera framework; the others are '
-            . 'the template languages Azera adapts via its view adapter layer.';
+            . 'the items and nested loops inside it — so the numbers compare engines rather than templates. '
+            . '`Clarity` and `Native` are Azera engines; the others are the template languages Azera adapts.';
     $l[] = '';
     $l[] = veEnvBlock($env, $rows);
     $l[] = '';
@@ -1087,10 +1144,8 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
         $l[] = '## ' . vePageLabel($page);
         $l[] = '';
         if ($about !== '') {
-            $l[] = 'The first of the rendering shapes measured here, rendered on the same machine with '
-                . 'the same engines as the rest: ' . $about . '. These are this page\'s own figures — a '
-                . 'time here and a time further down are not the same measurement, so compare engines '
-                . 'WITHIN a page rather than across pages.';
+            $l[] = 'The first rendering shape measured here: ' . $about . '. A time here and a time '
+                . 'further down are not the same measurement — compare engines WITHIN a page.';
             $l[] = '';
         }
     }
@@ -1100,10 +1155,7 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
         $l[] = '';
         $l[] = '![Render time per page](svg/view-engine/render-time.svg)';
         $l[] = '';
-        $l[] = 'The dot is the median render and the caps bound the fastest observation and p95, so an '
-            . 'engine that is usually fast but occasionally slow looks different from one that is '
-            . 'uniformly slower. The multiplier beside each row is measured against the fastest median '
-            . 'in the chart.';
+        $l[] = 'Dot: median render · caps: fastest observation and p95 · multiplier: median ÷ the fastest median.';
         $l[] = '';
     }
 
@@ -1112,16 +1164,10 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
         $l[] = '';
         $l[] = '![First render](svg/view-engine/warm-cost.svg)';
         $l[] = '';
-        $l[] = 'The cost of the first request after a deploy: the engine\'s classes load, the template '
-            . 'compiles, the cache is written and the page renders once. It is measured in a FRESH '
-            . 'process per engine, so no engine can be measured against a template cache or a bootstrap another '
-            . 'engine already paid for. OPcache is ON — as on a real deployment — but the CLI opcode segment '
-            . 'is PER-PROCESS (not shared across shell_exec children), so the engine\'s own PHP files are '
-            . 'compiled in that process; only the TEMPLATE cache is cold by construction. That makes it '
-            . 'comparable across engines, and it is why the '
-            . 'leading bar is a non-compiling engine: `native` has no compile step at all, so its first '
-            . 'render is just a render. Engines that compile to a cached PHP class pay this once per '
-            . 'deploy and nothing on later requests, which is what the render-time chart measures.';
+        $l[] = 'The first request after a deploy: engine classes load, the template compiles, the cache is '
+            . 'written, the page renders once. Measured once per engine, each in its own fresh process; '
+            . 'OPcache is on but its CLI segment is per-process, so the engine source is compiled there too. '
+            . '`native` has no compile step, so it leads; engines that compile pay this once per deploy only.';
         $l[] = '';
     }
 
@@ -1130,32 +1176,19 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
         $l[] = '';
         $l[] = '![Memory per run](svg/view-engine/memory.svg)';
         $l[] = '';
-        $l[] = 'Three marks, three measurements — not a spread of repeats. The left cap is the heap with '
-            . 'the engine loaded and nothing rendered, so it is the floor of having that engine at all. '
-            . 'The dot is what a whole run of renders still holds, with the garbage collector run '
-            . 'first. The right cap is the run\'s high-water mark, which is where the transient '
-            . 'allocation of compiling the template lives. Each engine is measured in its own fresh '
-            . 'process, so none of the three inherits another engine\'s footprint. Rows are sorted by '
-            . 'the dot, lightest first.';
+        $l[] = veMemoryNote($env) . ' One fresh process per engine, so no reading inherits another\'s '
+            . 'footprint. Rows are sorted by the dot, lightest first.';
         $l[] = '';
-        $l[] = '**One right cap stands well above the rest, and it is the engine rather than the '
-            . 'harness.** Latte\'s `{block}`/layout rendering builds objects that reference each '
-            . 'other, so PHP reclaims them with the cycle collector rather than by refcounting — '
-            . 'about 4 KB of garbage per render. The collector runs in batches, so that garbage is '
-            . 'held until a batch is released, and the high-water mark records the moment just '
-            . 'before a release: a few megabytes above base, not a leak. A long-lived server sees '
-            . 'exactly that sawtooth (this suite\'s RoadRunner pool never recycles a worker); '
-            . 'PHP-FPM tears request state down after every request and does not carry it. The '
-            . 'RETAINED figure — the dot — is unaffected on every engine, so that is the '
-            . 'like-for-like comparison; Latte is the only engine where the two readings differ at '
-            . 'all.';
+        $l[] = 'Latte\'s right cap is higher because its `{block}`/layout rendering creates reference cycles '
+            . '(about 4 KB per render) that PHP releases in batches, so the peak records the moment just before '
+            . 'a release — a bounded transient, not a leak. The retained dot is the like-for-like figure on '
+            . 'every engine.';
         $l[] = '';
     }
 
     $l[] = '## Results';
     $l[] = '';
-    $l[] = 'Generated from the run\'s JSON — the same rows the charts above are drawn from, so a cell '
-        . 'and a dot cannot disagree. Rows are ordered by median, fastest first.';
+    $l[] = 'Generated from the same rows the charts are drawn from. Rows are ordered by median, fastest first.';
     $l[] = '';
     $l[] = veTable($rows);
     $l[] = '';
@@ -1169,9 +1202,8 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
         $l[] = '';
         $about = vePageAbout($page);
         if ($about !== '') {
-            $l[] = 'Measured on the same machine with the same engines, rendering ' . $about . '. These '
-                . 'are that page\'s own figures — a time here and a time above are not the same '
-                . 'measurement, so compare engines WITHIN a page rather than across pages.';
+            $l[] = 'Rendering ' . $about . '. A time here and a time above are not the same measurement — '
+                . 'compare engines WITHIN a page rather than across pages.';
             $l[] = '';
         }
         foreach (veChartOrder() as $kind) {
@@ -1182,7 +1214,7 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
                 // Page-qualified caption: three sections all headed "Time per
                 // render" read as one chart repeated, which is exactly how the
                 // multi-page page was first read.
-                $caption = veChartCaptions(true, $page)[$kind] ?? [$key, ''];
+                $caption = veChartCaptions($env, true, $page)[$kind] ?? [$key, ''];
                 $l[] = '### ' . $caption[0];
                 $l[] = '';
                 $l[] = '![' . $caption[0] . '](' . 'svg/view-engine/' . $key . '.svg)';
@@ -1195,10 +1227,12 @@ function veMarkdown(array $rows, array $env, array $charts, array $extra = []): 
 
     $l[] = '### What the columns are';
     $l[] = '';
-    $l[] = '- **First render** — the first request after a deploy, measured in a fresh process per engine: engine boot, template compile, cache write and one render. The TEMPLATE cache is cold; OPcache is on but its CLI segment is per-process, so the engine source is compiled in that process. Comparable across engines because no engine inherits another\'s warm template cache or loaded classes.';
-    $l[] = '- **Mean / Median / Min / p95** — computed over every individual render across all runs.';
-    $l[] = '- **Retained** — PHP heap still held after a whole run of renders, with `gc_collect_cycles()` called before the reading, in a fresh process. This is what a process carries while serving.';
-    $l[] = '- **Peak** — the same run\'s PHP heap high-water mark, where the transient allocation of the first compile lives. It sits above Retained and is not a second measurement of it.';
+    $l[] = '- **First render** — the first request after a deploy, in a fresh process per engine: boot, '
+        . 'compile, cache write, one render. The template cache is cold.';
+    $l[] = '- **Mean / Median / Min / p95** — over every individual render across all runs.';
+    $l[] = '- **Retained** — heap still held after a whole run, after a gc pass, in a fresh process.';
+    $l[] = '- **Peak** — the same run\'s high-water mark, where the first compile\'s transient allocation lives. '
+        . 'Not a second measurement of Retained.';
     $l[] = '';
     $l[] = '---';
     $l[] = '';
@@ -1235,7 +1269,7 @@ function veHtml(array $rows, array $env, array $charts, array $extra = []): stri
 {
     $esc = static fn(string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 
-    $figures = veFigures($charts, $esc);
+    $figures = veFigures($charts, $env, $esc);
 
     // The table is rendered from the same rows, so it is emitted as HTML rather
     // than by converting Markdown — one source, two renderings.
@@ -1267,10 +1301,8 @@ function veHtml(array $rows, array $env, array $charts, array $extra = []): stri
         $headline = sprintf(
             "<h2>%s</h2>\n<p class=\"note\">%s</p>\n",
             $esc(vePageLabel($page)),
-            $esc('The first of the rendering shapes measured here, rendered on the same machine with '
-                . 'the same engines as the rest: ' . $about . '. These are this page\'s own figures — a '
-                . 'time here and a time further down are not the same measurement, so compare engines '
-                . 'WITHIN a page rather than across pages.')
+            $esc('The first rendering shape measured here: ' . $about . '. A time here and a time '
+                . 'further down are not the same measurement — compare engines WITHIN a page.')
         );
     }
     $entrants = veEntrantPhrase($rows);
@@ -1286,17 +1318,16 @@ function veHtml(array $rows, array $env, array $charts, array $extra = []): stri
     foreach ($extra as $page => $section) {
         $about = vePageAbout($page);
         $note  = $about !== ''
-            ? 'Measured on the same machine with the same engines, rendering ' . $about . '. '
-                . 'A figure here and a figure above are different measurements — compare engines '
-                . 'within a page, not across pages.'
-            : 'A second rendering shape, measured on the same machine with the same engines.';
+            ? 'Rendering ' . $about . '. A figure here and a figure above are different measurements — '
+                . 'compare engines within a page, not across pages.'
+            : 'A second rendering shape, measured with the same engines.';
 
         $sections .= sprintf(
             "<section id=\"page-%s\">\n  <h2>%s</h2>\n  <p class=\"note\">%s</p>\n%s  <h3>Results</h3>\n  <table><thead>%s</thead><tbody>\n%s</tbody></table>\n</section>\n",
             $esc($page),
             $esc(vePageLabel($page)),
             $esc($note),
-            veFigures($section['charts'], $esc, $page),
+            veFigures($section['charts'], $env, $esc, $page),
             $thead,
             veTableRows($section['rows'], $esc)
         );
@@ -1339,13 +1370,13 @@ footer code{background:#f1f5f9;padding:1px 5px;border-radius:4px}
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
   <h1>Template engine benchmark</h1>
-  <p class="lead">{$lead} <strong>Clarity</strong> and <strong>Native</strong> are engines inside the Azera framework; the rest are the template languages Azera adapts.</p>
+  <p class="lead">{$lead} <strong>Clarity</strong> and <strong>Native</strong> are Azera engines; the rest are the template languages Azera adapts.</p>
 {$envBlock}</header>
 <main>
 {$headline}{$figures}<h3>Results</h3>
 <table><thead>{$thead}</thead><tbody>
 {$tbody}</tbody></table>
-<p class="note">Memory is the peak PHP heap for one render, measured in a fresh process so each engine reports its own footprint rather than the high-water mark of everything measured before it.</p>
+<p class="note">A cell here is the median of one engine's own renders in its own fresh process — not a shared high-water mark.</p>
 {$sections}</main>
 <footer>
   Generated from the harness JSON by <code>scripts/view-engine-report.php</code>. Every chart is a plain SVG drawn from the same rows as the table, so the two cannot disagree.
@@ -1360,10 +1391,12 @@ HTML;
  *
  * `$page` is the page these charts belong to (empty for a single-page dataset),
  * so a multi-page document can caption each figure with the page it measured.
+ * `$env` reaches the notes through veChartCaptions(), which quotes the dataset's
+ * own memory basis.
  */
-function veFigures(array $keys, callable $esc, string $page = ''): string
+function veFigures(array $keys, array $env, callable $esc, string $page = ''): string
 {
-    $captions = veChartCaptions($page !== '', $page);
+    $captions = veChartCaptions($env, $page !== '', $page);
     $out      = '';
 
     foreach (veChartOrder() as $kind) {
@@ -1379,6 +1412,11 @@ function veFigures(array $keys, callable $esc, string $page = ''): string
             // links are broken" when the files were present and loading. The
             // charts are already plain SVGs beside the page; there is nothing to
             // save by deferring them.
+            // The note is PLAIN TEXT, escaped and nothing else. It quotes the
+            // dataset's own method sentences, which contain identifiers with
+            // underscores (`iterations_per_run`), and the mini-Markdown renderer's
+            // `_..._` rule would turn the middle of one into `<em>per</em>` — the
+            // exact defect that shipped once in the env block.
             $out .= sprintf(
                 "<figure>\n  <figcaption>%s</figcaption>\n  <img src=\"svg/view-engine/%s.svg\" alt=\"%s\">\n  <p class=\"note\">%s</p>\n</figure>\n",
                 $esc($caption),
@@ -1755,16 +1793,15 @@ function veConsumerRegion(array $rows, array $env, string $imagePath): string
     $l[] = '';
     $l[] = '![Template engine benchmark](' . $imagePath . ')';
     $l[] = '';
-    $l[] = 'Rows are ordered by median, fastest first. Two engines sitting next to each other at the top '
-        . 'of the table are not thereby ranked: a difference of a few percent is still within the spread '
-        . 'of a single engine\'s own runs, and a gap that small is a tie, not a win.';
+    $l[] = 'Rows are ordered by median, fastest first. A difference of a few percent is a tie — it is '
+        . 'within a single engine\'s own run-to-run spread.';
     $l[] = '';
     $l[] = veTable($rows);
     $l[] = '';
     $l[] = veEnvBlock($env, $rows);
     $l[] = '';
-    $l[] = 'Full report — every chart, including the first render (measured in a fresh process per engine) '
-        . 'and per-render memory: <' . vePublicUrl() . '>';
+    $l[] = 'Full report — every chart, including the first render and per-run memory: '
+        . '<' . vePublicUrl() . '>';
 
     return implode("\n", $l);
 }
@@ -1788,13 +1825,9 @@ function veConsumerRegion(array $rows, array $env, string $imagePath): string
 function veShapesRegion(array $shapes, array $env): string
 {
     $l = [];
-    $l[] = 'Every engine was measured rendering the SAME template shape, on the same machine and PHP build '
-        . 'and in the same session, so a difference between two engines is the engines and a difference '
-        . 'between two sections is the work the page does.';
-    $l[] = '';
-    $l[] = 'Compare engines WITHIN a shape. The sections below are different templates doing different '
-        . 'work with different data, so a time in one and a time in another are different measurements — '
-        . 'a ranking read across sections would be a ranking of the pages, not of the engines.';
+    $l[] = 'Every engine renders the same template shape, in the same session — a difference between two '
+        . 'engines is the engines, a difference between two sections is the work the page does. Compare '
+        . 'engines WITHIN a shape; a ranking read across sections ranks the pages, not the engines.';
     $l[] = '';
 
     foreach ($shapes as $page => $rows) {
@@ -1804,7 +1837,7 @@ function veShapesRegion(array $shapes, array $env): string
         $l[] = '## ' . $label;
         $l[] = '';
         if ($about !== '') {
-            $l[] = 'What this page renders, and so what these numbers are the cost of: ' . $about . '.';
+            $l[] = 'What the page renders, and so what these figures are the cost of: ' . $about . '.';
             $l[] = '';
         }
 
@@ -1814,23 +1847,17 @@ function veShapesRegion(array $shapes, array $env): string
         $captions = [
             'render-time' => [
                 'Time per render — ' . $label,
-                'The dot is the median render and the caps bound the fastest observation and p95, so an '
-                    . 'engine that is usually fast but occasionally slow looks different from one that is '
-                    . 'uniformly slower. The multiplier beside each row is measured against the fastest '
-                    . 'median in the chart.',
+                'Dot: median render · caps: fastest observation and p95 · multiplier: median ÷ the fastest median.',
             ],
             'warm-cost' => [
                 'First render — ' . $label,
-                'The one-off cost the first request after a deploy pays: the engine\'s classes load, the '
-                    . 'template compiles, the cache is written and the page renders once. Measured in a '
-                    . 'fresh process per engine, so no engine is measured against a cache another engine '
-                    . 'already paid for.',
+                'The one-off cost of the first request after a deploy: engine boot, template compile, cache '
+                    . 'write and one render. Measured once per engine, each in its own fresh process; '
+                    . 'OPcache is on but its CLI segment is per-process, so the engine source is compiled there too.',
             ],
             'memory' => [
                 'Memory per run — ' . $label,
-                'Three marks, three measurements: the left cap is the engine loaded with nothing rendered, '
-                    . 'the dot is the heap retained after the run (gc collected) and the right cap is the '
-                    . 'run\'s peak. Not a spread of repeats — every reading is deterministic.',
+                veMemoryNote($env) . ' Every reading is deterministic, so this is not a spread of repeats.',
             ],
         ];
         foreach (veChartOrder() as $kind) {
@@ -1845,8 +1872,7 @@ function veShapesRegion(array $shapes, array $env): string
 
         $l[] = '### Results — ' . $label;
         $l[] = '';
-        $l[] = 'Generated from the same rows the charts above are drawn from. Rows are ordered by median, '
-            . 'fastest first.';
+        $l[] = 'Generated from the same rows the charts are drawn from. Rows are ordered by median, fastest first.';
         $l[] = '';
         $l[] = veTable($rows);
         $l[] = '';
@@ -1854,26 +1880,18 @@ function veShapesRegion(array $shapes, array $env): string
 
     $l[] = '## What the columns are';
     $l[] = '';
-    $l[] = '- **First render** — the first request after a deploy, measured in a fresh process per engine: '
-        . 'engine boot, template compile, cache write and one render. The TEMPLATE cache is cold; OPcache is '
-        . 'on but its CLI segment is per-process, so the engine source is compiled in that process. '
-        . 'Comparable across engines because no '
-        . 'engine inherits another\'s warm template cache or loaded classes.';
-    $l[] = '- **Mean / Median / Min / p95** — computed over every individual render across all runs.';
-    $l[] = '- **Retained** — PHP heap still held after a whole run of renders, with `gc_collect_cycles()` '
-        . 'called before the reading, in a fresh process. This is what a process carries while serving.';
-    $l[] = '- **Peak** — the same run\'s PHP heap high-water mark, which is where the transient allocation '
-        . 'of the first compile lives. It sits above Retained and is not a second measurement of it.';
+    $l[] = '- **First render** — the first request after a deploy, in a fresh process per engine: boot, '
+        . 'compile, cache write, one render. The template cache is cold.';
+    $l[] = '- **Mean / Median / Min / p95** — over every individual render across all runs.';
+    $l[] = '- **Retained** — heap still held after a whole run, after a gc pass, in a fresh process.';
+    $l[] = '- **Peak** — the same run\'s high-water mark, where the first compile\'s transient allocation lives. '
+        . 'Not a second measurement of Retained.';
     $l[] = '';
-    $l[] = 'Two engines sitting next to each other at the top of a table are not thereby ranked: a '
-        . 'difference of a few percent is still within the spread of a single engine\'s own runs, and a '
-        . 'gap that small is a tie, not a win.';
+    $l[] = 'A few percent is a tie, not a win: it is within a single engine\'s own run-to-run spread.';
     $l[] = '';
     $l[] = veEnvBlock($env, reset($shapes));
     $l[] = '';
-    $l[] = 'Every chart on this page is a plain SVG generated from the run\'s own JSON, so a number and a '
-        . 'diagram cannot disagree. The full published report, including the headline page and each '
-        . 'shape\'s live page: <' . vePublicUrl() . '>';
+    $l[] = 'The full published report, including the headline page: <' . vePublicUrl() . '>';
 
     return implode("\n", $l);
 }
@@ -1890,10 +1908,9 @@ function veShapesPage(string $region): string
     $l = [];
     $l[] = '# Benchmark';
     $l[] = '';
-    $l[] = 'How Clarity compares with the other mainstream PHP template engines, across four rendering '
-        . 'shapes: a page of scalars, a heavy page of escapes and loops, a page of objects, and the same '
-        . 'objects held as nested arrays. The main README shows one of these at a glance; this page is '
-        . 'the comparison in full.';
+    $l[] = 'How Clarity compares with the other popular PHP template engines, across four rendering shapes: '
+        . 'a page of scalars, a heavy page of escapes and loops, a page of objects, and the same objects '
+        . 'held as arrays. The main README shows one of these at a glance; this page is the comparison in full.';
     $l[] = '';
     $l[] = '> **Generated — do not edit by hand.** Every figure below comes from a benchmark run\'s own '
         . 'JSON and is re-rendered from it, so the numbers cannot drift from the data they came from. To '

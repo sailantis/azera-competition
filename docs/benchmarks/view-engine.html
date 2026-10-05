@@ -36,123 +36,127 @@ footer code{background:#f1f5f9;padding:1px 5px;border-radius:4px}
 <nav><a href="index.html">&larr; All benchmarks</a></nav>
 <header>
   <h1>Template engine benchmark</h1>
-  <p class="lead">Six engines rendering identical pages — a layout, an included partial, a loop over the items, and nested loops inside it. <strong>Clarity</strong> and <strong>Native</strong> are engines inside the Azera framework; the rest are the template languages Azera adapts.</p>
-<p class="env"><strong>Environment</strong> — PHP 8.3.33 · Linux 6.8.0-139-generic · SAPI cli · OPcache (<code>opcache.enable_cli</code>): yes · Memory probe: <code>a fresh process with opcache.enable_cli=1 but a per-process CLI segment, so engine source is compiled in that process</code></p>
+  <p class="lead">Seven engines rendering identical pages — a layout, an included partial, a loop over the items, and nested loops inside it. <strong>Clarity</strong> and <strong>Native</strong> are Azera engines; the rest are the template languages Azera adapts.</p>
+<p class="env"><strong>Environment</strong> — PHP 8.3.33 · Linux 6.8.0-139-generic · SAPI cli · OPcache (<code>opcache.enable_cli</code>): yes</p>
 <p class="env"><strong>Budget</strong> — 10,000 renders × 30 runs, 200 items per render</p>
 <p class="env"><strong>Method</strong> — Steady-state timings: the render loop for each (engine, page) cell runs in its own fresh process against a warm cache: one untimed warm-up render, then runs x iterations-per-run timed renders. No order: each (engine, page) cell is measured in its own process, so measurement order cannot affect a cell. The first render was measured as one render in a fresh process with a cold template cache: engine class loading, template compile, cache write and one render.</p>
-<p class="env"><strong>Engines</strong> — Clarity dev-main (0a1c64d) · NativeEngine (Azera) dev-main (v0.1.0+dirty) · Plates 3.6.0 · Blade 12.69.2 · Twig 3.27.0 · Stempler 3.17.2</p>
-<p class="env"><em>Measured 2026-09-29T22:42:39+00:00</em></p>
+<p class="env"><strong>Engines</strong> — Clarity dev-main (cbe1b05+dirty) · NativeEngine (Azera) dev-main (5a0c30e+dirty) · Plates 3.6.0 · Blade 12.69.2 · Twig 3.27.0 · Stempler 3.17.2 · Latte 3.1.6</p>
+<p class="env"><em>Measured 2026-09-30T23:30:00+00:00</em></p>
 </header>
 <main>
 <h2>Scalars</h2>
-<p class="note">The first of the rendering shapes measured here, rendered on the same machine with the same engines as the rest: a layout, an included partial, a loop over scalars with a filter, and a nested loop inside it. These are this page&#039;s own figures — a time here and a time further down are not the same measurement, so compare engines WITHIN a page rather than across pages.</p>
+<p class="note">The first rendering shape measured here: a layout, an included partial, a loop over scalars with a filter, and a nested loop inside it. A time here and a time further down are not the same measurement — compare engines WITHIN a page.</p>
 <figure>
   <figcaption>Time per render</figcaption>
   <img src="svg/view-engine/render-time.svg" alt="Time per render">
-  <p class="note">Lower is better. Span: fastest observation → p95; dot: median of every render.</p>
+  <p class="note">Dot: median render · caps: fastest observation and p95.</p>
 </figure>
 <figure>
   <figcaption>First render (fresh process, cold template cache)</figcaption>
   <img src="svg/view-engine/warm-cost.svg" alt="First render (fresh process, cold template cache)">
-  <p class="note">The one-off cost the first request pays.</p>
+  <p class="note">The one-off cost of the first request after a deploy: engine boot, template compile, cache write and one render. Measured once per engine, each in its own fresh process; OPcache is on but its CLI segment is per-process, so the engine source is compiled there too.</p>
 </figure>
 <figure>
   <figcaption>Memory per run</figcaption>
   <img src="svg/view-engine/memory.svg" alt="Memory per run">
-  <p class="note">Range: the engine loaded with nothing rendered → the run&#039;s peak. Dot: heap retained after the run.</p>
+  <p class="note">Reads the PHP heap. Left cap: what the engine costs to have loaded, nothing rendered. Dot: what a whole run still holds, after a gc pass — memory_get_usage(false) after a whole run of iterations_per_run renders in a fresh process, gc_collect_cycles() called first. Right cap: the run&#039;s high-water mark. Memory probe: a fresh process with opcache.enable_cli=1 but a per-process CLI segment, so engine source is compiled in that process.</p>
 </figure>
 <h3>Results</h3>
 <table><thead><tr><th>Engine</th><th>First render (ms)</th><th>Mean (ms)</th><th>Median (ms)</th><th>Min (ms)</th><th>p95 (ms)</th><th>Retained (MB)</th><th>Peak (MB)</th></tr></thead><tbody>
-<tr><th scope="row"><span class="dot" style="--c:#3459e6"></span>Clarity</th><td>14.726</td><td>0.432</td><td>0.418</td><td>0.397</td><td>0.501</td><td>1.03</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#0b7285"></span>Stempler</th><td>22.536</td><td>0.440</td><td>0.428</td><td>0.402</td><td>0.505</td><td>1.29</td><td>1.71</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#777bb3"></span>Native</th><td>0.661</td><td>0.460</td><td>0.447</td><td>0.422</td><td>0.526</td><td>0.79</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#e8590c"></span>Plates</th><td>2.532</td><td>0.547</td><td>0.529</td><td>0.500</td><td>0.633</td><td>0.86</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#e5484d"></span>Blade</th><td>30.786</td><td>0.760</td><td>0.734</td><td>0.692</td><td>0.888</td><td>1.57</td><td>2.05</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#8044db"></span>Twig</th><td>36.686</td><td>1.289</td><td>1.248</td><td>1.193</td><td>1.507</td><td>1.48</td><td>1.79</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#3459e6"></span>Clarity</th><td>16.276</td><td>0.436</td><td>0.421</td><td>0.397</td><td>0.507</td><td>1.03</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#0b7285"></span>Stempler</th><td>23.179</td><td>0.443</td><td>0.427</td><td>0.398</td><td>0.518</td><td>1.29</td><td>1.71</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#777bb3"></span>Native</th><td>0.686</td><td>0.464</td><td>0.449</td><td>0.423</td><td>0.537</td><td>0.79</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#e8590c"></span>Plates</th><td>2.684</td><td>0.551</td><td>0.531</td><td>0.493</td><td>0.644</td><td>0.86</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#d6336c"></span>Latte</th><td>46.966</td><td>0.720</td><td>0.692</td><td>0.661</td><td>0.840</td><td>1.44</td><td>7.12</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#e5484d"></span>Blade</th><td>31.396</td><td>0.750</td><td>0.724</td><td>0.687</td><td>0.873</td><td>1.57</td><td>2.05</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#8044db"></span>Twig</th><td>35.577</td><td>1.288</td><td>1.249</td><td>1.195</td><td>1.506</td><td>1.48</td><td>1.79</td></tr>
 </tbody></table>
-<p class="note">Memory is the peak PHP heap for one render, measured in a fresh process so each engine reports its own footprint rather than the high-water mark of everything measured before it.</p>
+<p class="note">A cell here is the median of one engine's own renders in its own fresh process — not a shared high-water mark.</p>
 <section id="page-mixed">
   <h2>Mixed</h2>
-  <p class="note">Measured on the same machine with the same engines, rendering the heavy page: 20 flat variables each read twice (as text and as a data-value attribute) plus 20 rows of six fields each, over 40 flat variable accesses per render and 1440 in total at 200 items, with every value HTML-special so the escape path does real work in both the body and an attribute context. A figure here and a figure above are different measurements — compare engines within a page, not across pages.</p>
+  <p class="note">Rendering the heavy page: 20 flat variables each read twice (as text and as a data-value attribute) plus 20 rows of six fields each, over 40 flat variable accesses per render and 1440 in total at 200 items, with every value HTML-special so the escape path does real work in both the body and an attribute context. A figure here and a figure above are different measurements — compare engines within a page, not across pages.</p>
 <figure>
   <figcaption>Time per render — Mixed</figcaption>
   <img src="svg/view-engine/mixed-render-time.svg" alt="Time per render — Mixed">
-  <p class="note">Lower is better. Span: fastest observation → p95; dot: median of every render.</p>
+  <p class="note">Dot: median render · caps: fastest observation and p95.</p>
 </figure>
 <figure>
   <figcaption>First render (fresh process, cold template cache) — Mixed</figcaption>
   <img src="svg/view-engine/mixed-warm-cost.svg" alt="First render (fresh process, cold template cache) — Mixed">
-  <p class="note">The one-off cost the first request pays.</p>
+  <p class="note">The one-off cost of the first request after a deploy: engine boot, template compile, cache write and one render. Measured once per engine, each in its own fresh process; OPcache is on but its CLI segment is per-process, so the engine source is compiled there too.</p>
 </figure>
 <figure>
   <figcaption>Memory per run — Mixed</figcaption>
   <img src="svg/view-engine/mixed-memory.svg" alt="Memory per run — Mixed">
-  <p class="note">Range: the engine loaded with nothing rendered → the run&#039;s peak. Dot: heap retained after the run.</p>
+  <p class="note">Reads the PHP heap. Left cap: what the engine costs to have loaded, nothing rendered. Dot: what a whole run still holds, after a gc pass — memory_get_usage(false) after a whole run of iterations_per_run renders in a fresh process, gc_collect_cycles() called first. Right cap: the run&#039;s high-water mark. Memory probe: a fresh process with opcache.enable_cli=1 but a per-process CLI segment, so engine source is compiled in that process.</p>
 </figure>
   <h3>Results</h3>
   <table><thead><tr><th>Engine</th><th>First render (ms)</th><th>Mean (ms)</th><th>Median (ms)</th><th>Min (ms)</th><th>p95 (ms)</th><th>Retained (MB)</th><th>Peak (MB)</th></tr></thead><tbody>
-<tr><th scope="row"><span class="dot" style="--c:#3459e6"></span>Clarity</th><td>15.653</td><td>0.322</td><td>0.313</td><td>0.293</td><td>0.370</td><td>1.17</td><td>1.59</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#0b7285"></span>Stempler</th><td>30.288</td><td>0.337</td><td>0.326</td><td>0.306</td><td>0.388</td><td>1.45</td><td>2.00</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#777bb3"></span>Native</th><td>0.591</td><td>0.353</td><td>0.342</td><td>0.321</td><td>0.398</td><td>0.91</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#e8590c"></span>Plates</th><td>2.392</td><td>0.406</td><td>0.394</td><td>0.368</td><td>0.471</td><td>0.98</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#e5484d"></span>Blade</th><td>33.222</td><td>0.639</td><td>0.621</td><td>0.578</td><td>0.747</td><td>1.69</td><td>2.12</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#8044db"></span>Twig</th><td>35.839</td><td>0.854</td><td>0.829</td><td>0.782</td><td>0.991</td><td>1.65</td><td>2.15</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#3459e6"></span>Clarity</th><td>16.544</td><td>0.325</td><td>0.315</td><td>0.293</td><td>0.377</td><td>1.17</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#0b7285"></span>Stempler</th><td>28.845</td><td>0.338</td><td>0.327</td><td>0.309</td><td>0.390</td><td>1.45</td><td>2.00</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#777bb3"></span>Native</th><td>0.665</td><td>0.350</td><td>0.340</td><td>0.319</td><td>0.405</td><td>0.91</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#e8590c"></span>Plates</th><td>2.491</td><td>0.407</td><td>0.394</td><td>0.364</td><td>0.472</td><td>0.98</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#d6336c"></span>Latte</th><td>52.328</td><td>0.517</td><td>0.497</td><td>0.464</td><td>0.605</td><td>1.58</td><td>9.71</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#e5484d"></span>Blade</th><td>32.909</td><td>0.634</td><td>0.616</td><td>0.575</td><td>0.739</td><td>1.69</td><td>2.12</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#8044db"></span>Twig</th><td>35.309</td><td>0.859</td><td>0.833</td><td>0.786</td><td>0.997</td><td>1.65</td><td>2.15</td></tr>
 </tbody></table>
 </section>
 <section id="page-entities">
   <h2>Objects</h2>
-  <p class="note">Measured on the same machine with the same engines, rendering objects instead of scalars: two properties, a nested object, a nullable property behind a default, and an array inside an object. A figure here and a figure above are different measurements — compare engines within a page, not across pages.</p>
+  <p class="note">Rendering objects instead of scalars: two properties, a nested object, a nullable property behind a default, and an array inside an object. A figure here and a figure above are different measurements — compare engines within a page, not across pages.</p>
 <figure>
   <figcaption>Time per render — Objects</figcaption>
   <img src="svg/view-engine/entities-render-time.svg" alt="Time per render — Objects">
-  <p class="note">Lower is better. Span: fastest observation → p95; dot: median of every render.</p>
+  <p class="note">Dot: median render · caps: fastest observation and p95.</p>
 </figure>
 <figure>
   <figcaption>First render (fresh process, cold template cache) — Objects</figcaption>
   <img src="svg/view-engine/entities-warm-cost.svg" alt="First render (fresh process, cold template cache) — Objects">
-  <p class="note">The one-off cost the first request pays.</p>
+  <p class="note">The one-off cost of the first request after a deploy: engine boot, template compile, cache write and one render. Measured once per engine, each in its own fresh process; OPcache is on but its CLI segment is per-process, so the engine source is compiled there too.</p>
 </figure>
 <figure>
   <figcaption>Memory per run — Objects</figcaption>
   <img src="svg/view-engine/entities-memory.svg" alt="Memory per run — Objects">
-  <p class="note">Range: the engine loaded with nothing rendered → the run&#039;s peak. Dot: heap retained after the run.</p>
+  <p class="note">Reads the PHP heap. Left cap: what the engine costs to have loaded, nothing rendered. Dot: what a whole run still holds, after a gc pass — memory_get_usage(false) after a whole run of iterations_per_run renders in a fresh process, gc_collect_cycles() called first. Right cap: the run&#039;s high-water mark. Memory probe: a fresh process with opcache.enable_cli=1 but a per-process CLI segment, so engine source is compiled in that process.</p>
 </figure>
   <h3>Results</h3>
   <table><thead><tr><th>Engine</th><th>First render (ms)</th><th>Mean (ms)</th><th>Median (ms)</th><th>Min (ms)</th><th>p95 (ms)</th><th>Retained (MB)</th><th>Peak (MB)</th></tr></thead><tbody>
-<tr><th scope="row"><span class="dot" style="--c:#3459e6"></span>Clarity</th><td>15.339</td><td>0.111</td><td>0.105</td><td>0.095</td><td>0.133</td><td>1.05</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#777bb3"></span>Native</th><td>0.417</td><td>0.117</td><td>0.111</td><td>0.093</td><td>0.140</td><td>0.81</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#0b7285"></span>Stempler</th><td>22.398</td><td>0.123</td><td>0.116</td><td>0.107</td><td>0.149</td><td>1.32</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#e8590c"></span>Plates</th><td>2.010</td><td>0.148</td><td>0.139</td><td>0.122</td><td>0.181</td><td>0.88</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#e5484d"></span>Blade</th><td>30.908</td><td>0.329</td><td>0.317</td><td>0.293</td><td>0.394</td><td>1.59</td><td>2.01</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#8044db"></span>Twig</th><td>34.159</td><td>0.619</td><td>0.598</td><td>0.568</td><td>0.720</td><td>1.54</td><td>1.76</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#3459e6"></span>Clarity</th><td>16.580</td><td>0.114</td><td>0.108</td><td>0.094</td><td>0.139</td><td>1.05</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#777bb3"></span>Native</th><td>0.458</td><td>0.117</td><td>0.111</td><td>0.097</td><td>0.143</td><td>0.81</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#0b7285"></span>Stempler</th><td>23.729</td><td>0.124</td><td>0.118</td><td>0.107</td><td>0.152</td><td>1.32</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#e8590c"></span>Plates</th><td>2.467</td><td>0.148</td><td>0.139</td><td>0.124</td><td>0.182</td><td>0.88</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#d6336c"></span>Latte</th><td>45.775</td><td>0.299</td><td>0.285</td><td>0.261</td><td>0.354</td><td>1.46</td><td>6.89</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#e5484d"></span>Blade</th><td>32.062</td><td>0.329</td><td>0.318</td><td>0.296</td><td>0.393</td><td>1.59</td><td>2.01</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#8044db"></span>Twig</th><td>36.359</td><td>0.633</td><td>0.612</td><td>0.572</td><td>0.734</td><td>1.54</td><td>1.76</td></tr>
 </tbody></table>
 </section>
 <section id="page-entities-array">
   <h2>Objects as arrays</h2>
-  <p class="note">Measured on the same machine with the same engines, rendering the same content in the same order with the same values held as nested arrays, so access shape is the only difference. A figure here and a figure above are different measurements — compare engines within a page, not across pages.</p>
+  <p class="note">Rendering the same content in the same order with the same values held as nested arrays, so access shape is the only difference. A figure here and a figure above are different measurements — compare engines within a page, not across pages.</p>
 <figure>
   <figcaption>Time per render — Objects as arrays</figcaption>
   <img src="svg/view-engine/entities-array-render-time.svg" alt="Time per render — Objects as arrays">
-  <p class="note">Lower is better. Span: fastest observation → p95; dot: median of every render.</p>
+  <p class="note">Dot: median render · caps: fastest observation and p95.</p>
 </figure>
 <figure>
   <figcaption>First render (fresh process, cold template cache) — Objects as arrays</figcaption>
   <img src="svg/view-engine/entities-array-warm-cost.svg" alt="First render (fresh process, cold template cache) — Objects as arrays">
-  <p class="note">The one-off cost the first request pays.</p>
+  <p class="note">The one-off cost of the first request after a deploy: engine boot, template compile, cache write and one render. Measured once per engine, each in its own fresh process; OPcache is on but its CLI segment is per-process, so the engine source is compiled there too.</p>
 </figure>
 <figure>
   <figcaption>Memory per run — Objects as arrays</figcaption>
   <img src="svg/view-engine/entities-array-memory.svg" alt="Memory per run — Objects as arrays">
-  <p class="note">Range: the engine loaded with nothing rendered → the run&#039;s peak. Dot: heap retained after the run.</p>
+  <p class="note">Reads the PHP heap. Left cap: what the engine costs to have loaded, nothing rendered. Dot: what a whole run still holds, after a gc pass — memory_get_usage(false) after a whole run of iterations_per_run renders in a fresh process, gc_collect_cycles() called first. Right cap: the run&#039;s high-water mark. Memory probe: a fresh process with opcache.enable_cli=1 but a per-process CLI segment, so engine source is compiled in that process.</p>
 </figure>
   <h3>Results</h3>
   <table><thead><tr><th>Engine</th><th>First render (ms)</th><th>Mean (ms)</th><th>Median (ms)</th><th>Min (ms)</th><th>p95 (ms)</th><th>Retained (MB)</th><th>Peak (MB)</th></tr></thead><tbody>
-<tr><th scope="row"><span class="dot" style="--c:#3459e6"></span>Clarity</th><td>15.202</td><td>0.113</td><td>0.108</td><td>0.095</td><td>0.136</td><td>1.11</td><td>1.55</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#777bb3"></span>Native</th><td>0.316</td><td>0.121</td><td>0.114</td><td>0.102</td><td>0.144</td><td>0.87</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#0b7285"></span>Stempler</th><td>23.347</td><td>0.126</td><td>0.120</td><td>0.106</td><td>0.150</td><td>1.38</td><td>1.55</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#e8590c"></span>Plates</th><td>2.072</td><td>0.152</td><td>0.144</td><td>0.133</td><td>0.184</td><td>0.94</td><td>1.52</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#e5484d"></span>Blade</th><td>31.259</td><td>0.332</td><td>0.321</td><td>0.296</td><td>0.396</td><td>1.65</td><td>2.07</td></tr>
-<tr><th scope="row"><span class="dot" style="--c:#8044db"></span>Twig</th><td>34.280</td><td>0.488</td><td>0.472</td><td>0.441</td><td>0.563</td><td>1.59</td><td>1.82</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#3459e6"></span>Clarity</th><td>15.971</td><td>0.119</td><td>0.112</td><td>0.096</td><td>0.146</td><td>1.11</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#777bb3"></span>Native</th><td>0.321</td><td>0.121</td><td>0.115</td><td>0.103</td><td>0.148</td><td>0.87</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#0b7285"></span>Stempler</th><td>22.801</td><td>0.126</td><td>0.120</td><td>0.108</td><td>0.153</td><td>1.38</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#e8590c"></span>Plates</th><td>2.059</td><td>0.150</td><td>0.141</td><td>0.126</td><td>0.182</td><td>0.94</td><td>1.61</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#d6336c"></span>Latte</th><td>47.737</td><td>0.302</td><td>0.288</td><td>0.262</td><td>0.357</td><td>1.52</td><td>6.96</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#e5484d"></span>Blade</th><td>29.716</td><td>0.331</td><td>0.320</td><td>0.298</td><td>0.390</td><td>1.65</td><td>2.07</td></tr>
+<tr><th scope="row"><span class="dot" style="--c:#8044db"></span>Twig</th><td>34.921</td><td>0.492</td><td>0.473</td><td>0.448</td><td>0.577</td><td>1.59</td><td>1.82</td></tr>
 </tbody></table>
 </section>
 </main>
