@@ -84,7 +84,6 @@ final class FrameworkDocsLinkTest extends TestCase
         'docs/00-GETTING-STARTED.md -> ../public/index.php',
         'docs/00-GETTING-STARTED.md -> ../views/home/index.php',
         'docs/00-GETTING-STARTED.md -> ../views/layouts/main.php',
-        'docs/03b-CLARITY-ENGINE.md -> images/clarity-dsl-logo-opt.svg',
     ];
 
     /**
