@@ -606,7 +606,7 @@ final class ViewEngineHarnessTest extends TestCase
         // changes the compiled output.
         $factory = (string) file_get_contents("$dir/engines.php");
         self::assertStringContainsString("case 'clarity-open':", $factory);
-        self::assertStringContainsString('setPolicy(ClarityPolicy::open())', $factory);
+        self::assertStringContainsString('setPolicy(ClarityPolicy::unrestricted())', $factory);
         self::assertStringContainsString(
             'setCachePath(sys_get_temp_dir() . \'/clarity-bench-open\')',
             $factory,
@@ -734,7 +734,7 @@ final class ViewEngineHarnessTest extends TestCase
         // it there (see testEveryConsumerBuildsEnginesThroughTheSharedFactory).
         $factory = (string) file_get_contents(dirname(__DIR__) . '/benchmarks/view-engine/engines.php');
         self::assertStringContainsString("case 'clarity-open':", $factory, 'the open-mode arm must remain buildable');
-        self::assertStringContainsString('setPolicy(ClarityPolicy::open())', $factory);
+        self::assertStringContainsString('setPolicy(ClarityPolicy::unrestricted())', $factory);
         self::assertStringContainsString(
             "sys_get_temp_dir() . '/clarity-bench-open'",
             $factory,

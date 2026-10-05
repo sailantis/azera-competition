@@ -8,12 +8,12 @@ declare(strict_types=1);
  *
  * WHY THIS IS COMMITTED
  *
- * Clarity has two modes: sandboxed (the default) and open (`Policy::open()`,
- * the former `setSandboxMode(false)`, which grants templates full PHP for
- * Blade / Stempler / Plates parity). They compile the SAME template
- * differently — open mode seeds the render scope with one `extract($__c_va,
- * EXTR_SKIP)` and then reads PHP locals, where the sandbox reads
- * `$__c_va['name']` at every access. That is a real trade (one `extract()` against
+ * Clarity has two policies: restricted (the default) and unrestricted
+ * (`Policy::unrestricted()`, the engine's former PHP mode, which grants every
+ * rule for Blade / Stempler / Plates parity). They compile the SAME template
+ * differently — the unrestricted policy grants `phpVariables`, which seeds the
+ * render scope with one `extract($__c_va, EXTR_SKIP)` and then reads PHP locals,
+ * where the restricted policy reads `$__c_va['name']` at every access. That is a real trade (one `extract()` against
  * one hash lookup per access) and it is ONLY observable as a time difference, so
  * no correctness test can guard it: a future change that made open mode
  * expensive, or that quietly reintroduced the hash lookup, would render identical
@@ -119,7 +119,7 @@ function armCost(string $tplDir, bool $sandboxed, array $vars, int $iterations):
 
     $e = new ClarityEngine();
     $e->setExtension('.clarity.html');
-    $e->setPolicy($sandboxed ? ClarityPolicy::sandboxed() : ClarityPolicy::open());
+    $e->setPolicy($sandboxed ? ClarityPolicy::restricted() : ClarityPolicy::unrestricted());
     $e->setViewPath($tplDir)->addNamespace('benchmarks', $tplDir);
     $e->setCachePath($cache);
 

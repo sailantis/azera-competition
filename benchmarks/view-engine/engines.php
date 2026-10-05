@@ -74,9 +74,10 @@ function benchmarkEngine(string $key, string $template, bool $withPenalty = true
         case 'clarity-open':
             // Identical to the `clarity` arm in every respect but the policy, so
             // the compiled body differs ONLY in the policy-dependent parts (an
-            // open policy seeds the render scope with extract() and reads PHP
-            // locals instead of `$__c_va['name']` on every access — verified by
-            // diffing both modes' generated class).
+            // unrestricted policy grants `phpVariables`, which seeds the render
+            // scope with extract() and reads PHP locals instead of
+            // `$__c_va['name']` on every access — verified by diffing both modes'
+            // generated class).
             //
             // Its compiled templates go to a SEPARATE cache directory. The cache
             // file is named after the template alone, so two policy engines
@@ -87,7 +88,7 @@ function benchmarkEngine(string $key, string $template, bool $withPenalty = true
             // its published figures were measured with.
             $engine = (new ClarityEngine())
                 ->setExtension('.clarity.html')
-                ->setPolicy(ClarityPolicy::open())
+                ->setPolicy(ClarityPolicy::unrestricted())
                 ->setCachePath(sys_get_temp_dir() . '/clarity-bench-open');
             break;
 
