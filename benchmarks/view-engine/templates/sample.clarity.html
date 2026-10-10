@@ -5,7 +5,12 @@
     <ul>
         {% for idx, item in items %}
             <li {% if idx % 2 == 0 %}class="even"{% endif %}>
-                {{ item |> upper }}
+                {# `upper` is a string filter and this page's items are integers.
+                   Clarity compiles with strict types on by default, and its
+                   built-in filters no longer cast their input, so the value is
+                   cast here rather than by the filter. Latte's template carries
+                   the same workaround for the same reason. #}
+                {{ (string) item |> upper }}
                 <div class="extras">
                     {% for j in 0 .. 9 %}
                         <span>{{ item ~ '-' ~ j }}</span>
