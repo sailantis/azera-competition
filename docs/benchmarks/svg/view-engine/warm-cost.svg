@@ -2,7 +2,7 @@
 <rect x="0.5" y="0.5" width="959" height="343" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
 <text x="70" y="30" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="16" font-weight="700" fill="#1e293b" text-anchor="start">First render (fresh process, cold template cache)</text>
 <text x="70" y="50" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">linear scale · lower is better · unit: ms</text>
-<text x="70" y="62" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">Clarity dev-main (cbe1b05+dirty) · NativeEngine (Azera) dev-main (5a0c30e+dirty) · Plates 3.6.0 · Blade 12.69.2 · Twig 3.27.0 · Stempler 3.17.2 · Latte 3.1.6</text>
+<text x="70" y="62" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">Clarity dev-main (v0.3.0) · NativeEngine (Azera) dev-main (78444bf) · Plates 3.6.0 · Blade 12.69.2 · Twig 3.27.0 · Stempler 3.17.2 · Latte 3.1.6</text>
 <line x1="70" y1="292" x2="944" y2="292" stroke="#f1f5f9" stroke-width="1"/>
 <text x="62" y="296" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#64748b" text-anchor="end">0.000</text>
 <line x1="70" y1="235.5" x2="944" y2="235.5" stroke="#f1f5f9" stroke-width="1"/>
@@ -14,25 +14,25 @@
 <line x1="70" y1="66" x2="944" y2="66" stroke="#f1f5f9" stroke-width="1"/>
 <text x="62" y="70" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="400" fill="#64748b" text-anchor="end">50.0</text>
 <line x1="70" y1="292" x2="944" y2="292" stroke="#cbd5e1" stroke-width="1"/>
-<rect x="101.21" y="288.9" width="62.43" height="3.1" rx="3" fill="#777bb3"/>
-<text x="132.43" y="282.9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">0.686</text>
+<rect x="101.21" y="288.91" width="62.43" height="3.09" rx="3" fill="#777bb3"/>
+<text x="132.43" y="282.91" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">0.684</text>
 <text x="132.43" y="310" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="500" fill="#1e293b" text-anchor="middle">native</text>
-<rect x="226.07" y="279.87" width="62.43" height="12.13" rx="3" fill="#e8590c"/>
-<text x="257.29" y="273.87" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">2.68</text>
+<rect x="226.07" y="281.31" width="62.43" height="10.69" rx="3" fill="#e8590c"/>
+<text x="257.29" y="275.31" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">2.37</text>
 <text x="257.29" y="310" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="500" fill="#1e293b" text-anchor="middle">plates</text>
-<rect x="350.93" y="218.43" width="62.43" height="73.57" rx="3" fill="#3459e6"/>
-<text x="382.14" y="212.43" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">16.3</text>
+<rect x="350.93" y="197.3" width="62.43" height="94.7" rx="3" fill="#3459e6"/>
+<text x="382.14" y="191.3" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">21.0</text>
 <text x="382.14" y="310" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="500" fill="#1e293b" text-anchor="middle">clarity</text>
-<rect x="475.79" y="187.23" width="62.43" height="104.77" rx="3" fill="#0b7285"/>
-<text x="507" y="181.23" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">23.2</text>
+<rect x="475.79" y="186.05" width="62.43" height="105.95" rx="3" fill="#0b7285"/>
+<text x="507" y="180.05" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">23.4</text>
 <text x="507" y="310" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="500" fill="#1e293b" text-anchor="middle">stempler</text>
-<rect x="600.64" y="150.09" width="62.43" height="141.91" rx="3" fill="#e5484d"/>
-<text x="631.86" y="144.09" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">31.4</text>
+<rect x="600.64" y="141.98" width="62.43" height="150.02" rx="3" fill="#e5484d"/>
+<text x="631.86" y="135.98" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">33.2</text>
 <text x="631.86" y="310" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="500" fill="#1e293b" text-anchor="middle">blade</text>
-<rect x="725.5" y="131.19" width="62.43" height="160.81" rx="3" fill="#8044db"/>
-<text x="756.71" y="125.19" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">35.6</text>
+<rect x="725.5" y="136.16" width="62.43" height="155.84" rx="3" fill="#8044db"/>
+<text x="756.71" y="130.16" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">34.5</text>
 <text x="756.71" y="310" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="500" fill="#1e293b" text-anchor="middle">twig</text>
-<rect x="850.36" y="79.71" width="62.43" height="212.29" rx="3" fill="#d6336c"/>
-<text x="881.57" y="73.71" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">47.0</text>
+<rect x="850.36" y="90.24" width="62.43" height="201.76" rx="3" fill="#d6336c"/>
+<text x="881.57" y="84.24" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">44.6</text>
 <text x="881.57" y="310" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="500" fill="#1e293b" text-anchor="middle">latte</text>
 </svg>

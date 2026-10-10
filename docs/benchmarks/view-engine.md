@@ -8,9 +8,9 @@ Seven engines render **the same pages** — a layout, an included partial, a loo
 
 **Method** — Steady-state timings: the render loop for each (engine, page) cell runs in its own fresh process against a warm cache: one untimed warm-up render, then runs x iterations-per-run timed renders. No order: each (engine, page) cell is measured in its own process, so measurement order cannot affect a cell. The first render was measured as one render in a fresh process with a cold template cache: engine class loading, template compile, cache write and one render.
 
-**Engines** — Clarity dev-main (cbe1b05+dirty) · NativeEngine (Azera) dev-main (5a0c30e+dirty) · Plates 3.6.0 · Blade 12.69.2 · Twig 3.27.0 · Stempler 3.17.2 · Latte 3.1.6
+**Engines** — Clarity dev-main (v0.3.0) · NativeEngine (Azera) dev-main (78444bf) · Plates 3.6.0 · Blade 12.69.2 · Twig 3.27.0 · Stempler 3.17.2 · Latte 3.1.6
 
-_Measured 2026-09-30T23:30:00+00:00_
+_Measured 2026-10-10T18:57:36+00:00_
 
 ## Scalars
 
@@ -42,13 +42,13 @@ Generated from the same rows the charts are drawn from. Rows are ordered by medi
 
 | Engine | First render (ms) | Mean (ms) | Median (ms) | Min (ms) | p95 (ms) | Retained (MB) | Peak (MB) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Clarity | 16.276 | 0.436 | 0.421 | 0.397 | 0.507 | 1.03 | 1.61 |
-| Stempler | 23.179 | 0.443 | 0.427 | 0.398 | 0.518 | 1.29 | 1.71 |
-| Native | 0.686 | 0.464 | 0.449 | 0.423 | 0.537 | 0.79 | 1.61 |
-| Plates | 2.684 | 0.551 | 0.531 | 0.493 | 0.644 | 0.86 | 1.61 |
-| Latte | 46.966 | 0.720 | 0.692 | 0.661 | 0.840 | 1.44 | 7.12 |
-| Blade | 31.396 | 0.750 | 0.724 | 0.687 | 0.873 | 1.57 | 2.05 |
-| Twig | 35.577 | 1.288 | 1.249 | 1.195 | 1.506 | 1.48 | 1.79 |
+| Clarity | 20.951 | 0.441 | 0.424 | 0.400 | 0.518 | 1.03 | 1.61 |
+| Stempler | 23.441 | 0.449 | 0.431 | 0.404 | 0.534 | 1.29 | 1.71 |
+| Native | 0.684 | 0.466 | 0.450 | 0.424 | 0.543 | 0.79 | 1.61 |
+| Plates | 2.365 | 0.564 | 0.537 | 0.502 | 0.692 | 0.86 | 1.61 |
+| Latte | 44.638 | 0.738 | 0.702 | 0.657 | 0.907 | 1.44 | 7.12 |
+| Blade | 33.189 | 0.766 | 0.738 | 0.692 | 0.907 | 1.57 | 2.05 |
+| Twig | 34.478 | 1.298 | 1.253 | 1.189 | 1.530 | 1.48 | 1.79 |
 
 ## Mixed — another rendering shape
 
@@ -68,13 +68,13 @@ Rendering the heavy page: 20 flat variables each read twice (as text and as a da
 
 | Engine | First render (ms) | Mean (ms) | Median (ms) | Min (ms) | p95 (ms) | Retained (MB) | Peak (MB) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Clarity | 16.544 | 0.325 | 0.315 | 0.293 | 0.377 | 1.17 | 1.61 |
-| Stempler | 28.845 | 0.338 | 0.327 | 0.309 | 0.390 | 1.45 | 2.00 |
-| Native | 0.665 | 0.350 | 0.340 | 0.319 | 0.405 | 0.91 | 1.61 |
-| Plates | 2.491 | 0.407 | 0.394 | 0.364 | 0.472 | 0.98 | 1.61 |
-| Latte | 52.328 | 0.517 | 0.497 | 0.464 | 0.605 | 1.58 | 9.71 |
-| Blade | 32.909 | 0.634 | 0.616 | 0.575 | 0.739 | 1.69 | 2.12 |
-| Twig | 35.309 | 0.859 | 0.833 | 0.786 | 0.997 | 1.65 | 2.15 |
+| Clarity | 20.699 | 0.328 | 0.317 | 0.291 | 0.386 | 1.17 | 1.65 |
+| Stempler | 31.004 | 0.341 | 0.328 | 0.309 | 0.404 | 1.45 | 2.00 |
+| Native | 0.661 | 0.352 | 0.341 | 0.319 | 0.409 | 0.91 | 1.61 |
+| Plates | 2.308 | 0.415 | 0.397 | 0.372 | 0.497 | 0.98 | 1.61 |
+| Latte | 51.510 | 0.524 | 0.502 | 0.468 | 0.624 | 1.58 | 9.71 |
+| Blade | 31.817 | 0.639 | 0.620 | 0.575 | 0.754 | 1.69 | 2.12 |
+| Twig | 37.266 | 0.863 | 0.834 | 0.786 | 1.014 | 1.65 | 2.15 |
 
 ## Objects — another rendering shape
 
@@ -94,13 +94,13 @@ Rendering objects instead of scalars: two properties, a nested object, a nullabl
 
 | Engine | First render (ms) | Mean (ms) | Median (ms) | Min (ms) | p95 (ms) | Retained (MB) | Peak (MB) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Clarity | 16.580 | 0.114 | 0.108 | 0.094 | 0.139 | 1.05 | 1.61 |
-| Native | 0.458 | 0.117 | 0.111 | 0.097 | 0.143 | 0.81 | 1.61 |
-| Stempler | 23.729 | 0.124 | 0.118 | 0.107 | 0.152 | 1.32 | 1.61 |
-| Plates | 2.467 | 0.148 | 0.139 | 0.124 | 0.182 | 0.88 | 1.61 |
-| Latte | 45.775 | 0.299 | 0.285 | 0.261 | 0.354 | 1.46 | 6.89 |
-| Blade | 32.062 | 0.329 | 0.318 | 0.296 | 0.393 | 1.59 | 2.01 |
-| Twig | 36.359 | 0.633 | 0.612 | 0.572 | 0.734 | 1.54 | 1.76 |
+| Clarity | 19.672 | 0.115 | 0.107 | 0.094 | 0.146 | 1.05 | 1.61 |
+| Native | 0.331 | 0.119 | 0.112 | 0.096 | 0.148 | 0.81 | 1.61 |
+| Stempler | 23.472 | 0.124 | 0.117 | 0.104 | 0.156 | 1.32 | 1.61 |
+| Plates | 1.958 | 0.150 | 0.139 | 0.126 | 0.192 | 0.88 | 1.61 |
+| Latte | 44.224 | 0.305 | 0.288 | 0.267 | 0.374 | 1.46 | 6.89 |
+| Blade | 30.406 | 0.332 | 0.319 | 0.297 | 0.400 | 1.59 | 2.01 |
+| Twig | 38.442 | 0.626 | 0.602 | 0.563 | 0.740 | 1.54 | 1.76 |
 
 ## Objects as arrays — another rendering shape
 
@@ -120,13 +120,13 @@ Rendering the same content in the same order with the same values held as nested
 
 | Engine | First render (ms) | Mean (ms) | Median (ms) | Min (ms) | p95 (ms) | Retained (MB) | Peak (MB) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Clarity | 15.971 | 0.119 | 0.112 | 0.096 | 0.146 | 1.11 | 1.61 |
-| Native | 0.321 | 0.121 | 0.115 | 0.103 | 0.148 | 0.87 | 1.61 |
-| Stempler | 22.801 | 0.126 | 0.120 | 0.108 | 0.153 | 1.38 | 1.61 |
-| Plates | 2.059 | 0.150 | 0.141 | 0.126 | 0.182 | 0.94 | 1.61 |
-| Latte | 47.737 | 0.302 | 0.288 | 0.262 | 0.357 | 1.52 | 6.96 |
-| Blade | 29.716 | 0.331 | 0.320 | 0.298 | 0.390 | 1.65 | 2.07 |
-| Twig | 34.921 | 0.492 | 0.473 | 0.448 | 0.577 | 1.59 | 1.82 |
+| Clarity | 20.212 | 0.118 | 0.110 | 0.097 | 0.149 | 1.11 | 1.61 |
+| Native | 0.341 | 0.122 | 0.115 | 0.103 | 0.152 | 0.87 | 1.61 |
+| Stempler | 24.923 | 0.129 | 0.121 | 0.108 | 0.161 | 1.38 | 1.61 |
+| Plates | 2.011 | 0.151 | 0.142 | 0.128 | 0.189 | 0.94 | 1.61 |
+| Latte | 46.874 | 0.307 | 0.291 | 0.271 | 0.373 | 1.52 | 6.96 |
+| Blade | 30.039 | 0.334 | 0.320 | 0.298 | 0.407 | 1.65 | 2.07 |
+| Twig | 38.300 | 0.497 | 0.477 | 0.445 | 0.589 | 1.59 | 1.82 |
 
 ### What the columns are
 
