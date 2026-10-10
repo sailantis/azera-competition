@@ -342,7 +342,7 @@ if (Test-Path $fwRepo) {
 # The tag is preferred exactly as it is for the framework above, and for the
 # same reason: a tag names a release, a sha names a revision, and only the tag
 # lets a published figure say which RELEASE it measured. The old comment here
-# claimed clarity "has no git tags" — true when it was written, false since
+# claimed clarity "has no git tags" - true when it was written, false since
 # 2026-09-28, and it kept the stamp on a bare sha for three releases.
 #
 # `--match 'v*'` is not decoration. `git describe --tags --exact-match` breaks a
