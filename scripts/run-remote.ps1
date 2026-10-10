@@ -301,7 +301,7 @@ if (Test-Path $fwRepo) {
     $previousEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $described = (& git -C $fwRepo describe --tags --exact-match 2>$null | Select-Object -First 1)
+        $described = (& git -C $fwRepo describe --tags --exact-match --match 'v*' 2>$null | Select-Object -First 1)
         if (-not $described) {
             $described = (& git -C $fwRepo rev-parse --short HEAD 2>$null | Select-Object -First 1)
         }
@@ -337,14 +337,29 @@ if (Test-Path $fwRepo) {
 }
 
 # The same question for clarity-engine, which the view-engine harness stamps as
-# a per-engine ref. It has no git tags, so the short sha is the answer.
+# a per-engine ref.
+#
+# The tag is preferred exactly as it is for the framework above, and for the
+# same reason: a tag names a release, a sha names a revision, and only the tag
+# lets a published figure say which RELEASE it measured. The old comment here
+# claimed clarity "has no git tags" — true when it was written, false since
+# 2026-09-28, and it kept the stamp on a bare sha for three releases.
+#
+# `--match 'v*'` is not decoration. `git describe --tags --exact-match` breaks a
+# tie between tags on ONE commit by NAME, so any non-release tag (a `bench-...`
+# marker, a hand-made alias) can win and be stamped as the measured build. The
+# glob restricts the answer to version tags, which is the only kind that names a
+# release; the framework lookup above carries it for the same reason.
 $ClarityRef = ''
 $clRepo = Join-Path $Sailantis 'clarity-engine'
 if (Test-Path $clRepo) {
     $previousEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $described = (& git -C $clRepo rev-parse --short HEAD 2>$null | Select-Object -First 1)
+        $described = (& git -C $clRepo describe --tags --exact-match --match 'v*' 2>$null | Select-Object -First 1)
+        if (-not $described) {
+            $described = (& git -C $clRepo rev-parse --short HEAD 2>$null | Select-Object -First 1)
+        }
     }
     finally {
         $ErrorActionPreference = $previousEap
