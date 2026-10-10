@@ -22,6 +22,10 @@
 #   .\scripts\run-remote.ps1 -Fetch -ViewEngine
 #   .\scripts\run-remote.ps1 -Run   -ViewEngine -VeIterations 200 -VeRuns 3   # smoke
 #
+#   # -Fetch refuses a run that did not finish cleanly, because what it fetches
+#   # gets published. -AllowIncomplete overrides that, for inspection only.
+#   .\scripts\run-remote.ps1 -Fetch -ViewEngine -AllowIncomplete
+#
 # Config via env vars or -SshTarget/-RemoteDir overrides:
 #   BENCH_SSH       (default: competition@192.168.9.138 - LAN/VPN address of the VM)
 #   BENCH_REMOTE_DIR (default: ~/workspace/azera-competition)
@@ -43,6 +47,13 @@ param(
     # (host-path leak check, no-host-.git rule, LF-only payload) are reused
     # rather than reinvented.
     [switch]$ViewEngine,
+    # Fetch (and render) a view-engine run that did NOT finish cleanly.
+    #
+    # Off by default, and the default is the point: -Fetch is the step that
+    # copies a dataset down and renders the page the operator then publishes, so
+    # a failed run must not reach it silently. This exists only so a broken run
+    # can be inspected without ssh-ing by hand.
+    [switch]$AllowIncomplete,
     # Budget for the view-engine run. Stated rather than inherited: the numbers
     # published from this run are captioned with whatever it actually used.
     [int]$VeIterations = 10000,
@@ -626,6 +637,39 @@ function Get-ViewEngineResults {
     $fromLog = if ($raw) { ($raw | Select-Object -First 1).Trim() } else { '' }
     $fromLog = $fromLog -replace '^Wrote results to:\s*', '' -replace '\s+and\s+\.csv$', ''
     $fromLog = $fromLog.Trim()
+
+    # DID THE RUN ACTUALLY FINISH? Ask before fetching anything.
+    #
+    # The harness exits 1 when it could not measure a cell, and the launched
+    # script is `set -euo pipefail`, so a failing harness aborts it and the
+    # `=== done ===` marker is NEVER printed. That marker is therefore a reliable
+    # "the whole run completed" signal, and it is the one this checks.
+    #
+    # This matters because the next step FETCHES A DATASET AND RENDERS THE PAGE
+    # THAT GETS PUBLISHED. On 2026-10-10 the harness wrote a dataset with six
+    # engines on the `sample` page instead of seven and exited 0; had it exited
+    # non-zero, the log would have said `Wrote results to:` and nothing else, and
+    # this fetch would have carried the incomplete table straight to publication.
+    # The exit code the harness now sets is only worth having if the step that
+    # publishes something reads it, and this is that step.
+    #
+    # Checked as a POSITIVE marker, not grepped for the failure banner: a truncated
+    # or rotated log loses the banner silently, and absence of evidence would then
+    # read as success.
+    $done = ssh $SshTarget "grep -c '=== done ===' $RemoteDir/ve-run.log 2>/dev/null || echo 0"
+    $doneOk = (($done | Select-Object -First 1) -join '').Trim() -match '^[1-9]'
+    if (-not $doneOk) {
+        Write-Host '--- the run did not report completion; its log tail is: ---' -ForegroundColor Red
+        ssh $SshTarget "tail -n 25 $RemoteDir/ve-run.log 2>/dev/null || echo '(no log)'"
+        if (-not $AllowIncomplete) {
+            throw ("the view-engine run on the VM never printed '=== done ===', so it did not " +
+                'finish cleanly and its dataset is INCOMPLETE. Nothing was fetched or rendered. ' +
+                'Inspect the log above, or pass -AllowIncomplete to fetch it anyway (for ' +
+                'inspection only - it must not be published).')
+        }
+        Write-Warning ('the run did not report completion, but -AllowIncomplete was given; ' +
+            'continuing - the result MUST NOT be published as the figures for a release')
+    }
 
     if ($fromLog -ne '' -and $fromLog -match '\.json$') {
         $remote = $fromLog
