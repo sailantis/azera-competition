@@ -1325,4 +1325,92 @@ final class ViewEngineHarnessTest extends TestCase
         self::assertStringContainsString("'<extends'", $compare);
         self::assertStringContainsString("'@foreach'", $compare);
     }
+
+    /**
+     * A cell the harness could not measure must EXIT NON-ZERO, and must say
+     * which cell it was.
+     *
+     * This is the failure that actually happened, on 2026-10-10, at v0.3.0. The
+     * `sample` page uppercases `range(1, 200)` with `|> upper`; clarity 0.3.0
+     * removed the `(string)` cast from its built-in filters and compiles with
+     * strict types on by default, so `mb_strtoupper(int)` threw. The loop printed
+     * the message and `continue`d, the run wrote its dataset, and it exited **0**.
+     *
+     * The consequence was not a failed run, it was a PUBLISHED one: the dataset
+     * carried six engines on the headline page instead of seven, the table
+     * silently lost the engine the run was about, and nothing in the artefact or
+     * the exit code recorded that a cell was missing. `run-remote.ps1` fetches the
+     * newest dataset by name and publishes it, so silence is the whole problem.
+     *
+     * The message alone is not the contract — the EXIT CODE is, because that is
+     * what a wrapper can act on. The same rule is already asserted for the parity
+     * gate (`exit($failed ? 1 : 0)`) and for compare-dump.php; this pins it for the
+     * harness that produces the numbers.
+     */
+    public function testAnUnmeasuredCellFailsTheRun(): void
+    {
+        $src = self::source();
+
+        // Every skip in the measurement loop must be RECORDED. A bare `continue`
+        // after one of these messages is the exact shape of the bug.
+        foreach ([
+            'benchmarkEngine($key, $template)',
+            '$engine->render($template, $vars)',
+            'measureFirstRender($key, $pageKey, $itemsCount)',
+            'measureSteadyState(',
+        ] as $probe) {
+            self::assertStringContainsString($probe, $src, "the harness must still call {$probe}");
+        }
+
+        // The record and the exit code.
+        self::assertStringContainsString('$skipped[] = [', $src, 'a skipped cell must be recorded, not just printed');
+        self::assertStringContainsString(
+            'exit($skipped === [] ? 0 : 1)',
+            $src,
+            'a run with an unmeasured cell must exit non-zero - the exit code is what forbids publishing it'
+        );
+
+        // Writing happens BEFORE the exit, so a partial run is still inspectable;
+        // otherwise a failure would discard the evidence of what went wrong.
+        $writeAt = strpos($src, 'writeResults(');
+        $exitAt  = strpos($src, 'exit($skipped === [] ? 0 : 1)');
+        self::assertNotFalse($writeAt);
+        self::assertNotFalse($exitAt);
+        self::assertLessThan(
+            $exitAt,
+            $writeAt,
+            'the dataset must be written before the non-zero exit, not discarded by it'
+        );
+
+        // And it must be BEHAVIOURALLY true, not merely present. An unknown engine
+        // throws in the shared factory before any probe is spawned, so this is a
+        // complete run of every page without a measurement - fast and deterministic.
+        // Run without --out so nothing is written.
+        $out = [];
+        $rc  = 0;
+        exec(
+            escapeshellarg(PHP_BINARY)
+                . ' ' . escapeshellarg(dirname(__DIR__) . '/benchmarks/view-engine/run.php')
+                . ' --engines=nosuchengine --items=1 --runs=1 --iterations-per-run=1 2>&1',
+            $out,
+            $rc
+        );
+        $text = implode("\n", $out);
+
+        self::assertSame(1, $rc, "an unmeasured run must exit 1, got {$rc}:\n" . $text);
+        self::assertStringContainsString('were NOT measured', $text, 'the failure must name what was skipped');
+        self::assertStringContainsString('nosuchengine / sample', $text, 'the failure must name the cell');
+
+        // The consequence is stated, and it must match what actually happened: this
+        // run passed no --out, so nothing was written and the message must not claim
+        // a file exists. The other branch - the one that matters in production,
+        // where a partial dataset IS on disk and must not be published - is pinned
+        // at the source level.
+        self::assertStringContainsString('Nothing was written', $text, 'the message must not describe a dataset that was never created');
+        self::assertStringContainsString(
+            'do not publish it',
+            $src,
+            'a partial dataset that WAS written must warn against publishing it'
+        );
+    }
 }

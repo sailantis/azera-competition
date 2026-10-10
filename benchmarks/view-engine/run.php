@@ -895,6 +895,36 @@ foreach ($engines as $engineName) {
     }
 }
 
+/**
+ * One-line form of a failure message, for a skip record.
+ *
+ * The messages are multi-line and a record is not: a skip list whose entries
+ * wrap reads as if several things failed.
+ */
+function firstLine(string $message): string
+{
+    $one = trim((string) preg_replace('/\s+/', ' ', $message));
+
+    return $one === '' ? '(no message)' : $one;
+}
+
+// Cells that could not be measured, engine/page => why.
+//
+// A cell used to be reported on stdout and then `continue`d, while the run still
+// wrote its dataset and exited 0. THAT IS THE FAILURE THIS LIST EXISTS TO
+// PREVENT, and it is not hypothetical: the 2026-10-10 run at v0.3.0 wrote a
+// dataset with SIX engines on the `sample` page instead of seven, because
+// clarity's render check threw and the loop moved on. The published headline
+// table silently lost the engine the run was ABOUT, no trace of it reached the
+// JSON, and the exit code was 0 - so nothing downstream could notice.
+//
+// The parity gate (verify.php) exits non-zero for exactly this reason; the
+// harness that produces the artefact did not. A cell is now recorded here, named
+// on STDERR so it is also in the run log, and the run exits non-zero AFTER
+// writing. The dataset is still written on purpose - a partial run is useful to
+// inspect - and the non-zero exit is what forbids publishing it.
+$skipped = [];
+
 foreach ($jobs as [$key, $pageKey]) {
     $page     = $pages[$pageKey];
     $template = $page['template'];
@@ -905,6 +935,7 @@ foreach ($jobs as [$key, $pageKey]) {
         ['engine' => $engine, 'penalty' => $penalty] = benchmarkEngine($key, $template);
     } catch (InvalidArgumentException $e) {
         echo $e->getMessage() . "\n";
+        $skipped[] = ['engine' => $key, 'page' => $pageKey, 'reason' => firstLine($e->getMessage())];
         continue;
     }
 
@@ -938,12 +969,14 @@ foreach ($jobs as [$key, $pageKey]) {
         $engine->render($template, $vars);
     } catch (Exception $e) {
         echo "Error during render check: " . $e->getMessage() . "\n";
+        $skipped[] = ['engine' => $key, 'page' => $pageKey, 'reason' => 'render check: ' . firstLine($e->getMessage())];
         continue;
     }
 
     $firstMs = measureFirstRender($key, $pageKey, $itemsCount);
     if ($firstMs === null) {
         echo "Error during first render: the fresh-process probe returned nothing\n";
+        $skipped[] = ['engine' => $key, 'page' => $pageKey, 'reason' => 'first render: the fresh-process probe returned nothing'];
         continue;
     }
 
@@ -1018,6 +1051,7 @@ foreach ($jobs as [$key, $pageKey]) {
 
     if ($steady === null) {
         echo "Error during steady-state measurement: the probe returned nothing\n";
+        $skipped[] = ['engine' => $key, 'page' => $pageKey, 'reason' => 'steady state: the probe returned nothing'];
         continue;
     }
 
@@ -1098,3 +1132,35 @@ if ($outPrefix !== null) {
     $base = resultsBase($outPrefix);
     echo "\nWrote results to: " . str_replace('\\', '/', $base) . "/{$outPrefix}.json and .csv\n";
 }
+
+// ---------------------------------------------------------------------------
+// FAIL LOUDLY WHEN A CELL WAS SKIPPED, after writing what was measured.
+//
+// The exit code is the contract: `run-remote.ps1` fetches the newest dataset by
+// name and publishes it, so a run that silently measured six engines on one page
+// becomes a published page. A non-zero exit is what stops that, and it is the
+// same mechanism verify.php already uses to stop the run before it starts.
+//
+// STDERR as well as stdout, because the run is launched in tmux and its stdout
+// goes to a log nobody reads; stderr is what an operator or a wrapping script
+// sees first.
+// ---------------------------------------------------------------------------
+if ($skipped !== []) {
+    fwrite(STDERR, "\n" . str_repeat('=', 72) . "\n");
+    fwrite(STDERR, sprintf("%d cell(s) were NOT measured:\n", count($skipped)));
+    foreach ($skipped as $s) {
+        fwrite(STDERR, sprintf("  - %s / %s: %s\n", $s['engine'], $s['page'], $s['reason']));
+    }
+    // Only claim a file exists when one does: a run without --out writes nothing,
+    // and a message that describes a dataset that was never created sends the
+    // reader looking for it.
+    fwrite(
+        STDERR,
+        $outPrefix !== null
+            ? "The dataset was written, but it is INCOMPLETE - do not publish it.\n"
+            : "Nothing was written (no --out was given).\n"
+    );
+    fwrite(STDERR, str_repeat('=', 72) . "\n");
+}
+
+exit($skipped === [] ? 0 : 1);
