@@ -1,0 +1,31 @@
+# stokehold configuration for the benchmark apps - the cold (per-request boot) model.
+#
+# This is the arm that makes the framework-boot question measurable. `spawn_cgi` starts
+# N `php-cgi` processes and gives each request a full CGI SAPI reset, which means the
+# application's ENTRY SCRIPT re-runs per request - the same thing php-fpm does. So
+# `Bootstrap::boot()` lands inside every timed row here exactly as it does under FPM,
+# and the two servers can be compared for free.
+#
+# Read it alongside `pool.template.toml`: the application, the adapter, the worker
+# count and the document root are identical, and the only difference is whether the
+# framework's bootstrap is paid once (worker) or per request (spawn_cgi). A gap between
+# them is the price of the boot, measured rather than inferred.
+#
+# `php-cgi` rather than `php-fpm` because stokehold manages these processes itself and
+# needs no external pool, which keeps the cold arm to one moving part. Hazard 26 in the
+# stokehold plan records that `-b` accepts a unix socket too; loopback TCP is used here
+# because on this VM the two were within noise of each other (hazard 25's sweep).
+
+default_backend = "cgi"
+
+[server]
+http = "127.0.0.1:{{PORT}}"
+document_root = "{{ROOT}}/public"
+front_controller = "index-{{APP}}.php"
+
+[backends.cgi]
+kind = "spawn_cgi"
+binary = "{{PHP_CGI}}"
+workers = 1
+bind_host = "127.0.0.1"
+base_port = {{BASE_PORT}}

@@ -1,0 +1,25 @@
+# stokehold configuration for the benchmark apps - the warm (resident-worker) model.
+#
+# The counterpart of `deploy/rr/config-template.php`: same applications, same
+# adapters, same one-worker-for-SQLite-write-parity rule, different server. The point
+# of running both is that a difference between them is a difference of SERVER, while
+# a difference between either and `spawn-cgi.template.toml` is the difference of
+# deployment MODEL.
+#
+# Workers are 1 rather than "one per core" on purpose. The in-process harness and the
+# RoadRunner config both use one sequential worker because this application writes to
+# SQLite, and a second concurrent writer turns the measurement into a lock-contention
+# study. The trivial-handler sweep in `~/stoke-bench-run` is where worker count is the
+# variable; here it is held equal across all three servers.
+
+default_backend = "app"
+
+[server]
+http = "127.0.0.1:{{PORT}}"
+document_root = "{{ROOT}}/public"
+
+[backends.app]
+kind = "worker"
+command = "env BENCH_APP={{APP}} STOKEHOLD_SDK={{SDK}} php {{ROOT}}/deploy/stoke/worker.php"
+workers = 1
+max_requests = 0
