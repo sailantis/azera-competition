@@ -2,7 +2,7 @@
 # The framework-boot experiment: cold (framework booted per request) versus warm
 # (framework resident), on a REAL full-stack application, through one server.
 #
-# Why this exists. The trivial-handler sweep (`~/stoke-bench-run/bench.sh`) measures
+# Why this exists. The trivial-handler sweep (`~/volucer-bench-run/bench.sh`) measures
 # transport, and there warm and cold converge: a handler that does nothing has nothing
 # to keep warm. The hypothesis this script tests is that the warm model's advantage is
 # proportional to how much the application boots, so it has to be measured on an
@@ -10,8 +10,8 @@
 #
 # The four arms, ordered from most to least warm:
 #
-#   S-W  stokehold + resident worker    framework booted ONCE, then N requests
-#   S-C  stokehold + spawn_cgi          framework booted PER REQUEST (full CGI reset)
+#   S-W  volucer + resident worker    framework booted ONCE, then N requests
+#   S-C  volucer + spawn_cgi          framework booted PER REQUEST (full CGI reset)
 #   FPM  nginx + php-fpm                framework booted PER REQUEST (the reference arm)
 #   RR   RoadRunner + resident worker    framework booted ONCE
 #
@@ -34,9 +34,9 @@ set -uo pipefail
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
-BENCH="${BENCH:-$HOME/stoke-bench}"
-BIN="$BENCH/target/release/stokehold"
-SDK="${SDK:-$HOME/stokehold-php-sdk}"
+BENCH="${BENCH:-$HOME/volucer-bench}"
+BIN="$BENCH/target/release/volucer"
+SDK="${SDK:-$HOME/volucer-php-sdk}"
 ROOT="${ROOT:-$HOME/workspace/azera-competition}"
 RRDIR="${RRDIR:-$HOME/rr-bench}"
 RR="$RRDIR/rr"
@@ -49,7 +49,7 @@ PHP_CGI="$(command -v php-cgi)"
 mkdir -p "$RUNDIR"
 cd "$RUNDIR" || exit 1
 
-[ -x "$BIN" ] || { echo "no stokehold binary at $BIN"; exit 1; }
+[ -x "$BIN" ] || { echo "no volucer binary at $BIN"; exit 1; }
 [ -d "$ROOT" ] || { echo "no app checkout at $ROOT"; exit 1; }
 [ -n "$PHP_CGI" ] || { echo "no php-cgi on PATH"; exit 1; }
 
@@ -92,7 +92,7 @@ wait_port() {
 # that has nothing to do with the server. This wrapper gives php-cgi the settings the
 # FPM pools use, so a cold-versus-cold difference is a difference of server, not of ini.
 #
-# It is a shell script rather than a `-d` list because stokehold runs the configured
+# It is a shell script rather than a `-d` list because volucer runs the configured
 # command through its own tokenizer, not through a shell.
 PHP_CGI_WRAPPER="$RUNDIR/php-cgi-bench"
 cat > "$PHP_CGI_WRAPPER" <<WRAPPER
@@ -105,11 +105,11 @@ WRAPPER
 chmod +x "$PHP_CGI_WRAPPER"
 
 PID=""
-start_stokehold() {
+start_volucer() {
     "$BIN" serve -c "$1" >"$RUNDIR/server-$2.log" 2>&1 &
     PID=$!
 }
-stop_stokehold() {
+stop_volucer() {
     [ -n "$PID" ] && kill "$PID" 2>/dev/null
     [ -n "$PID" ] && wait "$PID" 2>/dev/null
     PID=""
@@ -125,21 +125,21 @@ stop_rr() {
     [ -n "$RR_PID" ] && wait "$RR_PID" 2>/dev/null
     RR_PID=""
 }
-cleanup() { stop_stokehold; stop_rr; }
+cleanup() { stop_volucer; stop_rr; }
 trap cleanup EXIT
 
 echo "=== host ==="
 echo "  cores: $(nproc)   php: $(php -v | head -1)"
 echo "  $(wrk --version 2>&1 | head -1)"
-echo "  stokehold: $("$BIN" version 2>/dev/null | head -1)"
+echo "  volucer: $("$BIN" version 2>/dev/null | head -1)"
 echo "  app: $ROOT"
 echo
 echo "  php-cgi (fair wrapper): $("$PHP_CGI_WRAPPER" -i 2>/dev/null | grep -m1 'opcache.enable_cli' | sed 's/<[^>]*>/ /g' | tr -s ' ')"
 echo
 
 BASE=18200
-STOKE_POOL_PORT=$((BASE + 0))
-STOKE_CGI_PORT=$((BASE + 1))
+VOLUCER_POOL_PORT=$((BASE + 0))
+VOLUCER_CGI_PORT=$((BASE + 1))
 RR_PORT=$((BASE + 2))
 # php-cgi's pool binds its own range; keep it clear of everything above.
 CGI_BASE=19200
@@ -153,26 +153,26 @@ for APP in ${APPS//,/ }; do
     sed -e "s#{{APP}}#$APP#g" \
         -e "s#{{ROOT}}#$ROOT#g" \
         -e "s#{{SDK}}#$SDK#g" \
-        -e "s#{{PORT}}#$STOKE_POOL_PORT#g" \
-        "$ROOT/deploy/stoke/pool.template.toml" > "stoke-pool-$APP.toml"
+        -e "s#{{PORT}}#$VOLUCER_POOL_PORT#g" \
+        "$ROOT/deploy/volucer/pool.template.toml" > "volucer-pool-$APP.toml"
 
     sed -e "s#{{APP}}#$APP#g" \
         -e "s#{{ROOT}}#$ROOT#g" \
         -e "s#{{PHP_CGI}}#$PHP_CGI_WRAPPER#g" \
-        -e "s#{{PORT}}#$STOKE_CGI_PORT#g" \
+        -e "s#{{PORT}}#$VOLUCER_CGI_PORT#g" \
         -e "s#{{BASE_PORT}}#$CGI_BASE#g" \
-        "$ROOT/deploy/stoke/spawn-cgi.template.toml" > "stoke-cgi-$APP.toml"
+        "$ROOT/deploy/volucer/spawn-cgi.template.toml" > "volucer-cgi-$APP.toml"
 
-    # --- S-W: stokehold, warm ---------------------------------------------
-    start_stokehold "stoke-pool-$APP.toml" "stoke-pool-$APP"
-    if wait_port "$STOKE_POOL_PORT"; then
-        echo "S-W sanity: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$STOKE_POOL_PORT/items/1 2>/dev/null)"
-        run_client "http://127.0.0.1:$STOKE_POOL_PORT/" "S-W. stokehold + resident worker ($APP): GET /"
-        run_client "http://127.0.0.1:$STOKE_POOL_PORT/items/1" "S-W. stokehold + resident worker ($APP): GET /items/1"
+    # --- S-W: volucer, warm ---------------------------------------------
+    start_volucer "volucer-pool-$APP.toml" "volucer-pool-$APP"
+    if wait_port "$VOLUCER_POOL_PORT"; then
+        echo "S-W sanity: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$VOLUCER_POOL_PORT/items/1 2>/dev/null)"
+        run_client "http://127.0.0.1:$VOLUCER_POOL_PORT/" "S-W. volucer + resident worker ($APP): GET /"
+        run_client "http://127.0.0.1:$VOLUCER_POOL_PORT/items/1" "S-W. volucer + resident worker ($APP): GET /items/1"
     else
-        echo "S-W failed to start:"; cat "$RUNDIR/server-stoke-pool-$APP.log"
+        echo "S-W failed to start:"; cat "$RUNDIR/server-volucer-pool-$APP.log"
     fi
-    stop_stokehold; sleep 1
+    stop_volucer; sleep 1
 
     # --- RR: RoadRunner, warm --------------------------------------------
     # Its config is generated by the harness's own template when available, so the
@@ -207,16 +207,16 @@ for APP in ${APPS//,/ }; do
     fi
     stop_rr; sleep 1
 
-    # --- S-C: stokehold, cold --------------------------------------------
-    start_stokehold "stoke-cgi-$APP.toml" "stoke-cgi-$APP"
-    if wait_port "$STOKE_CGI_PORT"; then
-        echo "S-C sanity: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$STOKE_CGI_PORT/items/1 2>/dev/null)"
-        run_client "http://127.0.0.1:$STOKE_CGI_PORT/" "S-C. stokehold + spawn_cgi, per-request boot ($APP): GET /"
-        run_client "http://127.0.0.1:$STOKE_CGI_PORT/items/1" "S-C. stokehold + spawn_cgi, per-request boot ($APP): GET /items/1"
+    # --- S-C: volucer, cold --------------------------------------------
+    start_volucer "volucer-cgi-$APP.toml" "volucer-cgi-$APP"
+    if wait_port "$VOLUCER_CGI_PORT"; then
+        echo "S-C sanity: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$VOLUCER_CGI_PORT/items/1 2>/dev/null)"
+        run_client "http://127.0.0.1:$VOLUCER_CGI_PORT/" "S-C. volucer + spawn_cgi, per-request boot ($APP): GET /"
+        run_client "http://127.0.0.1:$VOLUCER_CGI_PORT/items/1" "S-C. volucer + spawn_cgi, per-request boot ($APP): GET /items/1"
     else
-        echo "S-C failed to start:"; cat "$RUNDIR/server-stoke-cgi-$APP.log"
+        echo "S-C failed to start:"; cat "$RUNDIR/server-volucer-cgi-$APP.log"
     fi
-    stop_stokehold; sleep 1
+    stop_volucer; sleep 1
 
     # --- FPM: nginx + php-fpm, cold --------------------------------------
     if [ "${SKIP_FPM:-0}" != "1" ] && [ -f "/etc/nginx/conf.d/bench-$APP.conf" ]; then
