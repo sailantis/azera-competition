@@ -98,7 +98,7 @@ try {
     // recording before it would measure only the container build and
     // understate Laravel's boot by a factor of several.
     $kernel->bootstrap();
-    boot_probe_record('fpm', 'laravel');
+    boot_probe_record(bench_probe_kind(), 'laravel');
     mem_probe_arm('laravel');
 
     // Let Laravel build the request from the real SAPI superglobals (no

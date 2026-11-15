@@ -15,8 +15,13 @@ use CodeIgniter\Router\RouteCollection;
 /** @var RouteCollection $routes */
 
 // --- Core benchmark endpoints -------------------------------------------
+$routes->get('/echo', 'Bench::echo');
 $routes->get('/', 'Bench::index');
 $routes->get('/items', 'Bench::list');
+// GET /items with the row shape reduced to plain arrays: the single-variable
+// control for /items (see Bench::listFast()). Declared before /items/(:num) so
+// the literal segment is not swallowed by the numeric placeholder.
+$routes->get('/items-fast', 'Bench::listFast');
 $routes->get('/items/(:num)', 'Bench::show/$1');
 $routes->post('/items', 'Bench::create');
 
@@ -27,6 +32,9 @@ $routes->post('/items-qb', 'Bench::createQb');
 
 // --- REST API ------------------------------------------------------------
 $routes->get('/api/items', 'Api::index');
+// Declared before /api/items/(:num): CI4 matches top-down, so a literal
+// segment placed after the (:num) placeholder would be swallowed by it.
+$routes->get('/api/items-fast', 'Api::indexFast');
 $routes->get('/api/items/(:num)', 'Api::show/$1');
 $routes->post('/api/items', 'Api::create');
 

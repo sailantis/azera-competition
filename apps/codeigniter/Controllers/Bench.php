@@ -19,6 +19,23 @@ final class Bench extends BaseController
     private const SENTINEL_QB_ID = 999997;
 
     /**
+     * GET /echo — a constant handler through the whole HTTP path.
+     *
+     * The framework floor for this app: CI4's Router, its filter pipeline, the
+     * controller instantiation and the `BaseController` wiring all run, then the
+     * action returns three bytes. The gap between this and GET / is what a CI4
+     * view render costs.
+     *
+     * Returning a bare string lets CI4's own response path turn it into a body,
+     * so nothing is short-circuited: this is the cheapest response the framework
+     * can produce, which is exactly what a floor should measure.
+     */
+    public function echo(): string
+    {
+        return 'bench';
+    }
+
+    /**
      * GET / — welcome page via CodeIgniter(View) template (no DB).
      */
     public function index(): \CodeIgniter\HTTP\ResponseInterface|string
@@ -41,6 +58,67 @@ final class Bench extends BaseController
 
         return view('items', [
             'baseUrl'    => '/items',
+            'title'      => 'Items',
+            'items'      => $rows,
+            'pagination' => $this->pagination($page, $total),
+        ] + $this->viewGlobals());
+    }
+
+    /**
+     * GET /items-fast — GET /items with the row shape reduced to plain stdClass.
+     *
+     * Identical to {@see list()} except that the rows are never hydrated: the
+     * Model still resolves its table, still builds the query builder, still runs
+     * the same SELECT and the same `countAll()`; what changes is only that no
+     * entity is constructed per row.
+     *
+     * `getResultObject()` is CI4's unhydrated read: it walks the result and
+     * yields one `stdClass` per row. `list()` goes through the Model instead,
+     * whose `$returnType = Ci4App\Entities\Item::class` makes
+     * `getCustomResultObject()` construct an entity per row and inject the raw
+     * values into it. Hydration is therefore the single variable between the two
+     * routes, which is what this control exists to isolate.
+     *
+     * TWO CORRECTIONS, both measured rather than assumed:
+     *
+     *  - This route is NOT "PDO::FETCH_OBJ in C". CI4's SQLite3 driver says so
+     *    itself (`SQLite3\Result::fetchObject()` — "No native support for
+     *    fetching rows as objects") and does `fetchAssoc()` + `(object) $row`.
+     *    There is no C-level object fetch on this driver, so an earlier version
+     *    of this comment described a mechanism that never ran.
+     *  - Before the Model hydrated at all, `list()` and this route both ended in
+     *    that same `fetchAssoc() + (object)` call — which is exactly why the
+     *    published `/items` vs `/items-fast` gap was 0.4%, indistinguishable from
+     *    noise. The route was measuring nothing. With `$returnType` set to the
+     *    entity it measures hydration, like the other five apps.
+     *
+     * WHY NOT `asArray()`: `getResult('array')` reads with `PDO::FETCH_ASSOC`,
+     * and `getResultObject()` then loops those arrays casting each with
+     * `(object) $row` — building the array AND the object and paying for both.
+     *
+     * Rows still expose `->id`/`->title`/`->created_at`, so the list template is
+     * untouched and the body stays byte-identical to `/items`.
+     */
+    public function listFast(): \CodeIgniter\HTTP\ResponseInterface|string
+    {
+        $page = (int) ($this->request->getGet('page') ?? 1);
+        $page = max(1, $page);
+
+        // Built via the SAME model so table resolution, the builder and the
+        // pagination COUNT are untouched; only the result fetch mode differs.
+        // `getResultObject()` uses PDO::FETCH_OBJ, so the rows never exist as
+        // arrays.
+        $model = new Item();
+        $total = $model->countAll();
+        $rows  = (new Item())
+            ->builder()
+            ->orderBy('id', 'ASC')
+            ->limit(self::PAGE_SIZE, ($page - 1) * self::PAGE_SIZE)
+            ->get()
+            ->getResultObject();
+
+        return view('items', [
+            'baseUrl'    => '/items-fast',
             'title'      => 'Items',
             'items'      => $rows,
             'pagination' => $this->pagination($page, $total),
@@ -80,27 +158,29 @@ final class Bench extends BaseController
         $now   = date('Y-m-d H:i:s');
 
         $existing = $model->find(self::SENTINEL_ORM_ID);
+        $existed  = $existing !== null;
         if ($existing === null) {
             $model->db->table('items')->insert([
                 'id'         => self::SENTINEL_ORM_ID,
                 'title'      => 'Created Item ' . $now,
                 'created_at' => $now,
             ]);
-            $existed = false;
         } else {
             $model->db->table('items')
                 ->where('id', self::SENTINEL_ORM_ID)
                 ->update(['title' => 'Created Item ' . $now]);
-            $existed = true;
         }
+
+        // Re-read through the Model so the template is handed the same hydrated
+        // entity shape `/items` uses, exactly like the other five apps (whose
+        // write paths persist and then render the entity they just wrote).
+        // Constructing a literal object here instead would make POST the one
+        // items endpoint that skips hydration.
+        $item = $model->find(self::SENTINEL_ORM_ID);
 
         return view('item', [
             'title' => 'Item ' . self::SENTINEL_ORM_ID,
-            'item'  => (object) [
-                'id'         => self::SENTINEL_ORM_ID,
-                'title'      => 'Created Item ' . $now,
-                'created_at' => $now,
-            ],
+            'item'  => $item,
             'flash' => 'Item #' . self::SENTINEL_ORM_ID . ($existed ? ' updated' : ' created') . ' ✓',
         ] + $this->viewGlobals());
     }

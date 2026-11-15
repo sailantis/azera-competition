@@ -12,10 +12,15 @@ use App\Laravel\Http\Controllers\BenchController;
 use App\Laravel\Http\Controllers\FeatureController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/echo', [BenchController::class, 'echo']);
 Route::get('/', [BenchController::class, 'index']);
 
 // --- ORM endpoints ---------------------------------------------------------
 Route::get('/items', [BenchController::class, 'list']);
+// GET /items with Eloquent hydration off: the single-variable control for /items
+// (see BenchController::listFast()). Declared before /items/{id} so the literal
+// segment is not swallowed by the id constraint.
+Route::get('/items-fast', [BenchController::class, 'listFast']);
 Route::get('/items/{id}', [BenchController::class, 'show'])->whereNumber('id');
 Route::post('/items', [BenchController::class, 'create']);
 
@@ -39,6 +44,10 @@ Route::get('/features/request-scoped', [FeatureController::class, 'requestScoped
 Route::get('/features/rate-limit', [FeatureController::class, 'rateLimit']);
 
 // --- Filler routes (route-table size parity with other apps) ----------------
+// Pointed at a CONTROLLER METHOD, not a closure. A closure route cannot be part of a
+// `route:cache` table as plain data, and every other app in this suite already uses a
+// method for its fillers. These routes are never dispatched by the benchmark; they
+// exist so every framework matches against a route table of the same size.
 for ($i = 1; $i <= 100; $i++) {
-    Route::get("/filler/{$i}", fn() => 'filler');
+    Route::get("/filler/{$i}", [BenchController::class, 'filler']);
 }

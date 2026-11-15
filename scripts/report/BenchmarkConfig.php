@@ -23,13 +23,16 @@ final class BenchmarkConfig
     {
         return [
             'GET /'                        => 'routing',
+            'GET /echo'                    => 'routing',
             'GET /items'                   => 'orm',
+            'GET /items-fast'              => 'orm',
             'GET /items/1'                 => 'orm',
             'POST /items'                  => 'orm',
             'GET /items-qb'                => 'query-builder',
             'GET /items-qb/1'              => 'query-builder',
             'POST /items-qb'               => 'query-builder',
             'GET /api/items'               => 'rest-api',
+            'GET /api/items-fast'          => 'rest-api',
             'GET /api/items/1'             => 'rest-api',
             'POST /api/items'              => 'rest-api',
             'GET /features/aop'            => 'aop',
@@ -178,13 +181,16 @@ final class BenchmarkConfig
     {
         return [
             'GET /'                        => 'no DB — routing + template only',
+            'GET /echo'                    => 'no DB — routing + dispatch only',
             'GET /items'                   => '20 of 1000 items (page 1, + COUNT)',
+            'GET /items-fast'              => '20 of 1000 items (page 1, + COUNT), hydrated rows not built',
             'GET /items/1'                 => '1 item by id',
             'POST /items'                  => '1 row upserted (sentinel #999999)',
             'GET /items-qb'                => '20 of 1000 items (page 1, + COUNT)',
             'GET /items-qb/1'              => '1 item by id',
             'POST /items-qb'               => '1 row upserted (sentinel #999997)',
             'GET /api/items'               => '20 of 1000 items as JSON',
+            'GET /api/items-fast'          => '20 of 1000 items as JSON, rows not hydrated',
             'GET /api/items/1'             => '1 item by id as JSON',
             'POST /api/items'              => '1 row upserted (sentinel #999998)',
             'GET /features/aop'            => 'no DB — interceptor pipeline',
@@ -223,14 +229,20 @@ final class BenchmarkConfig
     public static function featureDescription(): array
     {
         return [
-            'routing'        => 'dispatches a plain request through the router and returns a rendered '
-                . 'template — no database access.',
+            'routing'        => 'dispatches a request through the router and returns a rendered '
+                . 'template — no database access. The `/echo` band runs the same path with a '
+                . 'constant handler instead, so what the template render costs can be read '
+                . 'off directly rather than inferred.',
             'orm'            => 'loads one page of the 1,000 seeded rows through each framework\'s '
-                . 'ORM / Active Record layer: 20 items plus a COUNT for the pagination total.',
+                . 'ORM / Active Record layer: 20 items plus a COUNT for the pagination total. '
+                . 'The `-fast` band repeats that page with hydration switched off, so the cost '
+                . 'of building one object per row can be read directly instead of inferred.',
             'query-builder'  => 'builds the same page of 20 items with each framework\'s query builder '
                 . 'instead of its ORM, so the two data-access styles can be compared directly.',
             'rest-api'       => 'serves the same page of items as a JSON response rather than HTML, '
-                . 'which adds serialization to the ORM work.',
+                . 'which adds serialization to the ORM work. The `-fast` band repeats that response '
+                . 'with hydration switched off, so serialization cost and hydration cost can be '
+                . 'told apart.',
             'aop'            => 'runs a request through an interceptor pipeline — logging, retry and '
                 . 'middleware aspects wrapped around the handler. Only frameworks with an AOP layer '
                 . 'take part.',

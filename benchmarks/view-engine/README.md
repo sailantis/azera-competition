@@ -327,10 +327,71 @@ either.
 
 The JSON is an envelope, `{ "env": { … }, "results": [ … ] }`. The `env` block
 is the point: it records the PHP version, OS, SAPI, the `opcache.enable_cli`
-state, the item count and budget, and **the resolved version of every engine
-measured**. Without it a table of milliseconds cannot be reproduced or even
-read — a figure published in the docs takes its caption from here, or from
-memory.
+state, **the JIT configuration**, the item count and budget, **the resolved
+version of every engine measured**, and **the Clarity revalidate window** (see
+below). Without it a table of milliseconds cannot be reproduced or even read — a
+figure published in the docs takes its caption from here, or from memory.
+
+### Clarity runs with a 60 s revalidate window, and that is a parity decision
+
+`clarity_revalidate_freq` records the value of Clarity's `revalidateFreq` during
+the run. It is set by `BENCHMARK_CLARITY_REVALIDATE_FREQ` in `engines.php`, for
+both the `clarity` and `clarity-open` arms, and the default is **not** used.
+
+The default is `0`, meaning `Clarity\Engine\Cache::isFresh()` stats every
+template dependency on every render. The engines Clarity is measured against all
+memoize that check **per process** instead:
+
+| engine | per-process memo |
+| ------ | ---------------- |
+| Twig   | `Environment::$loadedTemplates` — `loadTemplate()` returns before the freshness branch |
+| Latte  | `Engine::loadTemplate()` short-circuits on `class_exists()` |
+| Blade  | `CompilerEngine::$compiledOrNotExpired` |
+
+So the earlier figure charged Clarity a per-render stat cost none of Twig, Latte
+or Blade pays. That was the reason to change it: parity, not a faster number.
+
+**What it is actually worth, measured rather than assumed.** On the benchmark VM
+the window moves Clarity's `mixed` median from **0.311 ms to 0.304 ms** — about
+7 µs, or 2.3%, which lands it level with Native (0.304 ms) instead of a hair
+behind it. That is the whole effect there.
+
+Do not extrapolate from a development machine. On Windows/PHP 8.3 the same change
+measured **0.88–1.15 ms → 0.05 ms per render**, a 2× swing on that page, because
+an NTFS `stat` is far more expensive than an ext4 one and the VM's JIT absorbs
+much of what remains. The published figure is the VM's 7 µs, not the Windows
+2×: the platform decides the magnitude, and the harness's numbers only ever
+describe the host they were taken on.
+
+Stempler is the one competitor that genuinely stats per render
+(`StemplerCache::isFresh()` on every `compile()`), and it is left as it is. 60 s
+is also what a long-lived production worker runs with — it is the template
+analogue of `opcache.revalidate_freq`, and it is what `sailantis-homepage` and
+`azera-competition` both set — so the measured configuration is the one the
+figure is meant to describe. It comfortably covers a timed loop, which takes
+seconds.
+
+### The JIT is stamped, and from a CHILD
+
+`opcache_jit`, `opcache_jit_buffer_size` and `opcache_jit_enabled` are recorded
+from `jit-probe.php`, spawned with `-d opcache.enable_cli=1` and nothing else —
+the same command line the measured children use. Reading `ini_get()` in the
+harness process would describe the harness's own configuration, which may carry
+`-d` flags from whoever launched it and is not a process any figure was measured
+in.
+
+`opcache_jit_enabled` rests on `opcache_get_status()['jit']`, not on `ini_get()`,
+because the two answer different questions: a mode and a buffer that look correct
+can still come up not running. An absent key means "not establishable" (a host
+without the opcache extension), never "off", and `Provenance::jitClause()` renders
+no clause for such a dataset.
+
+The mode/buffer rule is shared with the deployment harness
+(`jitConfigurationFrom()` in `scripts/deploy-lib.php`), so a figure from this
+harness and one from the framework suite cannot describe one configuration two
+ways. `tracing` beside a `0`-byte buffer reads as **nothing compiled** — a
+strategy for a buffer that does not exist — and is printed as such rather than
+flattened to "off".
 
 `results[]` carries one row per engine (`min_ms`, `mean_ms`, `median_ms`,
 `p95_ms`, `trimmed_mean_ms`, the first-render timing, the four memory figures,

@@ -1,25 +1,49 @@
-# volucer configuration for the benchmark apps - the warm (resident-worker) model.
+# volucer configuration for the benchmark apps - the `worker` backend.
 #
-# The counterpart of `deploy/rr/config-template.php`: same applications, same
-# adapters, same one-worker-for-SQLite-write-parity rule, different server. The point
-# of running both is that a difference between them is a difference of SERVER, while
-# a difference between either and `spawn-cgi.template.toml` is the difference of
-# deployment MODEL.
+# NOT part of the benchmark dataset, kept runnable for spot checks. Volucer's `worker`
+# and `attach` backends are both resident and both serve deploy/volucer/app.php, so
+# they measure the same model and differ only in who owns the process: here volucer
+# spawns worker.php, there deploy/volucer/attach.php supervises its own children. The
+# dataset keeps `attach` (resident) and `spawn_cgi` (cold) instead.
+#
+# This file is also the closest sibling of `deploy/rr/config-template.php`: same
+# applications, same adapters, same one-worker-for-SQLite-write-parity rule, different
+# server. The point of running both is that a difference between them is a difference
+# of SERVER, while a difference between either and `spawn-cgi.template.toml` is the
+# difference of deployment MODEL.
 #
 # Workers are 1 rather than "one per core" on purpose. The in-process harness and the
 # RoadRunner config both use one sequential worker because this application writes to
 # SQLite, and a second concurrent writer turns the measurement into a lock-contention
 # study. The trivial-handler sweep in `~/volucer-bench-run` is where worker count is the
-# variable; here it is held equal across all three servers.
+# variable; here it is held equal across all four arms.
 
-default_backend = "app"
-
+# `default_backend` lives INSIDE [server] since 0.3.0. At top level it is rejected
+# outright ("the top-level key is no longer read"), which is how this template was
+# found to be stale: 0.6.0 refuses to start with it there.
 [server]
+default_backend = "app"
 http = "127.0.0.1:{{PORT}}"
 document_root = "{{ROOT}}/public"
+# Set for the same reason spawn-cgi.template.toml sets it: there is no `index.php` in
+# public/ — each app has its own `index-<app>.php` entry script — so leaving the default
+# makes volucer warn that the front controller is missing and 404 anything the backend
+# does not claim. The worker backend answers first here, so the warning was cosmetic,
+# but a template that ships a known-missing path is a trap for the next config edit.
+front_controller = "index-{{APP}}.php"
+
+# Static serving is OFF explicitly, and the spelling matters: `static_files` is a TABLE
+# (`[server.static_files] enabled = false`), so writing `static_files = false` would be
+# silently ignored rather than honoured. It is off for COMPARABILITY, not speed: this is
+# the only arm that would otherwise consult a document root ahead of dispatch. nginx+FPM
+# reaches the framework through a vhost with no static handler for these paths, and
+# RoadRunner has no document root at all, so leaving it on would give Volucer a stat per
+# request that no other arm performs.
+[server.static_files]
+enabled = false
 
 [backends.app]
 kind = "worker"
-command = "env BENCH_APP={{APP}} VOLUCER_SDK={{SDK}} php {{ROOT}}/deploy/volucer/worker.php"
+command = "env BENCH_APP={{APP}} VOLUCER_SDK={{SDK}} {{PHP_CLI}} {{ROOT}}/deploy/volucer/worker.php"
 workers = 1
 max_requests = 0

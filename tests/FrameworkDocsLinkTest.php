@@ -78,12 +78,26 @@ final class FrameworkDocsLinkTest extends TestCase
      * @var list<string>
      */
     private const KNOWN_DEAD = [
+        // The 2026-11-16 rewrite of the getting-started guide moved its skeleton
+        // from a PHP-view app to a Clarity app, so the layout/controller/view
+        // links moved with it: `../views/home/index.php` and
+        // `../views/layouts/main.php` were repaired (the templates they point at
+        // are now `.clarity.html`) and are gone from this list, while the new
+        // skeleton introduces five targets that do not exist here either.
+        'docs/00-GETTING-STARTED.md -> ../app/Bootstrap.php',
         'docs/00-GETTING-STARTED.md -> ../app/Controllers/IndexController.php',
+        'docs/00-GETTING-STARTED.md -> ../app/Controllers/UserController.php',
         'docs/00-GETTING-STARTED.md -> ../app/Models/User.php',
-        'docs/00-GETTING-STARTED.md -> ../console.php',
+        // `-> ../console.php` was here until 2026-11-10: the getting-started
+        // guide stopped pointing at a console.php the framework does not ship
+        // (it documented `composer exec azera` instead), so the link is gone and
+        // this entry had to go with it. Left as a note because the test's own
+        // contract is that a MISSING entry means a link was REPAIRED — deleting
+        // it silently is correct, but the reason is worth keeping.
         'docs/00-GETTING-STARTED.md -> ../public/index.php',
-        'docs/00-GETTING-STARTED.md -> ../views/home/index.php',
-        'docs/00-GETTING-STARTED.md -> ../views/layouts/main.php',
+        'docs/00-GETTING-STARTED.md -> ../views/index/index.clarity.html',
+        'docs/00-GETTING-STARTED.md -> ../views/layouts/main.clarity.html',
+        'docs/00-GETTING-STARTED.md -> ../views/users/view.clarity.html',
     ];
 
     /**
@@ -153,7 +167,7 @@ final class FrameworkDocsLinkTest extends TestCase
         $root     = self::frameworkRoot();
         $index    = (string) file_get_contents($root . '/docs/README.md');
         $expected = [
-            'docs/19-BENCHMARKS-SUMMARY-ROADRUNNER.md',
+            'docs/19-BENCHMARKS-SUMMARY-VOLUCER.md',
             'docs/19-BENCHMARKS-SUMMARY-FPM.md',
         ];
 
@@ -244,7 +258,7 @@ final class FrameworkDocsLinkTest extends TestCase
      * future `--publish=framework` that changes its layout would silently empty
      * the README.
      */
-    public function testTheReadmeBenchmarkSectionEmbedsBothGeneratedCharts(): void
+    public function testTheReadmeBenchmarkSectionEmbedsOneChartPerPublishedSummary(): void
     {
         $root    = self::frameworkRoot();
         $section = self::readmeBenchmarkSection((string) file_get_contents($root . '/README.md'));
@@ -252,15 +266,22 @@ final class FrameworkDocsLinkTest extends TestCase
         preg_match_all('/!\[[^\]]*\]\(([^)]+)\)/', $section, $m);
         $images = $m[1];
 
-        self::assertCount(2, $images, 'the benchmark section must embed exactly two charts');
+        self::assertCount(2, $images, 'the benchmark section must embed one chart per published summary');
         foreach ($images as $img) {
             self::assertFileExists($root . '/' . $img, "README.md references a missing chart: {$img}");
         }
 
-        // One per deployment model, because the two stories differ — the
-        // runner-up is a different framework under FPM than under RoadRunner.
-        self::assertMatchesRegularExpression('/summary-roadrunner\//', implode("\n", $images));
+        // One per deployment model. The runner-up is a different framework under
+        // FPM than under the resident arm, so the two stories are not
+        // interchangeable — which is why both are embedded rather than one.
+        //
+        // summary-roadrunner is deliberately NOT asserted: it stopped publishing
+        // on 2026-11-10, so the framework's docs carry one page per deployment
+        // model. RoadRunner is still a measured entrant and is still named in the
+        // section's prose as the independent second server, so the agreement
+        // claim remains checkable in the full report.
         self::assertMatchesRegularExpression('/summary-fpm\//', implode("\n", $images));
+        self::assertMatchesRegularExpression('/summary-volucer\//', implode("\n", $images));
     }
 
     /**

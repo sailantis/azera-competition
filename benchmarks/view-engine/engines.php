@@ -43,6 +43,34 @@ use Azera\Core\Engines\NativeEngine;
 use Clarity\Engine\Policy as ClarityPolicy;
 
 /**
+ * How long a Clarity template-freshness verdict is reused, in seconds.
+ *
+ * WHY THIS IS PART OF THE ENGINE'S IDENTITY AND NOT A KNOB LEFT ALONE
+ *
+ * `Clarity\Engine\Cache::isFresh()` stats every template dependency on every
+ * render at the default `revalidateFreq = 0`. The three engines it is measured
+ * against all memoize that check PER PROCESS instead:
+ *
+ * | engine  | per-process memo                                    |
+ * | ------- | --------------------------------------------------- |
+ * | Twig    | `Environment::$loadedTemplates` — `loadTemplate()` returns the instance before the freshness branch |
+ * | Latte   | `Engine::loadTemplate()` short-circuits on `class_exists()` |
+ * | Blade   | `CompilerEngine::$compiledOrNotExpired` |
+ *
+ * So a Clarity figure taken at the default charged it a per-render stat cost
+ * none of Twig, Latte or Blade pays — the measurement flattered its competitors,
+ * not itself. Stempler is the one engine that does stat per render
+ * (`StemplerCache::isFresh()` on every `compile()`), and it still does.
+ *
+ * 60 is the value a long-lived production worker is expected to run with (it is
+ * the template analogue of `opcache.revalidate_freq`, and it is what
+ * sailantis-homepage and azera-competition set), so this also measures the
+ * configuration the figure is supposed to describe. It comfortably covers a
+ * timed loop, which takes seconds.
+ */
+const BENCHMARK_CLARITY_REVALIDATE_FREQ = 60;
+
+/**
  * Build one engine by key.
  *
  * `$template` is the template NAME for this job and is used only for the
@@ -68,7 +96,9 @@ function benchmarkEngine(string $key, string $template, bool $withPenalty = true
 
     switch ($key) {
         case 'clarity':
-            $engine = (new ClarityEngine())->setExtension('.clarity.html');
+            $engine = (new ClarityEngine())
+                ->setExtension('.clarity.html')
+                ->setRevalidateFreq(BENCHMARK_CLARITY_REVALIDATE_FREQ);
             break;
 
         case 'clarity-open':
@@ -89,6 +119,7 @@ function benchmarkEngine(string $key, string $template, bool $withPenalty = true
             $engine = (new ClarityEngine())
                 ->setExtension('.clarity.html')
                 ->setPolicy(ClarityPolicy::unrestricted())
+                ->setRevalidateFreq(BENCHMARK_CLARITY_REVALIDATE_FREQ)
                 ->setCachePath(sys_get_temp_dir() . '/clarity-bench-open');
             break;
 

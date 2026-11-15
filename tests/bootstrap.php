@@ -39,6 +39,7 @@ require_once "{$root}/scripts/env-sanity.php";
 // report.php's own order, so a test can construct a real MarkdownReport and
 // render a view instead of asserting on source text alone.
 require_once "{$root}/scripts/report/BenchmarkConfig.php";
+require_once "{$root}/scripts/report/Provenance.php";
 require_once "{$root}/scripts/report/ResultStore.php";
 require_once "{$root}/scripts/report/SvgChart.php";
 require_once "{$root}/scripts/report/Tables.php";

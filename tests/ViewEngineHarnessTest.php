@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AzeraCompetition\Tests;
 
+use Azera\Core\Engines\ClarityEngine;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -445,6 +446,7 @@ final class ViewEngineHarnessTest extends TestCase
             "'runs'",
             "'engines'",
             "'engine_versions'",
+            "'clarity_revalidate_freq'",
         ] as $key) {
             self::assertStringContainsString(
                 $key,
@@ -739,6 +741,64 @@ final class ViewEngineHarnessTest extends TestCase
             "sys_get_temp_dir() . '/clarity-bench-open'",
             $factory,
             'the open-mode arm needs its own cache directory or the two modes recompile each other'
+        );
+    }
+
+    /**
+     * Both Clarity arms must run with the SAME `revalidateFreq` the engines it is
+     * compared against pay implicitly.
+     *
+     * Twig (`$loadedTemplates`), Latte (`class_exists()` short-circuit) and Blade
+     * (`$compiledOrNotExpired`) all memoize the template-freshness check per
+     * process. At Clarity's default of 0 it stats every dependency on every
+     * render, so the published row would charge Clarity a per-render cost those
+     * three do not pay. This pins the setting on BOTH arms: the open-mode arm
+     * exists to be comparable with the sandboxed one, so a difference here would
+     * turn a policy comparison into a cache-policy comparison.
+     */
+    public function testBothClarityArmsRunWithTheProductionRevalidateFrequency(): void
+    {
+        $factory = (string) file_get_contents(dirname(__DIR__) . '/benchmarks/view-engine/engines.php');
+
+        self::assertStringContainsString(
+            'const BENCHMARK_CLARITY_REVALIDATE_FREQ = 60;',
+            $factory,
+            'the frequency must be one named constant, not a literal repeated per arm'
+        );
+
+        // The `clarity` arm: extension, then the frequency.
+        self::assertMatchesRegularExpression(
+            "/case 'clarity':\s*\\\$engine = \(new ClarityEngine\(\)\).*?->setRevalidateFreq\(BENCHMARK_CLARITY_REVALIDATE_FREQ\)/s",
+            $factory,
+            'the sandboxed arm must set the frequency'
+        );
+
+        // The `clarity-open` arm builds a longer chain; it must still carry it.
+        self::assertMatchesRegularExpression(
+            "/case 'clarity-open':.*?->setRevalidateFreq\(BENCHMARK_CLARITY_REVALIDATE_FREQ\)/s",
+            $factory,
+            'the open-mode arm must set the same frequency, or the two modes stop being comparable'
+        );
+
+        // Exactly two arms set it — a third would mean an arm was forgotten in
+        // the reasoning above rather than added deliberately.
+        self::assertSame(
+            2,
+            substr_count($factory, '->setRevalidateFreq(BENCHMARK_CLARITY_REVALIDATE_FREQ)'),
+            'both and only the two Clarity arms set the frequency'
+        );
+
+        // And the shared factory is what every consumer builds through, so the
+        // probes and the parity gate inherit it (asserted by
+        // testEveryConsumerBuildsEnginesThroughTheSharedFactory).
+        $engine = (new ClarityEngine())
+            ->setExtension('.clarity.html')
+            ->setRevalidateFreq(60);
+        self::assertSame(60, $engine->getRevalidateFreq(), 'the setter must accept the value');
+        self::assertSame(
+            0,
+            (new ClarityEngine())->getRevalidateFreq(),
+            'the default must still be per-render checking, so this is a deliberate benchmark choice'
         );
     }
 

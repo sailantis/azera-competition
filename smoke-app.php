@@ -44,13 +44,16 @@ require_once __DIR__ . "/adapters/{$map[$key]}.php";
 
 $checks = [
     'GET /',
+    'GET /echo',
     'GET /items',
+    'GET /items-fast',
     'GET /items/1',
     'POST /items',
     'GET /items-qb',
     'GET /items-qb/1',
     'POST /items-qb',
     'GET /api/items',
+    'GET /api/items-fast',
     'GET /api/items/1',
     'POST /api/items',
     'GET /features/aop',

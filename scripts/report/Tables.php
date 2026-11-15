@@ -205,17 +205,27 @@ final class Tables
             ? ' <span class="unit">(sub-line: boot + handle + post-response cleanup, which sum to the total)</span>'
             : '';
         if ($this->store->hasBoot()) {
-            if (in_array($mode, ['cold', 'php-fpm'], true) && $this->store->coldBootIncluded()) {
+            if ($this->store->isPerRequestMode($mode) && $this->store->coldBootIncluded()) {
+                // Named per deployment: "(FPM story)" is what this page has always
+                // said, and it stays right for PHP-FPM. A Volucer spawn_cgi page gets
+                // its own name rather than borrowing FPM's, and an unknown future
+                // per-request arm gets the generic wording instead of a false claim.
+                $story = match ($mode) {
+                    'php-fpm', 'cold' => 'FPM story',
+                    'volucer-cgi'     => 'Volucer spawn_cgi story',
+                    default           => 'per-request story',
+                };
                 $sub .= ' <span class="unit">— cold rows and charts are end-to-end: each iteration pays a fresh '
-                    . 'framework boot inside the request clock (FPM story)</span>';
-            } elseif (in_array($mode, ['warm', 'roadrunner'], true)) {
+                    . 'framework boot inside the request clock (' . $story . ')</span>';
+            } elseif ($this->store->isResidentMode($mode)) {
                 // Follow the stamped pool model: a pool that never recycles puts
                 // no boot into a row, so claiming one here would be wrong.
-                $sub .= match ($this->store->rrRecycleModel()) {
-                    'never' => ' <span class="unit">— the worker is never recycled (max_jobs=0), so each '
+                $sub .= match ($this->store->modeRecycleModel($mode)) {
+                    'never' => ' <span class="unit">— the worker is never recycled ('
+                        . $this->store->recycleSettingLabel($mode) . '), so each '
                         . 'number is the measured request with no boot in it</span>',
                     'every' => ' <span class="unit">— every row and chart point adds this request\'s share of '
-                        . 'the worker boot (recycle ÷ max_jobs)</span>',
+                        . 'the worker boot (recycle ÷ ' . $this->store->recycleSettingLabel($mode) . ')</span>',
                     default => ' <span class="unit">— every row and chart point adds the worker\'s boot (warm '
                         . 'recycle), so each number is the full time one request keeps that worker busy</span>'
                 };

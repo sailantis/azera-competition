@@ -124,7 +124,16 @@ $requests  = isset($opts['requests'])
     : [
         // HTML benchmark endpoints
         'GET /',
+        // The framework floor: same router and pipeline, constant handler. Kept
+        // immediately after `GET /` (not before it) because the resident-heap
+        // probe walks this list once per endpoint and BenchmarkConfig's
+        // requestOrder() mirrors it — reordering here silently rewrites a
+        // published memory trajectory.
+        'GET /echo',
         'GET /items',
+        // GET /items with hydration off and nothing else changed — the
+        // single-variable control for /items (see each app's listFast action).
+        'GET /items-fast',
         'GET /items/1',
         'POST /items',
         // -orm paths deactivated (2026-09-05) — re-enable together with the
@@ -137,6 +146,7 @@ $requests  = isset($opts['requests'])
         'POST /items-qb',
         // REST API endpoints (JSON serialization category)
         'GET /api/items',
+        'GET /api/items-fast',
         'GET /api/items/1',
         'POST /api/items',
         // Feature demo endpoints (each framework participates only if it

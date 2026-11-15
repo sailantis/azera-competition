@@ -395,7 +395,7 @@ final class RequestPeakMemoryTest extends TestCase
         self::assertSame($lightest, $range['lowRequest'], 'the lightest endpoint must be named');
         self::assertSame($heaviest, $range['highRequest'], 'the heaviest endpoint must be named');
         self::assertSame(
-            21,
+            count(BenchmarkConfig::requestOrder()),
             $range['count'],
             'every endpoint with a peak must take part, not just the extremes'
         );

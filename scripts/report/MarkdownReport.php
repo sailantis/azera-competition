@@ -33,6 +33,19 @@ final class MarkdownReport
      */
     private array $written = [];
 
+    /**
+     * The apps the LAST render() actually included: the view's `apps` list
+     * intersected with what the dataset carries.
+     *
+     * Exposed rather than recomputed by the caller because the intersection is
+     * the renderer's own rule, and a caller that reimplemented it could disagree
+     * with the page it just wrote — the dashboard's framework chips were doing
+     * exactly that, colouring cards from the wrong dataset's app list.
+     *
+     * @var list<string>
+     */
+    private array $renderedApps = [];
+
     public function __construct(
         private readonly ResultStore $store,
         private readonly string $viewKey,
@@ -51,6 +64,21 @@ final class MarkdownReport
     public function writtenCharts(): array
     {
         return $this->written;
+    }
+
+    /**
+     * The apps the most recent render() actually included.
+     *
+     * Null before the first render. Callers use it to describe the page that was
+     * written — e.g. the dashboard's framework chips — instead of re-deriving the
+     * app list from their own dataset, which is the wrong one whenever a view pins
+     * a dataset of its own.
+     *
+     * @return list<string>|null
+     */
+    public function renderedApps(): ?array
+    {
+        return $this->renderedApps === [] ? null : $this->renderedApps;
     }
 
     /**
@@ -82,6 +110,7 @@ final class MarkdownReport
         $this->written = [];
 
         $apps     = array_values(array_intersect($this->view['apps'] ?? $this->store->apps(), $this->store->apps()));
+        $this->renderedApps = $apps;
         $baseline = (string) ($this->view['baseline'] ?? $apps[0] ?? '');
         $mode     = (string) ($this->view['mode'] ?? 'warm');
         $logScale = (bool) ($this->view['log_scale'] ?? false);
@@ -95,7 +124,7 @@ final class MarkdownReport
         // the request clock (the FPM story); older datasets timed the request
         // only. Never render a subtitle the numbers cannot support.
         $subtitle = (string) ($this->view['subtitle'] ?? '');
-        if (in_array($mode, ['cold', 'php-fpm'], true) && !$this->store->coldBootIncluded()) {
+        if ($this->store->isPerRequestMode($mode) && !$this->store->coldBootIncluded()) {
             $subtitle = str_replace(
                 'the application boots for every request (harness cold mode, opcache retained).',
                 'the application boots for every request (harness cold mode, opcache retained) — boot is timed separately, the request numbers show post-boot work only.',
@@ -201,17 +230,39 @@ final class MarkdownReport
     }
 
     /**
+     * How one framework's build is named on a page or a chart footer.
+     *
+     * A thin forward to Provenance, kept because this class names its own
+     * collaborators in a dozen places and a rename here would be churn. The
+     * WORDING lives in Provenance because the homepage's benchmark section
+     * states the same facts in a Clarity partial, and two copies of "JIT: off"
+     * drift into two pages that disagree about one run.
+     *
+     * Shared by the page's version line and the compact chart footer rather than
+     * written twice: a chart is embedded as an <img> and travels on its own, so
+     * the two must not disagree about which build the picture measured.
+     */
+    private function frameworkLabel(string $app, array $entry): string
+    {
+        return Provenance::frameworkLabel($app, $entry);
+    }
+
+    /**
      * The chart-footer form of the version stamp: names and numbers only.
      *
      * Compact on purpose. The chart has one line to work with and the ref is
      * already on the page, where the environment block has room for it — a
      * footer that grew to carry refs and labels would wrap on the memory
      * charts, whose captions are the longest.
+     *
+     * The Azera ref still rides along despite the note above: `dev-main` names no
+     * build, so a chart that travelled without the ref would advertise a branch
+     * for the one entrant whose version cannot identify it. See frameworkLabel().
      */
     private function chartVersions(): string
     {
         $env = $this->store->env();
-        /** @var array<string,array{version:?string}> $frameworks */
+        /** @var array<string,array{version:?string,ref?:?string}> $frameworks */
         $frameworks = $env['frameworks'] ?? [];
         if ($frameworks === []) {
             return '';
@@ -219,7 +270,7 @@ final class MarkdownReport
 
         $parts = [];
         foreach ($frameworks as $app => $entry) {
-            $parts[] = BenchmarkConfig::appLabel($app) . ' ' . ($entry['version'] ?? 'unknown');
+            $parts[] = $this->frameworkLabel($app, $entry);
         }
 
         return implode(' · ', $parts);
@@ -273,6 +324,35 @@ final class MarkdownReport
         return 'OPcache: ' . (!empty($env['opcache']) ? 'yes' : 'no');
     }
 
+    /**
+     * The JIT clause for a page, or '' when the dataset predates the stamp.
+     *
+     * Stated as `JIT: off` / `JIT: tracing` rather than omitted-when-off. JIT is
+     * the accelerator a reader is most likely to ASSUME on, and PHP 8.4+ makes
+     * that assumption look confirmed: `opcache.jit_buffer_size` defaults to 64M
+     * while `opcache.jit` defaults to `disable`, so `php -i` prints a buffer
+     * beside a disabled engine. A page that silently omitted the clause would
+     * leave the most likely reading unopposed; printing "JIT: off" is a fact a
+     * reader can check against the dataset rather than an absence they must
+     * interpret.
+     *
+     * The buffer size is included when the engine is OFF, because the pair is
+     * the thing that misleads: `JIT: off (buffer 64M)` says "allocated but
+     * unused" in one glance. When a mode IS set the size is the working set and
+     * rides along for the same reason.
+     *
+     * A dataset without `opcache_jit` renders nothing, exactly like the OPcache
+     * clause: "not recorded" is not "off", and this renders what a run stated.
+     *
+     * The wording is Provenance's: this clause is the one most likely to be
+     * copied onto another page, and a second spelling of "off" is how two pages
+     * come to disagree about one run.
+     */
+    private function jitClause(): string
+    {
+        return Provenance::jitClause($this->store->env());
+    }
+
     private function envBlock(string $mode): string
     {
         $env = $this->store->env();
@@ -291,6 +371,7 @@ final class MarkdownReport
         // part of the clause, so an unknown OPcache setting shortens the line
         // instead of ending it with a dangling bullet.
         $opcache = $this->opcacheClause($mode);
+        $jit     = $this->jitClause();
 
         // Order: what was measured (environment + builds), then WHEN. The
         // timestamp goes LAST rather than between the two "what" lines: it is
@@ -298,10 +379,11 @@ final class MarkdownReport
         // environment from the frameworks with it made the block read as two
         // unrelated stamps with a date wedged between them.
         return sprintf(
-            '**Environment** — PHP %s · %s%s · %s, lower is better.',
+            '**Environment** — PHP %s · %s%s%s · %s, lower is better.',
             $env['php_version'] ?? '?',
             $env['os'] ?? '?',
             $opcache === '' ? '' : ' · ' . $opcache,
+            $jit === '' ? '' : ' · ' . $jit,
             $budget
         ) . $this->versionsLine()
             . "\n\n_Measured " . ($env['timestamp'] ?? '?')
@@ -322,31 +404,15 @@ final class MarkdownReport
      * printing "unknown" six times. The absence is stated once, in the prose that
      * explains the dataset predates the stamp, which is honest about WHY it is
      * missing; six "unknown"s in a chart footer is noise that says less.
+     *
+     * The wording is Provenance's, so the homepage partial cannot word the same
+     * six builds differently.
      */
     private function versionsLine(): string
     {
-        $env = $this->store->env();
-        /** @var array<string,array{version:?string,ref?:?string}> $frameworks */
-        $frameworks = $env['frameworks'] ?? [];
-        if ($frameworks === []) {
-            return '';
-        }
+        $line = Provenance::versionsLine($this->store->env());
 
-        $parts = [];
-        foreach ($frameworks as $app => $entry) {
-            $version = $entry['version'] ?? null;
-            // Azera is not on Packagist, so its version alone does not identify
-            // the build. The ref is shown on the page (where there is room);
-            // the chart footer stays compact.
-            $label = BenchmarkConfig::appLabel($app) . ' ' . ($version ?? 'unknown');
-            // The ref only where it adds information — see the note above.
-            if ($app === 'azera' && isset($entry['ref']) && $entry['ref'] !== '') {
-                $label .= ' (' . $entry['ref'] . ')';
-            }
-            $parts[] = $label;
-        }
-
-        return "\n\n**Frameworks** — " . implode(' · ', $parts) . '.';
+        return $line === '' ? '' : "\n\n**Frameworks** — " . $line . '.';
     }
 
     /**
@@ -401,7 +467,7 @@ final class MarkdownReport
         if (!$this->store->hasBoot()) {
             return '';
         }
-        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+        if ($this->store->isPerRequestMode($mode)) {
             return $this->store->coldBootIncluded()
                 ? 'boot included (fresh per-request rebuild)'
                 : '';
@@ -411,7 +477,7 @@ final class MarkdownReport
         // startup chart measures, not a term inside these points. On a view
         // that draws no startup chart the note stops at the model, since there
         // is nothing on that page to point at.
-        if ($this->store->rrRecycleModel() === 'never') {
+        if ($this->store->modeRecycleModel($mode) === 'never') {
             return 'worker never recycled (max_jobs=0) — no boot inside these points';
         }
         return $this->drawsStartupChart()
@@ -444,7 +510,10 @@ final class MarkdownReport
         }
         $ms = static fn(string $key): ?float => $floors[$key]['ms'] ?? null;
 
-        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+        /** Does this floor belong to the server this page measures? */
+        $floorBelongsToMode = fn(string $key, string $m): bool =>
+            ($floors[$key]['mode'] ?? null) === $m;
+        if ($this->store->isPerRequestMode($mode)) {
             $php = $ms('floor-php');
             if ($php === null) {
                 return '';
@@ -485,11 +554,36 @@ final class MarkdownReport
                 . 'stands on. ' . $advice;
         }
 
-        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+        if ($this->store->isResidentMode($mode)) {
             $rr = $ms('floor-rr');
             if ($rr === null) {
                 return '';
             }
+
+            // THE FLOOR NAMED HERE MUST BE ONE THIS SERVER PAID.
+            //
+            // `floor-rr` is a RoadRunner process. On a Volucer page it was
+            // described as "the IPC + server floor every row below also pays",
+            // which is a claim about a DIFFERENT server's overhead presented as
+            // the arithmetic behind these rows — and the two are not
+            // interchangeable: the published Volucer page carried exactly this
+            // sentence while Volucer's own floor was never measured at all
+            // (measureFloors() takes no arm list). A reader subtracting it from a
+            // Volucer number would be subtracting RoadRunner.
+            //
+            // The honest statement for a server with no floor of its own is that
+            // there is none, and why — not a borrowed number. The model is still
+            // named, because "no floor was measured" is only useful alongside the
+            // reassurance that the rows are measured the same way.
+            if (!$floorBelongsToMode('floor-rr', $mode)) {
+                return "\n\n**Server floor** — none measured for this server: the resident floor in "
+                    . 'this dataset (`floor-rr`) was measured through RoadRunner, whose process model '
+                    . 'differs from ' . $this->serverLabel($mode) . "'s, so its number is not this "
+                    . "server's overhead and does not appear in these rows. Read the figures here as "
+                    . 'end-to-end; differences larger than the floor in the other resident summaries '
+                    . 'are framework differences.';
+            }
+
             return "\n\n**Server floor** — real RoadRunner over loopback: a bare resident worker that renders a "
                 . 'fixed string (`floor-rr`) measures the IPC + server floor every row below also pays. '
                 . 'Only differences larger than this floor are framework differences.';
@@ -513,12 +607,127 @@ final class MarkdownReport
      *     "how long is this worker busy with one request" when a pool is
      *     recycled or requests queue behind it.
      */
+    /**
+     * Whether a RESIDENT arm boots the framework exactly ONCE for the whole block.
+     *
+     * True when its boot probe produced a single sample. That is a structural fact
+     * about the backend, not a sampling shortfall: a master that boots before
+     * forking (Volucer's `attach`) can only ever report one boot, while a pool that
+     * re-initialises a live worker (`RoadRunner`) reports one per recycle.
+     *
+     * Requiring EVERY measured app to agree keeps a half-sampled dataset on the
+     * conservative side — a mixed dataset claims nothing special and keeps the
+     * historical caption.
+     *
+     * @param list<string> $apps
+     */
+    private function bootsOnce(array $apps, string $mode): bool
+    {
+        $seen = false;
+        foreach ($apps as $app) {
+            $samples = $this->store->bootSamples($app, $mode);
+            if ($samples === null) {
+                continue;
+            }
+            if ((int) ($samples['count'] ?? 0) !== 1) {
+                return false;
+            }
+            $seen = true;
+        }
+
+        return $seen;
+    }
+
+    /**
+     * Chart band label for a RESIDENT arm's boot, e.g.
+     * "One-time boot — before the supervisor forks (Volucer attach)".
+     *
+     * Two datasets, two arms, one helper: the model is stated by the prose the
+     * chart sits under, and the parenthetical names the SERVER the number came
+     * from, which is the only part a reader cannot infer. Kept together with
+     * perRequestBootLabel() so the pair cannot drift into two different
+     * vocabularies for "warm" and "cold".
+     */
+    private function residentBootLabel(string $mode, bool $bootsOnce = false): string
+    {
+        if ($bootsOnce) {
+            // A boot paid once, by the supervisor, before its children exist. The
+            // word "recycle" would be wrong twice over: nothing is recycled, and
+            // the figure is the FULL PHP-start boot rather than a cheap re-init.
+            return 'One-time boot — before the supervisor forks (' . $this->serverLabel($mode) . ')';
+        }
+
+        return 'Warm recycle — framework re-init in a resident worker (' . $this->serverLabel($mode) . ')';
+    }
+
+    /**
+     * Chart band label for a PER-REQUEST arm's boot, e.g.
+     * "Framework boot — per request (PHP-FPM)".
+     */
+    private function perRequestBootLabel(string $mode): string
+    {
+        return 'Framework boot — per request (' . $this->serverLabel($mode) . ')';
+    }
+
+    /**
+     * The human name of the server behind a mode, for a chart band or caption,
+     * e.g. "(RoadRunner)" / "(PHP-FPM)".
+     *
+     * A mode this does not recognise is passed through unchanged rather than
+     * guessed at: a label reading "(volucer-attach)" is honest, while one
+     * reading "(PHP-FPM)" on a Volucer chart would be a false attribution —
+     * and the report's whole purpose is to keep those apart.
+     */
+    private function serverLabel(string $mode): string
+    {
+        return match ($mode) {
+            'roadrunner', 'warm' => 'RoadRunner',
+            'php-fpm', 'cold'    => 'PHP-FPM',
+            'volucer-attach'     => 'Volucer attach',
+            'volucer-cgi'        => 'Volucer spawn_cgi',
+            default              => $mode,
+        };
+    }
+
+    /**
+     * The name a mode's server goes by mid-sentence, e.g. "the FPM entry
+     * script". Shorter than serverLabel() because prose has already named the
+     * deployment, and because "nginx/PHP-FPM" is a transport description
+     * rather than a worker name.
+     */
+    private function workerName(string $mode): string
+    {
+        return match ($mode) {
+            'roadrunner', 'warm' => 'RoadRunner',
+            'php-fpm', 'cold'    => 'FPM',
+            'volucer-attach'     => 'Volucer attach',
+            'volucer-cgi'        => 'Volucer spawn_cgi',
+            default              => $mode,
+        };
+    }
+
+    /**
+     * How this mode reaches its PHP process, for the startup intro.
+     *
+     * The FPM case reproduces the sentence this report has always printed,
+     * verbatim ("nginx/PHP-FPM re-runs the entry script per request"): the
+     * transport IS the thing being explained, so naming only the worker would
+     * lose the half of the sentence that says why the boot is per request.
+     */
+    private function perRequestTransport(string $mode): string
+    {
+        return match ($mode) {
+            'php-fpm', 'cold' => 'nginx/PHP-FPM',
+            default           => $this->workerName($mode),
+        };
+    }
+
     private function bootLegend(string $mode): string
     {
         if (!$this->store->hasBoot()) {
             return '';
         }
-        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+        if ($this->store->isPerRequestMode($mode)) {
             if (!$this->store->coldBootIncluded()) {
                 return '';
             }
@@ -527,7 +736,7 @@ final class MarkdownReport
                 . 'The boot share is therefore inside both the headline and the `boot` term of the sub-line — '
                 . 'the totals here are the numbers a user waits for.';
         }
-        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+        if ($this->store->isResidentMode($mode)) {
             // The boot each row carries is the pool's recycle divided by its
             // max_jobs, so the sentence has to follow the stamped model — the
             // recycle is a different quantity once the pool recycles on a
@@ -542,14 +751,15 @@ final class MarkdownReport
             $where = $this->drawsStartupChart()
                 ? 'the startup chart'
                 : 'the full report linked at the foot of this page';
-            return match ($this->store->rrRecycleModel()) {
+            return match ($this->store->modeRecycleModel($mode)) {
                 'never' => "\n\nThese rows are end-to-end for a resident worker with a pool that never "
-                    . 'recycles it (max_jobs=0): the worker booted once before the first request and '
-                    . 'serves the whole run, so a cell is the measured request itself and carries no '
-                    . 'boot. The one-time recycle cost is measured in ' . $where . ' — read that when '
-                    . 'sizing a pool that is recycled or restarted, or when requests queue behind one worker.',
+                    . 'recycles it (' . $this->store->recycleSettingLabel($mode) . '): the worker booted once '
+                    . 'before the first request and serves the whole run, so a cell is the measured request '
+                    . 'itself and carries no boot. The one-time recycle cost is measured in ' . $where
+                    . ' — read that when sizing a pool that is recycled or restarted, or when requests '
+                    . 'queue behind one worker.',
                 'every' => "\n\nThese rows are end-to-end for a resident worker whose pool recycles it "
-                    . 'every ' . $this->store->rrMaxJobs() . ' jobs: the recycle is divided across those '
+                    . 'every ' . $this->store->modeRecycleJobs($mode) . ' jobs: the recycle is divided across those '
                     . 'jobs, so a cell is the measured request plus its share of the boot.',
                 default => "\n\nThese rows are end-to-end for a resident worker: every headline and every chart "
                     . 'point adds the worker\'s boot (warm recycle, measured in ' . $where . ') to the '
@@ -647,9 +857,36 @@ final class MarkdownReport
         // recycle — resident worker"), which describe things that were never
         // measured here.
         if ($probed) {
-            $bands = ($mode === 'roadrunner')
-                ? ['warm' => ['label' => 'Warm recycle — framework re-init in a resident worker (RoadRunner)', 'key' => 'warm_ms']]
-                : ['cold' => ['label' => 'Framework boot — per request (PHP-FPM)', 'key' => 'cold_ms']];
+            // The band follows the MEASURED model, not the mode name. Naming the
+            // server in the label is deliberate: a reader needs to know which
+            // deployment produced the number. The `? :` this replaced compared
+            // against 'roadrunner' exactly, so any additional resident arm would
+            // have been drawn with the per-request band and its cold_ms — a
+            // plausible chart of the wrong quantity.
+            //
+            // WHICH resident boot, though, depends on whether the arm RECYCLES at
+            // all, and the probe sample count says so unambiguously:
+            //
+            //   RoadRunner  — the pool re-boots the framework in a live worker, so
+            //                 the probe repeats and returns many samples. That is a
+            //                 per-service-lifetime REBUILD, and it happens to be
+            //                 cheap (opcache and every class are already loaded).
+            //   attach      — the supervisor boots the framework ONCE in the master
+            //                 before the first fork and the children inherit it, so
+            //                 there is exactly ONE sample: the full PHP-start boot
+            //                 (7.9 ms azera, 159 ms laravel), not a recycle.
+            //
+            // Labelling attach "warm recycle" would put a 1000x larger number under
+            // a caption written for a cheap re-init. One sample is the tell, and the
+            // band name follows it.
+            if ($this->store->isResidentMode($mode)) {
+                $bands = ['warm' => [
+                    'label' => $this->residentBootLabel($mode, $this->bootsOnce($apps, $mode)),
+                    'key'   => 'warm_ms',
+                ]];
+            } else {
+                $bands = ['cold' => ['label' => $this->perRequestBootLabel($mode), 'key' => 'cold_ms']];
+            }
         } else {
             $bands = [
                 'cold' => ['label' => 'Cold boot — real, first boot in a process (CGI/CLI model)', 'key' => 'cold_ms'],
@@ -781,13 +1018,20 @@ final class MarkdownReport
                 return '';
             }
 
-            $intro = ($mode === 'roadrunner')
-                ? 'Time to re-initialise the framework in an already-warm RoadRunner worker — the cycle reset a '
-                    . 'recycled worker pays, with opcache and every class already loaded. This is NOT process start: '
-                    . 'spawning the process is the server supervisor\'s cost, not the framework\'s.'
-                : 'Time from PHP start until the framework is ready to serve, measured inside the FPM entry '
-                    . 'script — the boot every request waits for on this deployment, because nginx/PHP-FPM '
-                    . 're-runs the entry script per request.';
+            $intro = $this->store->isResidentMode($mode)
+                ? ($this->bootsOnce($apps, $mode)
+                    ? 'Time from PHP start until the framework is ready to serve, measured ONCE in the '
+                        . $this->workerName($mode) . ' supervisor before it forks any child. Every worker '
+                        . 'process inherits that already-built state, so this is a boot the deployment pays '
+                        . 'one time for the whole run — not a cost any request carries.'
+                    : 'Time to re-initialise the framework in an already-warm ' . $this->workerName($mode)
+                        . ' worker — the cycle reset a recycled worker pays, with opcache and every class already '
+                        . 'loaded. This is NOT process start: spawning the process is the server supervisor\'s '
+                        . 'cost, not the framework\'s.')
+                : 'Time from PHP start until the framework is ready to serve, measured inside the '
+                    . $this->workerName($mode) . ' entry script — the boot every request waits for on this '
+                    . 'deployment, because ' . $this->perRequestTransport($mode) . ' re-runs the entry script '
+                    . 'per request.';
 
             // The anchor must be the fastest boot that actually REBUILDS
             // something, exactly as the chart's factor logic does. Several
@@ -821,7 +1065,7 @@ final class MarkdownReport
                     . "survives the recycle, so the band measures no meaningful rebuild cost.\n";
             $noopNote = $rebuilt !== [] && $noop !== []
                 ? '- ' . implode(', ', array_keys($noop))
-                    . ($mode === 'roadrunner'
+                    . ($this->store->isResidentMode($mode)
                         ? ' keep their compiled wiring across a recycle and hand it straight back, so '
                             . 'there is no rebuild to time.'
                         : ' re-run the entry script but had nothing left to build.')
@@ -1286,13 +1530,14 @@ final class MarkdownReport
         // its dot the heap of whichever endpoint happened to sort LAST and its
         // right cap a third unrelated request. Arithmetically the chart was
         // right; every reading in it was wrong.
-        return $mode === 'php-fpm'
+        return $this->store->isPerRequestMode($mode)
             ? $this->fpmMemory($dir, $rel, $apps, $mode)
             : $this->residentWorkerMemory($dir, $rel, $apps, $mode);
     }
 
     /**
-     * Per-request memory for a fresh-process deployment (nginx + php-fpm).
+     * Per-request memory for a fresh-process deployment (the entry script is
+     * re-run per request).
      *
      * The statistic is the peak heap one request needed, measured with
      * memory_reset_peak_usage() at the entry script's boot-complete boundary
@@ -1603,15 +1848,24 @@ final class MarkdownReport
      */
     private function workerMemoryTransport(string $mode): string
     {
-        if ($mode === 'roadrunner') {
-            return 'The numbers are read from the resident RoadRunner worker, which answers '
+        $name = $this->workerName($mode);
+
+        if ($this->store->isResidentMode($mode)) {
+            return "The numbers are read from the resident {$name} worker, which answers "
                 . "them directly in response headers.\n\n";
         }
 
-        return 'The numbers come from the FPM worker process itself: because the entry '
+        return "The numbers come from the {$name} worker process itself: because the entry "
             . 'script is torn down when the request ends, it appends one sample as it exits, and '
-            . 'the harness reads that back. The pool is `pm = static` with `max_children = 1` and '
-            . '`max_requests = 0`, so this is ONE worker that stays alive for the whole block — '
-            . "which is why it has retained memory worth reporting at all.\n\n";
+            . 'the harness reads that back.'
+            // The pool settings are a fact about the FPM deployment specifically, so
+            // they are only claimed for it. A spawn_cgi arm has no pool to describe.
+            . ($name === 'FPM'
+                ? ' The pool is `pm = static` with `max_children = 1` and `max_requests = 0`, so this '
+                    . 'is ONE worker that stays alive for the whole block — which is why it has '
+                    . 'retained memory worth reporting at all.'
+                : ' Each request gets a fresh process, so what is reported is that process\'s peak, '
+                    . 'not a heap that survives anything.')
+            . "\n\n";
     }
 }

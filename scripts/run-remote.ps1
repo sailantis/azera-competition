@@ -8,6 +8,10 @@
 #   .\scripts\run-remote.ps1 -Run -MemOnly -MemRepeats 20  # more probes per endpoint
 #   .\scripts\run-remote.ps1 -Run -Apps azera,laravel -Servers rr
 #
+#   # Measure a different PHP (must be a matching MAJOR.MINOR pair - run-http.php
+#   # refuses a mismatch, because the dataset records one version for both servers):
+#   .\scripts\run-remote.ps1 -Run -PhpCli php8.3 -PhpFpm php-fpm8.3
+#
 #   # PARTIAL re-measure: must name its own output (see -Out below), then splice:
 #   .\scripts\run-remote.ps1 -Run -Apps cakephp -Out results/real-cakephp
 #   .\scripts\run-remote.ps1 -Fetch -Apps cakephp -Out results/real-cakephp
@@ -87,7 +91,24 @@ param(
     # spliced locally by merge-app.php / merge-modes.php.
     [string]$Out = '',
     [string]$Apps = 'azera,laravel,symfony,spiral,codeigniter,cakephp',
+    # Comma-separated. PowerShell binds an actual array (`-Servers rr,fpm,volucer`) to a
+    # [string] parameter by joining the elements with SPACES, giving "rr fpm volucer";
+    # `explode(',')` then sees ONE unknown server, run-http.php rejects it, and because
+    # the launcher only checks that the tmux session started, the failure surfaced as a
+    # log from the PREVIOUS invocation. So the join is normalised back here instead of
+    # relying on the caller to quote it: both "rr,fpm,volucer" and "rr fpm volucer" work.
     [string]$Servers = 'rr,fpm',
+    # The PHP the run measures, stated rather than inherited from the VM's PATH.
+    #
+    # These two must agree in MAJOR.MINOR: run-http.php refuses the run otherwise.
+    # They are one decision made twice because the two servers are different
+    # binaries - nginx talks to the packaged `php-fpm<X.Y>`, RoadRunner spawns the
+    # CLI interpreter - and nothing on the host keeps them in step. The VM's
+    # default `php` was moved to 8.5 on 2026-10-19 while its FPM pools stayed under
+    # /etc/php/8.3, so relying on PATH would have published 8.3 FPM numbers beside
+    # 8.5 RoadRunner numbers under one version stamp.
+    [string]$PhpCli = 'php8.5',
+    [string]$PhpFpm = 'php-fpm8.5',
     [string]$SshTarget = $(if ($env:BENCH_SSH) { $env:BENCH_SSH } else { 'competition@192.168.9.138' }),
     [string]$RemoteDir = $(if ($env:BENCH_REMOTE_DIR) { $env:BENCH_REMOTE_DIR } else { '~/workspace/azera-competition' })
 )
@@ -95,6 +116,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot   # azera-competition repo root
 $Sailantis = Split-Path -Parent $Root      # parent with sibling repos
+
+# Normalise the list args: an array passed to a [string] parameter arrives space-joined
+# (see the $Servers note in param()), so both "a,b" and "a b" become "a,b" here. Done
+# once, for both lists, so no later code has to care which form the caller used.
+$Servers = ($Servers -split '[,\s]+' | Where-Object { $_ -ne '' }) -join ','
+$Apps    = ($Apps    -split '[,\s]+' | Where-Object { $_ -ne '' }) -join ','
 
 # `ssh` inherits this console's stdin, and when the script is invoked DIRECTLY
 # (not from one of the sibling driver scripts) that makes it HANG waiting on the
@@ -118,15 +145,27 @@ if ($SshExe) {
 $OutPrefix = if ($Out -ne '') { $Out } elseif ($Quick) { 'results/smoke-' + (Get-Date -Format 'yyyy-MM-dd') } else { 'results/real-deployments' }
 $OutName = Split-Path -Leaf $OutPrefix
 
-# A run that measures only SOME apps must not claim the canonical name, for the
-# same reason -Quick must not: the file it writes is a fragment, and the fetch's
-# publish path would treat it as the whole story.
+# A run that measures only SOME of the canonical experiment must not claim the
+# canonical name, for the same reason -Quick must not: the file it writes is a
+# fragment, and the fetch's publish path would treat it as the whole story.
+#
+# FRAGMENT, NOT DIFFERENCE. The test is whether the run is a SUBSET of the
+# canonical experiment: all six apps, and both of the servers the published
+# RoadRunner and FPM pages read. Extra servers do not make a run partial -- every
+# canonical number in it was re-measured by that same run, so the file is a
+# superset and the pages it feeds stay true. Requiring the server list to be
+# exactly {rr, fpm} refused a full run that merely added Volucer's arms, which is
+# a different thing from a fragment and should not be blocked by this guard.
 $AppsList = @($Apps -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
-$IsPartial = $AppsList.Count -lt 6 -or $Servers -split ',' -notcontains 'fpm' -or $Servers -split ',' -notcontains 'rr'
+$ServerList = @($Servers -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+$MissingServers = @(@('rr', 'fpm') | Where-Object { $ServerList -notcontains $_ })
+$IsPartial = $AppsList.Count -lt 6 -or $MissingServers.Count -gt 0
 if ($IsPartial -and -not ($Quick -or $BootOnly -or $MemOnly) -and $OutPrefix -eq 'results/real-deployments') {
-    throw ("Partial run (apps: $($AppsList -join ',') / servers: $Servers) would overwrite the " +
+    $why = if ($MissingServers.Count -gt 0) { "missing servers: $($MissingServers -join ',')" } else { "only $($AppsList.Count) of 6 apps" }
+    throw ("Partial run ($why; apps: $($AppsList -join ',') / servers: $Servers) would overwrite the " +
         'canonical results/real-deployments.json on the VM with a fragment. Pass -Out ' +
-        'results/<scratch> and splice it locally with merge-app.php / merge-modes.php.')
+        'results/<scratch> and splice it locally with merge-app.php / merge-modes.php. ' +
+        '(Adding servers to a full six-app run is NOT partial - only a subset is.)')
 }
 
 # Separate args (bsdtar: each --exclude needs to be its own argument).
@@ -157,6 +196,54 @@ $Excludes = @(
 # A repo tarball is ~1-3 MB; anything above this is an exclude that stopped
 # matching (e.g. a new cache dir) rather than a real change.
 $MaxTarBytes = 100MB
+
+# A DIRTY TREE ONLY MATTERS IF THE DIRTY FILES ARE SHIPPED.
+#
+# `+dirty` exists to say "the code that ran contains changes in no commit", so it
+# has to be decided from the files that actually travel. `git status --porcelain`
+# answers the wrong question: it reports any modified path, and `docs` and
+# `results` are excluded from every sync. Rendering the 2026-11-10 report marked a
+# build `377d0f6+dirty` when `git diff HEAD -- src/` was EMPTY and the only
+# modified files were README.md and the published benchmark docs - none of which
+# the VM ever receives, and none of which can reach a timed request. The mark was
+# simultaneously true about the checkout and false about the measurement, and it
+# is the claim about the MEASUREMENT that a published figure makes.
+#
+# The excluded paths are derived from $Excludes rather than listed a second time;
+# a hand-kept copy is the sort of thing that silently stops matching. Only the
+# `--exclude=<path>` form is read, and the ones with a glob or an intermediate
+# separator need no handling here: a path matching `*.log` or `bootstrap/cache`
+# is matched by the prefix test below closely enough, and over-matching is the
+# safe direction for a warning label.
+$SyncedExcludedPaths = @(
+    $Excludes | Where-Object { $_ -like '--exclude=*' -and $_ -notlike '*[*?]*' } | ForEach-Object {
+        $_.Substring('--exclude='.Length).TrimEnd('/')
+    }
+)
+
+function Test-PathIsSynced([string]$RepoRelativePath) {
+    $p = $RepoRelativePath.TrimEnd('/')
+    foreach ($ex in $SyncedExcludedPaths) {
+        if ($p -eq $ex -or $p.StartsWith($ex + '/')) { return $false }
+    }
+    return $true
+}
+
+function Get-SyncedDirtyEntry([string]$Repo) {
+    # Porcelain v1 is `XY <path>`; a rename adds ` -> <new path>`, and the field
+    # may be quoted when the name has non-ASCII bytes. The rename target is what
+    # ships, so it is the part tested.
+    $lines = & git -C $Repo status --porcelain 2>$null
+    foreach ($line in @($lines)) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $path = $line.Substring(2).Trim()
+        $arrow = $path.IndexOf(' -> ')
+        if ($arrow -ge 0) { $path = $path.Substring($arrow + 4) }
+        $path = $path.Trim('"').Replace('\', '/')
+        if (Test-PathIsSynced $path) { return $line }
+    }
+    return $null
+}
 
 function Get-RemoteParent([string]$Path) {
     # POSIX parent directory, computed with STRING operations on purpose.
@@ -215,6 +302,13 @@ function Sync-Source {
     # sharing one remote path is a race, and a corrupt stream makes the remote
     # tar exit non-zero, which reads as "tar extract failed" and explains nothing.
     $remoteTar = "/tmp/azera-sync-$PID-$(Get-Date -Format 'HHmmss').tar"
+    # NOTE: volucer-php-sdk is deliberately NOT synced. `sailantis/volucer-worker` is a
+    # TAGGED, PUBLISHED package pinned to v0.4.1, so composer fetches it from its own
+    # distribution and records the version in composer.lock. Syncing the sibling checkout
+    # would install the same code while recording `dev-main` with no ref at all - the
+    # dataset would name the volucer BINARY's version and leave the PHP worker half
+    # anonymous. Only the two repos that are genuinely unreleased workspace code are
+    # shipped as path repositories.
     foreach ($repo in @('azera-competition', 'azera-framework', 'clarity-engine')) {
         $src = Join-Path $Sailantis $repo
         if (-not (Test-Path $src)) { Write-Warning "skip $repo (not found)"; continue }
@@ -253,7 +347,7 @@ function Sync-Source {
     # whose clarity source came from the host. Any repository whose ref is
     # stamped must have its stale checkout removed, or the stamp names a build
     # that did not run.
-    ssh $SshTarget "rm -rf $RemoteDir/../azera-framework/.git $RemoteDir/vendor/sailantis/azera-framework/.git $RemoteDir/../clarity-engine/.git $RemoteDir/vendor/sailantis/clarity-engine/.git 2>/dev/null; true"
+    ssh $SshTarget "rm -rf $RemoteDir/../azera-framework/.git $RemoteDir/vendor/sailantis/azera-framework/.git $RemoteDir/../clarity-engine/.git $RemoteDir/vendor/sailantis/clarity-engine/.git $RemoteDir/vendor/sailantis/volucer-worker/.git 2>/dev/null; true"
 
     Assert-SyncLanded 'boot-probe.php'
     # boot-probe.php is required (so it proves the sync mechanism works), but a
@@ -261,6 +355,18 @@ function Sync-Source {
     # own check: mem-only against a VM that never received this change would
     # write zero samples for every app and look like "FPM uses no memory".
     Assert-SyncLanded 'scripts/merge-mem.php'
+    # The route-cache warmers are new files that run-http.php now invokes for
+    # azera and laravel. An OLD VM tree without them does not fail the run: the
+    # deploy step shells out, gets "Could not open input file", and the app then
+    # measures a COLD boot while the dataset claims a warm one - the exact
+    # asymmetry the warmers were added to remove. Checked explicitly so a stale
+    # VM aborts here instead of publishing a wrong number.
+    Assert-SyncLanded 'scripts/warm-azera-routes.php'
+    Assert-SyncLanded 'scripts/warm-laravel-routes.php'
+    # The Volucer SDK is NOT checked here on purpose: it is a pinned, published package
+    # that composer fetches itself (see the sync list above). A path-repo sibling would
+    # need this guard because a missing path repo is a hard composer error; a pinned
+    # package that fails to download is already a hard composer error.
     Write-Host '==> sync done.' -ForegroundColor Green
 }
 
@@ -306,16 +412,22 @@ if (Test-Path $fwRepo) {
     #   git.exe : fatal: no tag exactly matches 'daeb5a6...'
     #
     # and nothing ran. A lookup that is ALLOWED to fail must not be able to
-    # abort the script, so EAP is relaxed for these two calls only. The tag is
-    # preferred when it exists (it names a release); the short sha is the
-    # fallback that always answers.
+    # abort the script, so EAP is relaxed for these two calls only.
+    #
+    # NO `--exact-match`, and that is the whole point. It answers only while HEAD
+    # sits ON a tag, so the normal case - a few commits past the release being
+    # worked on - fell through to a bare `377d0f6`. A published page then named
+    # neither the release nor how far past it the build was, which is the worst of
+    # both: `0.4.1` would have been a lie and the sha is unreadable. Plain
+    # `describe` prints `v0.4.1-4-g377d0f6`, which says the release AND the
+    # distance, and degrades to just `v0.4.2` when HEAD is on the tag.
+    #
+    # `--always` is the last resort: in a repo with no tags at all, describe still
+    # answers with the abbreviated sha rather than failing.
     $previousEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $described = (& git -C $fwRepo describe --tags --exact-match --match 'v*' 2>$null | Select-Object -First 1)
-        if (-not $described) {
-            $described = (& git -C $fwRepo rev-parse --short HEAD 2>$null | Select-Object -First 1)
-        }
+        $described = (& git -C $fwRepo describe --tags --always --match 'v*' 2>$null | Select-Object -First 1)
     }
     finally {
         $ErrorActionPreference = $previousEap
@@ -339,11 +451,12 @@ if (Test-Path $fwRepo) {
     # is to measure it, so a hard stop would remove the ability to check whether
     # an uncommitted change helped. What must not happen is the run claiming a
     # clean ref it never had.
-    $dirty = (& git -C $fwRepo status --porcelain 2>$null | Select-Object -First 1)
+    $dirty = Get-SyncedDirtyEntry $fwRepo
     if ($dirty) {
         $FrameworkRef = $FrameworkRef + '+dirty'
-        Write-Warning ("azera-framework has uncommitted changes; stamping '{$FrameworkRef}' so " +
-            'the published figures do not claim a commit that does not contain them')
+        Write-Warning ("azera-framework has uncommitted changes in a shipped path; stamping " +
+            "'{$FrameworkRef}' so the published figures do not claim a commit that does not " +
+            "contain them (first: {$dirty})")
     }
 }
 
@@ -356,21 +469,23 @@ if (Test-Path $fwRepo) {
 # claimed clarity "has no git tags" - true when it was written, false since
 # 2026-09-28, and it kept the stamp on a bare sha for three releases.
 #
-# `--match 'v*'` is not decoration. `git describe --tags --exact-match` breaks a
-# tie between tags on ONE commit by NAME, so any non-release tag (a `bench-...`
-# marker, a hand-made alias) can win and be stamped as the measured build. The
-# glob restricts the answer to version tags, which is the only kind that names a
-# release; the framework lookup above carries it for the same reason.
+# `--match 'v*'` is not decoration. `git describe` breaks a tie between tags on
+# ONE commit by NAME, so any non-release tag (a `bench-...` marker, a hand-made
+# alias) can win and be stamped as the measured build. The glob restricts the
+# answer to version tags, which is the only kind that names a release; the
+# framework lookup above carries it for the same reason.
+#
+# Same no-`--exact-match` rule as the framework, for the same reason: clarity is
+# almost never ON a tag when a run is launched, so `--exact-match` reduced a
+# `v0.4.2` build to a bare sha. `v0.4.2-2-g83b11ef` states the release and the
+# distance; `v0.4.2` alone would claim a tag the code is not at.
 $ClarityRef = ''
 $clRepo = Join-Path $Sailantis 'clarity-engine'
 if (Test-Path $clRepo) {
     $previousEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $described = (& git -C $clRepo describe --tags --exact-match --match 'v*' 2>$null | Select-Object -First 1)
-        if (-not $described) {
-            $described = (& git -C $clRepo rev-parse --short HEAD 2>$null | Select-Object -First 1)
-        }
+        $described = (& git -C $clRepo describe --tags --always --match 'v*' 2>$null | Select-Object -First 1)
     }
     finally {
         $ErrorActionPreference = $previousEap
@@ -379,8 +494,9 @@ if (Test-Path $clRepo) {
 
     # The same dirty-tree mark as the framework above, and for the same reason:
     # clarity's Compiler.php is the file the harness puts under the clock, so an
-    # uncommitted edit there is precisely what a reader must be told about.
-    $dirty = (& git -C $clRepo status --porcelain 2>$null | Select-Object -First 1)
+    # uncommitted edit there is precisely what a reader must be told about. Same
+    # shipped-path test too, so a docs-only edit cannot mark a clean build.
+    $dirty = Get-SyncedDirtyEntry $clRepo
     if ($dirty) {
         $ClarityRef = $ClarityRef + '+dirty'
         Write-Warning ("clarity-engine has uncommitted changes; stamping '{$ClarityRef}' so " +
@@ -391,7 +507,14 @@ if (Test-Path $clRepo) {
 function Install-Prereqs {
     # One-time system packages: nginx + FPM. Run as the non-root user via sudo
     # (the VM user has passwordless sudo). Skipped when already present.
-    Write-Host '==> checking VM prerequisites (nginx, php8.3-fpm)...' -ForegroundColor Cyan
+    #
+    # The PHP packages are derived from -PhpFpm, not spelled out. This used to install
+    # php8.3-fpm unconditionally, so a run that asked for another version checked for a
+    # binary it was not going to use: either it found the pre-installed 8.3 and skipped
+    # the install the requested 8.5 actually needed, or it installed 8.3 and then
+    # measured a binary that was already there. One version, one place.
+    $phpSeries = if ($PhpFpm -match 'php-fpm(\d+\.\d+)$') { $Matches[1] } else { '8.3' }
+    Write-Host "==> checking VM prerequisites (nginx, php$phpSeries-fpm)..." -ForegroundColor Cyan
 
     # The payload MUST be LF-only before it reaches bash. On Windows the working
     # tree is CRLF (core.autocrlf=true), so this here-string is literally
@@ -409,9 +532,9 @@ function Install-Prereqs {
     # the final bytes. This mirrors deploy/*.sh and temp/*.sh, which are
     # likewise required to be LF-only.
     $remoteCmd = @"
-if ! command -v nginx >/dev/null || [ ! -x /usr/sbin/php-fpm8.3 ]; then
+if ! command -v nginx >/dev/null || [ ! -x /usr/sbin/php-fpm$phpSeries ]; then
   sudo -n apt-get update -qq
-  sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx php8.3-fpm php8.3-cli php8.3-sqlite3 php8.3-mbstring php8.3-curl
+  sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx php$phpSeries-fpm php$phpSeries-cli php$phpSeries-sqlite3 php$phpSeries-mbstring php$phpSeries-curl
 fi
 "@
     $remoteCmd = $remoteCmd -replace "`r`n", "`n"
@@ -421,12 +544,22 @@ fi
 
 function Invoke-RemoteRun {
     Install-Prereqs
+    # `~/bin` is NOT on PATH for a non-interactive ssh command: bash sources
+    # ~/.bashrc for interactive shells only, and ~/.profile only for LOGIN shells,
+    # while `ssh host "cmd"` is neither. On the bench VM both composer and rr live
+    # there, so the bare names used to fail with "command not found" (composer) and
+    # a missing vendor/bin/rr - and because neither step is fatal, the run went on
+    # to measure the PREVIOUSLY INSTALLED vendor tree. Prepending the directory once
+    # here fixes both, and every later ssh in this script inherits the same shape.
+    $homeBin = [char]36 + 'HOME/bin:'
     Write-Host "==> composer install on remote..." -ForegroundColor Cyan
-    ssh $SshTarget "cd $RemoteDir && composer install --no-interaction 2>&1 | tail -5"
+    ssh $SshTarget "export PATH=`"$homeBin`$PATH`"; cd $RemoteDir && composer install --no-interaction 2>&1 | tail -5"
     if ($LASTEXITCODE -ne 0) { throw 'composer install failed' }
 
+    # The RR binary lives in ~/bin on the VM (see run-http.php's $homeBinRr default),
+    # so it is addressed through the same PATH prefix rather than vendor/bin.
     Write-Host "==> fetching RoadRunner binary (rr)..." -ForegroundColor Cyan
-    ssh $SshTarget "cd $RemoteDir && test -x vendor/bin/rr || php vendor/spiral/roadrunner-cli/bin/rr get-binary 2>&1 | tail -3"
+    ssh $SshTarget "export PATH=`"$homeBin`$PATH`"; cd $RemoteDir && test -x `$HOME/bin/rr || php `$HOME/spiral/rr get-binary 2>&1 | tail -3; `$HOME/bin/rr --version | head -1"
 
     # The budget is stated, not inherited: the defaults live in run-http.php and
     # a silent default change must not silently change what a run measured.
@@ -445,6 +578,26 @@ function Invoke-RemoteRun {
     if ($MemOnly) { $budgetArgs = "--mem-only --mem-repeats=$MemRepeats" }
     $log = "$RemoteDir/bench-run.log"
 
+    # Install the JIT drop-in BEFORE the run starts.
+    #
+    # `opcache.jit` is PHP_INI_SYSTEM, so it cannot be set per FPM pool: the pool
+    # accepts `php_admin_value[opcache.jit]` silently and the worker still reports
+    # `disable` (verified 2026-11-11 by serving a request through the pool). Every
+    # SAPI the benchmark runs - fpm for nginx, cgi for volucer's spawn_cgi arm, cli
+    # for the RoadRunner/attach workers - therefore needs the setting in its own
+    # conf.d, which is what this does. Doing it here rather than by hand means a
+    # fresh VM, or a reimaged one, cannot silently measure without JIT while the
+    # dataset says otherwise: deploymentJit() probes the live interpreter, so a
+    # mismatch would show up as "JIT: off" in the published page rather than as a
+    # quietly different number.
+    Write-Host "==> installing JIT ini for fpm/cgi/cli..." -ForegroundColor Cyan
+    $jitIni = "opcache.jit=tracing`nopcache.jit_buffer_size=64M`n"
+    $jitB64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($jitIni))
+    $phpSeries = if ($PhpFpm -match 'php-fpm(\d+\.\d+)$') { $Matches[1] } else { '8.3' }
+    $installJit = "for s in fpm cgi cli; do sudo -n cp /tmp/bench-99-jit.ini /etc/php/$phpSeries/`$s/conf.d/99-jit.ini; done && sudo -n systemctl restart php$phpSeries-fpm"
+    ssh $SshTarget "echo '$jitB64' | base64 -d > /tmp/bench-99-jit.ini && $installJit && echo 'JIT ini installed'"
+    if ($LASTEXITCODE -ne 0) { throw 'could not install the JIT ini (opcache.jit is PHP_INI_SYSTEM, so the run would measure with JIT off)' }
+
     # State the measured build to the harness. The VM has no .git to read (see
     # Sync-Source), so without this the ref is unanswerable there and the dataset
     # would carry no build identity at all. Passed through env rather than as a
@@ -459,8 +612,23 @@ function Invoke-RemoteRun {
     }
 
     Write-Host "==> launching benchmark in tmux (log: bench-run.log, out: ${OutName}.json)..." -ForegroundColor Cyan
-    ssh $SshTarget "tmux kill-session -t bench 2>/dev/null; tmux new -d -s bench 'cd $RemoteDir && AZERA_FRAMEWORK_REF=$FrameworkRef php scripts/run-http.php --apps=$Apps --servers=$Servers $budgetArgs --out=$OutPrefix > bench-run.log 2>&1'"
+    # The tmux session detaches immediately, so a run-http.php that rejects its arguments
+    # (an unknown --servers value, a bad option) dies in the background and the launcher
+    # still prints "launched". What the operator then reads with -Status is the PREVIOUS
+    # invocation's log, which looks like a normal run of the wrong dataset. So the log is
+    # checked for a fatal before reporting success.
+    # PATH is prefixed for the same reason as composer/rr above: the tmux shell is
+    # a fresh non-interactive bash, so ~/bin is not on PATH there either.
+    $homeBin = [char]36 + 'HOME/bin:'
+    ssh $SshTarget "tmux kill-session -t bench 2>/dev/null; tmux new -d -s bench 'cd $RemoteDir && export PATH=`"$homeBin`$PATH`" && AZERA_FRAMEWORK_REF=$FrameworkRef php scripts/run-http.php --apps=$Apps --servers=$Servers --php-cli=$PhpCli --php-fpm=$PhpFpm $budgetArgs --out=$OutPrefix > bench-run.log 2>&1'"
     if ($LASTEXITCODE -ne 0) { throw 'tmux launch failed' }
+
+    Start-Sleep -Seconds 3
+    $early = ssh $SshTarget "cd $RemoteDir && grep -m1 -E '^\[run-http\]|Fatal error|^PHP Fatal' bench-run.log || true"
+    if ($early) {
+        throw ("run-http.php refused the run:`n" + ($early -join "`n") +
+            "`n`n(Arguments sent: --apps=$Apps --servers=$Servers $budgetArgs --out=$OutPrefix)")
+    }
     Write-Host '==> launched. Watch with: .\scripts\run-remote.ps1 -Status' -ForegroundColor Green
 }
 
@@ -543,8 +711,17 @@ function Get-Results {
 # argument expands or parses LOCALLY (this cost real debugging cycles on the
 # suite path).
 function Invoke-ViewEngineRun {
+    # `composer` is not on a non-interactive ssh PATH: it lives in ~/bin, which
+    # only a LOGIN shell adds. The suite path below learned this already and
+    # prefixes $HOME/bin; this one did not, so the whole mode died at the first
+    # command with "composer: command not found" after the payload was uploaded.
+    # The tmux line needs it too: tmux starts a fresh shell that inherits this
+    # environment, and without it the harness would run a VM tree whose vendor/
+    # was never refreshed for the commit that was just synced.
+    $homeBin = [char]36 + 'HOME/bin:'
+
     Write-Host '==> view-engine run: composer install on remote (needed for the adapters)...' -ForegroundColor Cyan
-    ssh $SshTarget "cd $RemoteDir && composer install --no-interaction 2>&1 | tail -5"
+    ssh $SshTarget "export PATH=`"$homeBin`$PATH`"; cd $RemoteDir && composer install --no-interaction 2>&1 | tail -5"
     if ($LASTEXITCODE -ne 0) { throw 'composer install failed' }
 
     # The dataset name carries the BUDGET as well as the date, because a figure
@@ -559,6 +736,12 @@ function Invoke-ViewEngineRun {
 #!/usr/bin/env bash
 set -euo pipefail
 cd "`$HOME/workspace/azera-competition"
+
+# `php` itself is on the system PATH, but nothing else this needs is: the
+# harness's own composer-adjacent tooling and any future helper in ~/bin would
+# not be found from a non-login shell. Stated here rather than inherited, so the
+# run does not depend on how tmux was started.
+export PATH="`$HOME/bin:`$PATH"
 
 export AZERA_FRAMEWORK_REF="$FrameworkRef"
 export CLARITY_ENGINE_REF="$ClarityRef"

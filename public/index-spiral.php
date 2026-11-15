@@ -88,7 +88,7 @@ $kernel->bootstrapped(static function () use (&$container, $kernel): void {
 
     // Boot complete: all bootloaders ran, the container is built. This
     // callback is the kernel's own boot-complete hook.
-    boot_probe_record('fpm', 'spiral');
+    boot_probe_record(bench_probe_kind(), 'spiral');
     mem_probe_arm('spiral');
 });
 

@@ -75,6 +75,17 @@ final class ResultStore
      */
     private array $bootSamplesByMode = [];
 
+    /**
+     * What kind of boot each band measured: app => mode => 'warm_recycle' |
+     * 'per_request_boot'. Stamped by the harness from the arm's probe
+     * transport (see bench-lib.php), so it is a MEASUREMENT, not a naming
+     * convention — which is why the accessors below prefer it to the mode
+     * string. Empty for datasets recorded before the stamp existed.
+     *
+     * @var array<string,array<string,?string>>
+     */
+    private array $bootKindByMode = [];
+
     /** @var list<string> */
     private array $apps = [];
 
@@ -194,6 +205,11 @@ final class ResultStore
                 $this->bootSamplesByMode[$key][(string) $modeName] = $s;
             }
         }
+        foreach (($app['boot_kind_by_mode'] ?? []) as $modeName => $kind) {
+            if (is_string($kind) && $kind !== '') {
+                $this->bootKindByMode[$key][(string) $modeName] = $kind;
+            }
+        }
         foreach (($app['modes'] ?? []) as $modeName => $mode) {
             foreach (($mode['requests'] ?? []) as $row) {
                 $this->data[$key][$modeName][(string) $row['request']] = $row;
@@ -223,6 +239,81 @@ final class ResultStore
     public function coldBootIncluded(): bool
     {
         return (bool) ($this->env['cold_boot_included'] ?? false);
+    }
+
+    /**
+     * The deployment MODEL a mode measures: 'warm' (one PHP process survives
+     * between requests) or 'cold' (the entry script re-runs for every
+     * request).
+     *
+     * This used to be decided by matching the mode NAME against
+     * `['warm', 'roadrunner']` / `['cold', 'php-fpm']`, repeated in about
+     * eighty places across the renderers. That was correct while the only two
+     * modes were those two, and it broke silently the moment a fourth name
+     * existed: `volucer-attach` is a resident worker and `volucer-cgi` boots
+     * per request, so a name-matching renderer would have drawn the cold arm
+     * with the resident memory chart and charged it the warm boot rule — a
+     * wrong page with a green run, no exception anywhere.
+     *
+     * The dataset already knows the answer: the harness stamps
+     * `boot_kind_by_mode` from each arm's probe TRANSPORT, which is the same
+     * fact that decides whether the boot lives inside the timed rows. So that
+     * stamp is read first and the name is only the fallback, for datasets
+     * recorded before it existed.
+     *
+     * 'warm' is the answer when NO app reports a kind for the mode: a dataset
+     * that says nothing about a mode has always been rendered as warm by
+     * name, and this keeps those renders byte-identical.
+     */
+    public function modeModel(string $mode): string
+    {
+        foreach ($this->bootKindByMode as $byMode) {
+            $kind = $byMode[$mode] ?? null;
+            if ($kind !== null) {
+                return $kind === 'per_request_boot' ? 'cold' : 'warm';
+            }
+        }
+
+        // Fallback: the historical name convention, widened by the names that
+        // have existed. A name this does not recognise is treated as warm,
+        // matching the pre-stamp behaviour.
+        return in_array($mode, ['cold', 'php-fpm', 'volucer-cgi'], true) ? 'cold' : 'warm';
+    }
+
+    /**
+     * Whether a mode boots the framework per request.
+     *
+     * Named because the three decisions that hinge on it — which transport the
+     * memory probe uses, whether a row carries boot_ms, and which prose a page
+     * prints — were each written as an inline `in_array($mode, ['cold',
+     * 'php-fpm'])` and had to be found and re-checked by hand every time an arm
+     * was added.
+     */
+    public function isPerRequestMode(string $mode): bool
+    {
+        return $this->modeModel($mode) === 'cold';
+    }
+
+    /**
+     * Whether a mode keeps one PHP process alive across requests.
+     */
+    public function isResidentMode(string $mode): bool
+    {
+        return $this->modeModel($mode) === 'warm';
+    }
+
+    /**
+     * The probe kind a mode's processes write, or null when the dataset does
+     * not record it (pre-stamp datasets).
+     *
+     * Distinct from modeModel(): the mode is the deployment MODEL (warm/cold),
+     * the kind is which probe FILES the arm wrote. They agree on the warm/cold
+     * question by construction, but a reader that needs the files wants these
+     * exact strings.
+     */
+    public function bootKind(string $app, string $mode): ?string
+    {
+        return $this->bootKindByMode[$app][$mode] ?? null;
     }
 
     /**
@@ -438,6 +529,87 @@ final class ResultStore
     }
 
     /**
+     * Does the measured pool for THIS mode recycle its worker, and does the
+     * dataset even say?
+     *
+     * The accessor every prose site should use. `rrRecycleModel()` reads
+     * `env.rr_max_jobs`, which is a RoadRunner setting: on a Volucer page it
+     * described recycling performed by a different mechanism, i.e. a claim about a
+     * knob the measured server does not read. The two values agreed only by
+     * coincidence — both 0 — so nothing caught it.
+     *
+     * Models:
+     *   'never'    — the worker is not recycled: one boot for the whole block, so
+     *                no request carries any of it.
+     *   'every'    — a recycle every N jobs, so each request carries boot/N.
+     *   'unknown'  — the dataset does not say for this mode. Prose must not claim a
+     *                model it cannot see; this is also what a pre-stamp dataset
+     *                returns, which is what keeps old renders unchanged.
+     *
+     * Residency is tested first and separately, so asking about a per-request arm
+     * answers 'unknown' here rather than borrowing the resident arm's knob.
+     */
+    public function modeRecycleModel(string $mode): string
+    {
+        if (!$this->isResidentMode($mode)) {
+            return 'unknown';
+        }
+
+        // The mode's own stamp wins when the harness recorded one.
+        $byMode = $this->env()['volucer_recycle_by_mode'][$mode] ?? null;
+        if (is_string($byMode) && $byMode !== '') {
+            return in_array($byMode, ['never', 'every'], true) ? $byMode : 'unknown';
+        }
+
+        return $this->rrRecycleModel();
+    }
+
+    /**
+     * How many jobs the pool serves between recycles, for the modes where the
+     * report divides a boot by it. 0 is "no limit" (never recycled).
+     */
+    public function modeRecycleJobs(string $mode): ?int
+    {
+        $model = $this->modeRecycleModel($mode);
+        if ($model === 'never') {
+            return 0;
+        }
+        if ($model === 'unknown') {
+            return null;
+        }
+
+        return $this->rrMaxJobs();
+    }
+
+    /**
+     * A short parenthetical naming the SETTING that keeps this mode's worker
+     * alive, for prose like "a pool that never recycles it (max_jobs=0)".
+     *
+     * The setting is named rather than described because it is checkable: a
+     * reader can find `max_jobs = 0` in the RoadRunner config template and
+     * `max_requests = 0` in Volucer's. A generic "is not recycled" phrase would be
+     * true but unfalsifiable, and it was previously spelled `max_jobs=0` on every
+     * page including Volucer's, where that key is never read.
+     */
+    public function recycleSettingLabel(string $mode): string
+    {
+        if (!$this->isResidentMode($mode)) {
+            // A per-request arm has no pool setting to name, and inventing one
+            // would describe a mechanism the measured server does not use.
+            return 'a fresh process per request';
+        }
+
+        if ($this->env()['volucer_recycle_by_mode'][$mode] ?? null) {
+            // `attach` has no interval to name: volucer holds its `workers`
+            // connections for the whole block, so the supervisor's first child
+            // serves every request.
+            return $mode === 'volucer-attach' ? 'one long-lived worker' : 'max_requests=0';
+        }
+
+        return 'max_jobs=0';
+    }
+
+    /**
      * Webserver-overhead probes present in the dataset:
      * app => ['mode' => .., 'request' => .., 'ms' => float]. Empty for every
      * dataset produced by the in-process harness.
@@ -564,14 +736,17 @@ final class ResultStore
     public function fpmBootMedian(string $app): ?float
     {
         $values = [];
-        foreach (['cold', 'php-fpm'] as $mode) {
+        foreach ($this->modes as $mode) {
+            if (!$this->isPerRequestMode($mode)) {
+                continue;
+            }
             foreach ($this->data[$app][$mode] ?? [] as $row) {
                 if (isset($row['boot_ms'])) {
                     $values[] = (float) $row['boot_ms'];
                 }
             }
             if ($values !== []) {
-                break; // a dataset never carries both names for the same side
+                break;
             }
         }
         if ($values === []) {
@@ -616,7 +791,7 @@ final class ResultStore
      */
     public function modeBootMs(string $app, string $mode): ?float
     {
-        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+        if ($this->isPerRequestMode($mode)) {
             $values = [];
             foreach ($this->data[$app][$mode] ?? [] as $row) {
                 if (isset($row['boot_ms'])) {
@@ -629,7 +804,7 @@ final class ResultStore
             sort($values);
             return $values[(int) floor((count($values) - 1) / 2)];
         }
-        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+        if ($this->isResidentMode($mode)) {
             $boot = $this->bootByMode[$app][$mode] ?? $this->boot[$app] ?? null;
             return $boot['warm_ms'] ?? null;
         }
@@ -680,7 +855,7 @@ final class ResultStore
      */
     private function bootAddOn(string $app, string $mode): float
     {
-        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+        if ($this->isPerRequestMode($mode)) {
             return 0.0;
         }
         $warm = $this->modeBootMs($app, $mode);
@@ -700,7 +875,13 @@ final class ResultStore
         //          boot/N. This is the case the boot-add was written for.
         //   null — un-stamped (pre-existing) datasets: keep the historical
         //          per-request behaviour so old renders do not silently move.
-        $jobs = $this->rrMaxJobs();
+        //
+        // The knob comes from modeRecycleJobs(), which reads the setting the
+        // MEASURED server actually uses: `max_jobs` is RoadRunner's, `max_requests`
+        // is Volucer's, and `attach` recycles per connection (one request) rather
+        // than on a schedule. Reading $this->rrMaxJobs() directly charged every
+        // Volucer resident row a boot according to a RoadRunner setting.
+        $jobs = $this->modeRecycleJobs($mode);
         if ($jobs === 0) {
             return 0.0;
         }

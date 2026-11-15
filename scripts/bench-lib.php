@@ -9,6 +9,27 @@ declare(strict_types=1);
  * generator.
  */
 
+/**
+ * Whether an arm answers the memory probe in RESPONSE HEADERS.
+ *
+ * The split is the deployment MODEL, not the server's name: an arm whose PHP process
+ * stays alive can be asked at any time, and one that re-runs its entry script per
+ * request can only write a file.
+ *
+ *   true  — rr, volucer, volucer-attach   (resident worker)
+ *   false — fpm, volucer-cgi              (per-request boot)
+ *
+ * It lives HERE rather than in http-bench.php because three separate decisions read it
+ * and they must not disagree: which transport the memory probe uses, which file the
+ * boot probe reads, and whether a row carries boot_ms. A mismatch is silent — the arm
+ * reads an empty or stale file and reports zeros that look like a measurement of "this
+ * framework uses no memory".
+ */
+function probeUsesHeaders(string $probeKind): bool
+{
+    return $probeKind === 'rr' || $probeKind === 'volucer';
+}
+
 // --- Stats (mirrors run.php) -------------------------------------------------
 
 function stats(array $values): array
@@ -131,13 +152,22 @@ function parseRequestsArg(?string $raw): array
         ? array_map('trim', explode(',', $raw))
         : [
             'GET /',
+            // The framework floor, kept beside `GET /` — the two are read together
+            // (what a template render costs is this minus that).
+            'GET /echo',
             'GET /items',
+            // GET /items with row hydration off: the single-variable control for
+            // /items. Must stay in step with run.php's list, which is the same set
+            // for the in-process harness; a real-deployment dataset missing these
+            // two cannot be compared with the in-process one.
+            'GET /items-fast',
             'GET /items/1',
             'POST /items',
             'GET /items-qb',
             'GET /items-qb/1',
             'POST /items-qb',
             'GET /api/items',
+            'GET /api/items-fast',
             'GET /api/items/1',
             'POST /api/items',
             'GET /features/aop',
@@ -631,9 +661,19 @@ function writeHttpResults(
     int $runs,
     array $measured,
     ?array $boot = null,
+    string $probeKind = '',
 ): void {
     if ($outJsonPath === null) {
         return;
+    }
+
+    // The probe kind decides whether this arm's boot sits inside its timed rows, so it
+    // cannot be inferred here from $server: a name-to-kind rule would be a THIRD copy of
+    // the mapping (http-bench.php and run-http.php each own one) and the copies are
+    // exactly what must not drift. Callers pass it; an empty value falls back to the
+    // historical assumption so an older caller keeps working.
+    if ($probeKind === '') {
+        $probeKind = $server === 'rr' ? 'rr' : 'fpm';
     }
 
     $payload = [
@@ -657,16 +697,28 @@ function writeHttpResults(
     //              anything, so this boot is NOT inside the timed rows; it is
     //              the cost of re-initialising the framework in a warm process.
     //
+    // The test is whether the arm holds a RESIDENT worker — the same question
+    // probeUsesHeaders() answers — NOT the server's name. `volucer` and
+    // `volucer-attach` boot once before serving, so their boot is not inside the timed
+    // rows either; only `volucer-cgi` re-boots per request, like FPM. Getting this
+    // wrong fails nothing: it silently tells the report to charge a resident arm's boot
+    // to every row.
+    //
     // Both fields carry the measured median because a real dataset has exactly
     // ONE kind of boot: whichever band a view looks for must find a number
     // rather than render blank. Which kind it actually is gets recorded in
     // boot_kind, and the report picks its band label and prose from that
     // (MarkdownReport::bootChart) instead of guessing from the field name.
+    // Recorded UNCONDITIONALLY, not only when a boot block exists. Without a sample the
+    // report still needs to know whether this arm's boot belongs inside its timed rows —
+    // and the absent-samples case is exactly when it is most likely to guess wrong. The
+    // orchestrator forwards it to boot_kind_by_mode, where merge-boot.php already reads it.
+    $payload['boot_kind'] = probeUsesHeaders($probeKind) ? 'warm_recycle' : 'per_request_boot';
+
     if ($boot !== null) {
         $median = (float) $boot['median'];
         $payload['boot']         = ['cold_ms' => $median, 'warm_ms' => $median];
         $payload['boot_samples'] = $boot;
-        $payload['boot_kind']    = ($server === 'rr') ? 'warm_recycle' : 'per_request_boot';
     }
 
     $dir = dirname($outJsonPath);

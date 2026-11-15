@@ -40,8 +40,10 @@ declare(strict_types=1);
  *   view-engine.csv         the dataset, copied next to the page it describes
  */
 
+require_once __DIR__ . '/report/Provenance.php';
 require_once __DIR__ . '/report/SvgChart.php';
 
+use AzeraCompetition\Report\Provenance;
 use AzeraCompetition\Report\SvgChart;
 
 // -----------------------------------------------------------------------------
@@ -637,10 +639,23 @@ function veEnvBlock(array $env, array $rows): string
     }
 
     $lines = [];
+    // The JIT clause is APPENDED to the Environment line rather than given a line
+    // of its own: it describes the same interpreter the PHP version does, and a
+    // reader scanning for "which PHP ran this" wants the pair together. It is
+    // empty for a dataset that did not record the JIT — "not recorded" is not
+    // "off", so such a dataset must not be given the clause.
+    $jit = Provenance::jitClause($env);
+    // The Clarity revalidate window rides alongside it for the same reason, and
+    // because it is a measurement condition that moves Clarity's bar without
+    // being visible in any other engine's row. Same shared renderer as the
+    // product page's footnote, so the two cannot word one run differently.
+    $revalidate = Provenance::clarityRevalidateClause($env);
     $lines[] = '**Environment** — PHP ' . (string) ($env['php_version'] ?? '?')
         . ' · ' . (string) ($env['os'] ?? '?')
         . ' · SAPI ' . (string) ($env['sapi'] ?? '?')
-        . ' · OPcache (`opcache.enable_cli`): ' . (($env['opcache'] ?? false) ? 'yes' : 'no');
+        . ' · OPcache (`opcache.enable_cli`): ' . (($env['opcache'] ?? false) ? 'yes' : 'no')
+        . ($jit !== '' ? ' · ' . $jit : '')
+        . ($revalidate !== '' ? ' · ' . $revalidate : '');
     $lines[] = '**Budget** — ' . $budget;
 
     // HOW the numbers were produced, not just what they measure. Three figures on

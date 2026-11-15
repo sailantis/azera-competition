@@ -76,7 +76,7 @@ try {
     $kernel->boot();
 
     // Boot complete: kernel booted (container + bundles + bundles' extensions).
-    boot_probe_record('fpm', 'symfony');
+    boot_probe_record(bench_probe_kind(), 'symfony');
     mem_probe_arm('symfony');
 
     $request  = Symfony\Component\HttpFoundation\Request::createFromGlobals();

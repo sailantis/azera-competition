@@ -18,6 +18,20 @@ use Azera\Http\Response;
 class BenchController extends Controller
 {
     /**
+     * GET /echo — a constant handler through the whole HTTP path.
+     *
+     * The framework floor: routed and dispatched through the same router, the same
+     * two global middlewares and the same controller instantiation as every other
+     * endpoint here, then it does nothing but return three bytes. Everything `/`
+     * costs above this is template work, and everything this costs above the
+     * `hello` app's route-less `/api/hello` is the framework.
+     */
+    public function echoAction(): Response
+    {
+        return Response::text('bench');
+    }
+
+    /**
      * GET / — welcome page via Clarity template (no DB, just routing + middleware + template render).
      */
     public function indexAction(): Response

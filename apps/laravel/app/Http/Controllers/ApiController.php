@@ -32,6 +32,28 @@ class ApiController
     }
 
     /**
+     * GET /api/items-fast — the same JSON as {@see index()}, without hydration.
+     *
+     * Identical in every other respect: same model, same `items` table, same
+     * builder, same SELECT, same serializer. Only the terminal differs —
+     * `toBase()` returns the query builder's plain `stdClass` rows instead of
+     * letting Eloquent's `get()` run them through `$this->model->hydrate()`.
+     *
+     * Verified byte-identical JSON against {@see index()}, so the difference
+     * between the two routes is hydration and only hydration.
+     */
+    public function indexFast(): JsonResponse
+    {
+        $items = Item::query()
+            ->orderBy('id')
+            ->limit(20)
+            ->toBase()
+            ->get();
+
+        return response()->json($items);
+    }
+
+    /**
      * GET /api/items/{id} — fetch a single item as a JSON object.
      *
      * NOTE: route params arrive as strings; the signature takes string and

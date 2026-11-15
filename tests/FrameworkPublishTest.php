@@ -34,10 +34,18 @@ use PHPUnit\Framework\TestCase;
  */
 final class FrameworkPublishTest extends TestCase
 {
-    /** How the framework docs refer to the two pages. */
+    /** How the framework docs refer to the published pages. */
     private const EXPECTED_FILES = [
-        'summary-roadrunner' => '19-BENCHMARKS-SUMMARY-ROADRUNNER.md',
-        'summary-fpm'        => '19-BENCHMARKS-SUMMARY-FPM.md',
+        'summary-fpm'     => '19-BENCHMARKS-SUMMARY-FPM.md',
+        // The resident model, on the framework's own server tool.
+        //
+        // `summary-roadrunner` is deliberately ABSENT: it stopped publishing on
+        // 2026-11-10, so the framework's docs carry one page per deployment model
+        // instead of two pages for the resident one. RoadRunner is still a
+        // measured entrant and still has a page on the benchmark site — see the
+        // view's own comment in views.php for why the pair stopped being
+        // published together.
+        'summary-volucer' => '19-BENCHMARKS-SUMMARY-VOLUCER.md',
     ];
 
     /** @return array<string,array<string,mixed>> */
@@ -126,7 +134,12 @@ final class FrameworkPublishTest extends TestCase
     public function testASummaryIsAStrictSubsetOfItsFullView(): void
     {
         $manifest  = self::manifest();
-        $pairs     = ['summary-roadrunner' => 'real-roadrunner', 'summary-fpm' => 'real-fpm'];
+        // Only PUBLISHING summaries need this check: it exists to stop a page that
+        // reaches the framework's docs from being a duplicate of the full view.
+        // summary-roadrunner still draws the same subset but is no longer
+        // published, and asserting on it would keep a page in the test's
+        // expectations that the docs no longer carry.
+        $pairs     = ['summary-fpm' => 'real-fpm', 'summary-volucer' => 'real-volucer-attach'];
         $canonical = \AzeraCompetition\Report\BenchmarkConfig::featureOrder();
 
         foreach ($pairs as $summary => $full) {
@@ -408,9 +421,11 @@ final class FrameworkPublishTest extends TestCase
             'every declared link must be printed, and nothing else'
         );
 
-        // ...and the cross-link between the two models exists, so neither page
-        // is a dead end.
-        self::assertStringContainsString('view-summary-roadrunner.html', $md);
+        // ...and the cross-link between the models exists, so neither page
+        // is a dead end. Updated when summary-roadrunner stopped publishing: the
+        // resident/per-request pairing is now FPM <-> Volucer, which is the pair
+        // the framework's docs actually carry.
+        self::assertStringContainsString('view-summary-volucer.html', $md);
     }
 
     /**

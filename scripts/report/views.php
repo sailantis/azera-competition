@@ -46,7 +46,12 @@ return [
         // constant webserver overhead is INCLUDED in every number; the
         // floor-* pseudo-apps in the dataset expose that overhead explicitly.
         'real-deployments' => [
-            'label' => 'Real deployments — RoadRunner + nginx/FPM on the benchmark VM (HTTP over loopback)',
+            // All four servers as of the 2026-11-10 run, which measured
+            // RoadRunner, nginx/PHP-FPM and BOTH Volucer arms in one pass. The
+            // Volucer views read this same file rather than a separate partial
+            // run: a second dataset carrying the same apps invites two pages that
+            // silently render different numbers from each other.
+            'label' => 'Real deployments — RoadRunner + nginx/FPM + Volucer on the benchmark VM (HTTP over loopback)',
             'file'  => $root . '/results/real-deployments.json',
         ],
     ],
@@ -165,6 +170,43 @@ return [
             'charts' => ['hero', 'speedup', 'features', 'resident-memory'],
         ],
 
+        // --- Volucer ------------------------------------------------------
+        //
+        // Two pages, one per deployment model, published the same way the
+        // RoadRunner and FPM pages are. They exist because the two models are the
+        // two answers a reader actually chooses between, and because Volucer is a
+        // third server implementing them: a model that only ever showed up in
+        // RoadRunner and FPM is a claim about those two implementations.
+        //
+        // The app lists are deliberately ABSENT: render() intersects a view's
+        // `apps` with what the dataset actually carries, so naming them here would
+        // pin a run's app set into a page that must also render a later, fuller
+        // run. An empty intersection would render a page of dashes, which reads as
+        // "these frameworks failed" rather than "this run did not measure them".
+        'real-volucer-attach' => [
+            'title'     => 'Framework Competition — Volucer (attach)',
+            'subtitle'  => 'Volucer\'s `attach` backend: the framework boots ONCE, in a supervisor the deployment owns, and every request is served from that already-built state. `deploy/volucer/attach.php` listens on a unix relay and forks a child per connection; volucer dials it. End-to-end HTTP over loopback — includes the constant webserver overhead; framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker\'s boot depends on the pool\'s max_jobs, which the dataset records.',
+            'dataset'   => 'real-deployments',
+            'baseline'  => 'azera',
+            'mode'      => 'volucer-attach',
+            'log_scale' => false,
+            'charts'    => ['hero', 'speedup', 'features', 'resident-memory'],
+        ],
+
+        'real-volucer-cgi' => [
+            'title'     => 'Framework Competition — Volucer (spawn_cgi)',
+            'subtitle'  => 'Volucer\'s `spawn_cgi` backend: volucer runs the app\'s entry script through a fresh `php-cgi` for every request, so the framework\'s boot is inside the request clock — the same shape as nginx + PHP-FPM, in a different server. The php-cgi pool is reached over a unix socket, not loopback TCP, so this arm differs from the FPM arm by its SERVER and never by its transport. End-to-end HTTP over loopback — includes the constant webserver overhead. Single sequential client.',
+            'dataset'   => 'real-deployments',
+            'baseline'  => 'azera',
+            'mode'      => 'volucer-cgi',
+            'log_scale' => false,
+            // No 'resident-memory': this model has no resident state to report.
+            // Each request gets its own process, so a "retained heap" chart would
+            // describe something that does not exist (see the same reasoning on
+            // the cold-start view).
+            'charts'    => ['hero', 'speedup', 'features'],
+        ],
+
         // --- Published summaries ------------------------------------------
         //
         // These two are the ONLY views that publish, and each is a strict
@@ -198,6 +240,20 @@ return [
         // same .md is written to this repo's docs/benchmarks and to the framework
         // repo's docs/, so a relative path would resolve in one and dangle in the
         // other.
+        // NOT PUBLISHED, and that is a deliberate decision rather than an
+        // oversight (2026-11-10): the framework's docs carry the Volucer summary
+        // for the resident model and the FPM summary for the per-request one, and
+        // RoadRunner remains an ENTRANT in the full report. Publishing a
+        // RoadRunner summary beside Volucer's would put the framework's own
+        // server tool in the position of comparing itself to a rival in the
+        // framework's own docs, which is not a comparison a reader can be
+        // expected to read as neutral. The page still exists on the benchmark
+        // site, where all four servers are presented as measurements.
+        //
+        // What keeps this honest: the removal is a `publish` change ONLY. The
+        // data stays, so every RoadRunner row is still measured and still appears
+        // in the full report — and the Volucer summary's agreement with it stays
+        // checkable at https://sailantis.github.io/azera-competition/benchmarks/.
         'summary-roadrunner' => [
             'title'     => 'Framework Competition — RoadRunner Summary',
             'subtitle'  => 'The headline numbers from the measured RoadRunner deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and the worker memory that survives a request. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-rr in the dataset). The deployment model actually measured is stated with the table.',
@@ -218,10 +274,9 @@ return [
             'links'        => [
                 'The complete report (all six frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
                 'This model, measured end to end'                               => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-roadrunner.html',
+                'The same model in Volucer'                                     => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-volucer.html',
                 'The PHP-FPM summary'                                           => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-fpm.html',
             ],
-            'publish'    => ['framework'],
-            'publish_md' => '19-BENCHMARKS-SUMMARY-ROADRUNNER.md',
         ],
 
         'summary-fpm' => [
@@ -232,18 +287,51 @@ return [
             'mode'      => 'php-fpm',
             'log_scale' => false,
             'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
-            // Same narrowing as the RoadRunner summary: the plain routing race
-            // first (the endpoint the dropped startup chart measured), then the
-            // two data-access races.
+            // The plain routing race first (the endpoint the dropped startup
+            // chart measured), then the two data-access races.
             'charts'       => ['speedup', 'features', 'resident-memory'],
             'feature_keys' => ['routing', 'orm', 'rest-api'],
             'links'        => [
                 'The complete report (all six frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
                 'This model, measured end to end'                               => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-fpm.html',
-                'The RoadRunner summary'                                        => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-roadrunner.html',
+                'The same work as a resident worker (Volucer)'                  => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-volucer.html',
             ],
             'publish'    => ['framework'],
             'publish_md' => '19-BENCHMARKS-SUMMARY-FPM.md',
+        ],
+
+        // The resident model, on the framework's own server tool.
+        //
+        // This is the page the framework's docs publish for the resident model,
+        // so it is also the page that has to stand alone: it no longer sits beside
+        // a RoadRunner summary (that page stopped publishing on 2026-11-10), and
+        // nothing here should imply a comparison the docs do not carry.
+        //
+        // The independent confirmation still exists and is still worth pointing at
+        // — RoadRunner remains a measured entrant, and its numbers land within
+        // 1.8% on azera / 5.4% at worst across the six frameworks. That is what
+        // makes the finding about the deployment MODEL rather than about one
+        // server, and it is checkable in the full report, which is where a reader
+        // who wants to verify a benchmark should end up anyway.
+        'summary-volucer' => [
+            'title'     => 'Framework Competition — Volucer Summary',
+            'subtitle'  => 'The headline numbers from the measured Volucer deployment. Volucer runs the app as a resident worker under a supervisor the deployment owns: the framework boots ONCE, before the supervisor forks, and every request is served from that already-built state. End-to-end HTTP over loopback, so the constant webserver overhead is included.',
+            'dataset'   => 'real-deployments',
+            'baseline'  => 'azera',
+            'mode'      => 'volucer-attach',
+            'log_scale' => false,
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            // Same narrowing as the other summaries, so the pages are read the
+            // same way.
+            'charts'       => ['speedup', 'features', 'resident-memory'],
+            'feature_keys' => ['routing', 'orm', 'rest-api'],
+            'links'        => [
+                'The complete report (all six frameworks, every deployment model)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
+                'This model, measured end to end'                                  => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-volucer-attach.html',
+                'The per-request model (PHP-FPM)'                                  => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-fpm.html',
+            ],
+            'publish'    => ['framework'],
+            'publish_md' => '19-BENCHMARKS-SUMMARY-VOLUCER.md',
         ],
     ],
 

@@ -165,7 +165,7 @@ $app = new BenchApp($root . 'apps' . DIRECTORY_SEPARATOR . 'cakephp' . DIRECTORY
 $app->routes(\Cake\Routing\Router::createRouteBuilder('/'));
 $app->getContainer();
 
-boot_probe_record('fpm', 'cakephp');
+boot_probe_record(bench_probe_kind(), 'cakephp');
 mem_probe_arm('cakephp');
 
 try {

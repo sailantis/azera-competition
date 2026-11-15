@@ -40,6 +40,30 @@ class ApiController extends AbstractController
     }
 
     /**
+     * GET /api/items-fast — the same JSON as {@see index()}, without hydration.
+     *
+     * Identical in every other respect: same entity manager, same entity, same
+     * DQL, same limit, same serializer. Only the terminal differs —
+     * `getArrayResult()` returns scalar rows instead of letting the ORM
+     * instantiate and register one entity per row.
+     *
+     * Verified byte-identical JSON against {@see index()}, so the difference
+     * between the two routes is hydration and only hydration.
+     */
+    public function indexFast(): JsonResponse
+    {
+        $items = $this->em->createQueryBuilder()
+            ->select('i')
+            ->from(Item::class, 'i')
+            ->orderBy('i.id', 'ASC')
+            ->setMaxResults(20)
+            ->getQuery()
+            ->getArrayResult();
+
+        return $this->json(\array_map(self::serializeRow(...), $items));
+    }
+
+    /**
      * GET /api/items/{id} — fetch a single item as a JSON object.
      */
     public function show(int $id): JsonResponse
@@ -90,6 +114,26 @@ class ApiController extends AbstractController
             'id'         => $item->id,
             'title'      => $item->title,
             'created_at' => $item->created_at,
+        ];
+    }
+
+    /**
+     * Serialize a scalar row as returned by Doctrine's getArrayResult().
+     *
+     * getArrayResult() yields plain arrays, so the unhydrated route needs its
+     * own shape reader. Selecting the three columns explicitly keeps the keys
+     * identical to serialize().
+     *
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed>
+     */
+    private static function serializeRow(array $row): array
+    {
+        return [
+            'id'         => $row['id'],
+            'title'      => $row['title'],
+            'created_at' => $row['created_at'],
         ];
     }
 }

@@ -535,6 +535,14 @@ PHP);
 
         $stamped = $store->env()['frameworks'];
         foreach ($stamped as $app => $entry) {
+            if ($app === 'azera' && ($entry['ref'] ?? '') !== '') {
+                // Azera's `version` is the Composer BRANCH (`dev-main`), which
+                // names no build, so the page prints the REF INSTEAD — see
+                // MarkdownReport::frameworkLabel(). Asserting the branch is
+                // present would pin the bug: `dev-main (377d0f6+dirty)` made a
+                // reader reconcile two labels for one build.
+                continue;
+            }
             self::assertStringContainsString(
                 BenchmarkConfig::appLabel($app) . ' ' . $entry['version'],
                 $md,
@@ -552,6 +560,49 @@ PHP);
                 "the page must print azera's git ref"
             );
         }
+    }
+
+    /**
+     * The Azera ref REPLACES the Composer branch, it does not annotate it.
+     *
+     * Azera is consumed through a Composer `path` repository, so its recorded
+     * `version` is the branch — `dev-main` — no matter which release is
+     * installed. Publishing `Azera dev-main (377d0f6+dirty)` asked a reader to
+     * reconcile two names for one build, and the branch half is the one that
+     * cannot be checked out. With a ref present the page prints the ref alone;
+     * the branch must not survive anywhere a reader can see it, including the
+     * chart footers, which travel detached from the page.
+     */
+    public function testTheAzeraRefReplacesTheComposerBranch(): void
+    {
+        $manifest = self::manifest();
+        $store    = self::store();
+        self::assertNotEmpty(
+            $store->env()['frameworks']['azera']['ref'] ?? null,
+            'this test needs a dataset that stamps a ref'
+        );
+
+        $md = (new MarkdownReport($store, 'real-fpm', $manifest['views']['real-fpm']))
+            ->render(sys_get_temp_dir() . '/tmp-ver-branch', 'svg/real-fpm');
+
+        self::assertStringNotContainsString(
+            'Azera dev-main',
+            $md,
+            'the page must not print the Composer branch next to a real ref'
+        );
+
+        // The chart footer is asserted through the rendered SVG, because it is
+        // the copy that travels alone and the one that went unnoticed. The
+        // renderer's second argument is the IMAGE-LINK prefix used inside the
+        // Markdown, not an output directory, so charts land beside the .md.
+        $svg = (string) @file_get_contents(sys_get_temp_dir() . '/tmp-ver-branch/speedup.svg');
+        self::assertNotSame('', $svg, 'the speedup chart must have been written');
+        self::assertStringNotContainsString('Azera dev-main', $svg);
+        self::assertStringContainsString(
+            (string) $store->env()['frameworks']['azera']['ref'],
+            $svg,
+            'the detached chart must still name the build it measured'
+        );
     }
 
     /**

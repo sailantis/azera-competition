@@ -1,0 +1,60 @@
+# volucer configuration for the benchmark apps - the `attach` backend.
+#
+# This is the arm where the DEPLOYMENT owns the worker processes. `deploy/volucer/
+# attach.php` is the supervisor: it listens on the relay below and forks a child per
+# accepted connection, and volucer is the CLIENT - it dials the relay `workers` times
+# and holds each connection for the life of a slot.
+#
+# That inversion is why scripts/deploy-lib.php must start attach.php BEFORE volucer.
+#
+# The other Volucer arm in the dataset is spawn-cgi.template.toml, which boots the
+# framework per request. Volucer's third backend, `worker` (volucer spawns the PHP
+# process itself), is runnable by hand via pool.template.toml + worker.php but is NOT
+# part of the benchmark dataset: it is resident like this arm, boots the same shared
+# handler, and would only add a second row measuring the same thing.
+#
+# `unix:` rather than `host:port` is not a preference. Volucer's own configuration
+# reference measures a loopback TCP relay at 38.96 ms per request against 0.06 ms for
+# the same protocol, because a frame is a header write followed by a payload write and
+# Nagle holds the second until the first is acknowledged. An AF_UNIX socket has no
+# Nagle to disable, so the relay costs nothing measurable and the arm stays a
+# measurement of the application.
+
+[server]
+default_backend = "app"
+http = "127.0.0.1:{{PORT}}"
+document_root = "{{ROOT}}/public"
+front_controller = "index-{{APP}}.php"
+
+# Off for the same comparability reason as the other two templates, and written as a
+# TABLE because `static_files` is a struct: `static_files = false` would be silently
+# ignored. No other arm consults a document root, so leaving it on would give this one
+# a stat per request that nothing else performs.
+[server.static_files]
+enabled = false
+
+[backends.app]
+kind = "attach"
+
+# The relay attach.php listens on. The supervisor reads the SAME address from
+# VOLUCER_RELAY_SOCKET, so the deployment states it once; naming it here as well is
+# deliberate, because a file that names its relay must mean exactly what it says and
+# not be movable by a stale variable in an operator's shell.
+relay = "{{RELAY_ADDRESS}}"
+
+# How many connections to hold, i.e. how many requests can be in flight. It must match
+# the number of children the supervisor can serve: 0 is refused by volucer here (unlike
+# `worker`'s `workers = 0`, which means "one per CPU"), because a number that differs
+# from what the supervisor forked leaves children unused or requests queued behind
+# connections with no child to answer them.
+#
+# 1, for the reason every other arm is 1: the client is a single sequential HTTP loop,
+# so a second connection would be idle, and the benchmark app writes to SQLite, where a
+# second concurrent writer turns the measurement into a lock-contention study.
+workers = 1
+
+# 0 = never recycle, like `pm.max_requests = 0` in the FPM pool and `max_jobs = 0` in
+# the RoadRunner config. Recycling is cheap here (a reconnect plus handshake, no
+# framework boot) but it would still put a different amount of connection setup into
+# each row than the other arms carry.
+max_requests = 0

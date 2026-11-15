@@ -223,6 +223,65 @@ function declaredVersion(string $composerJson): ?string
     return is_string($version) && $version !== '' ? $version : null;
 }
 
+/**
+ * The version AND source reference of the volucer PHP worker SDK, as one string.
+ *
+ * The Rust binary and the PHP worker are two builds with two identities, and a volucer
+ * measurement is only reproducible when both are named. `volucer version` answers for
+ * the binary; nothing on the command line answers for the SDK, so it is read from
+ * Composer's own record of what it installed.
+ *
+ * The REF is half the answer and is the half that is easy to lose. A path-repo install
+ * records `dev-main` with a null reference, so the dataset would name a version that
+ * exists in no tag while the code that ran is some checkout — which is exactly why this
+ * repository pins the published release instead of using a sibling path repo. The ref is
+ * appended only when Composer recorded one; `v0.4.1@eb05fb47` is a claim that can be
+ * checked out, `v0.4.1` on its own is not a build.
+ *
+ * Returns 'unknown' rather than an empty string: a missing stamp must be visible in the
+ * dataset, and an empty cell in a published table reads as "not applicable".
+ */
+function volucerWorkerVersion(string $root): string
+{
+    $file = $root . '/vendor/composer/installed.json';
+    $json = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+
+    if (is_array($json)) {
+        // Composer 2 wraps the list as {"packages": [...]}; Composer 1 writes a bare
+        // array. Both shapes occur, and the same two are handled in installedVersions().
+        foreach (($json['packages'] ?? $json) as $pkg) {
+            if (!is_array($pkg) || ($pkg['name'] ?? null) !== 'sailantis/volucer-worker') {
+                continue;
+            }
+            $version = normaliseVersion((string) ($pkg['version'] ?? ''));
+            if ($version === null || $version === '') {
+                return 'unknown';
+            }
+            $ref = (string) ($pkg['source']['reference'] ?? $pkg['dist']['reference'] ?? '');
+
+            return $ref === '' ? $version : $version . '@' . substr($ref, 0, 8);
+        }
+    }
+
+    // No vendor tree (a fresh checkout rendering an old dataset): the lock still records
+    // what a `composer install` would resolve, which is the next best answer.
+    $lock = $root . '/composer.lock';
+    $json = is_file($lock) ? json_decode((string) file_get_contents($lock), true) : null;
+    foreach ((is_array($json) ? ($json['packages'] ?? []) : []) as $pkg) {
+        if (!is_array($pkg) || ($pkg['name'] ?? null) !== 'sailantis/volucer-worker') {
+            continue;
+        }
+        $version = normaliseVersion((string) ($pkg['version'] ?? ''));
+        $ref     = (string) ($pkg['source']['reference'] ?? $pkg['dist']['reference'] ?? '');
+
+        return $version === null || $version === ''
+            ? 'unknown'
+            : ($ref === '' ? $version : $version . '@' . substr($ref, 0, 8));
+    }
+
+    return 'unknown';
+}
+
 if (!function_exists('azeraFrameworkRef')) {
     /**
      * Git ref of the azera-framework build that was measured.

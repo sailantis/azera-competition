@@ -10,15 +10,20 @@
 #
 # The four arms, ordered from most to least warm:
 #
-#   S-W  volucer + resident worker    framework booted ONCE, then N requests
-#   S-C  volucer + spawn_cgi          framework booted PER REQUEST (full CGI reset)
-#   FPM  nginx + php-fpm                framework booted PER REQUEST (the reference arm)
-#   RR   RoadRunner + resident worker    framework booted ONCE
+#   S-W  volucer + attach supervisor     framework booted ONCE, then N requests
+#   S-C  volucer + spawn_cgi             framework booted PER REQUEST (full CGI reset)
+#   FPM  nginx + php-fpm                 framework booted PER REQUEST (the reference arm)
+#   RR   RoadRunner + resident worker      framework booted ONCE
 #
 # S-W and RR are the same model in two servers; S-C and FPM are the same model in two
 # servers. So the cold-versus-warm ratio appears TWICE, independently, and the two
 # server ecosystems have to agree for the finding to be about the model rather than
 # about one implementation.
+#
+# S-W uses volucer's `attach` backend, where attach.php supervises its own prefork
+# children and volucer dials their relay. Volucer's third backend, `worker` (volucer
+# spawns the PHP process), is also warm but is not used here: it measures the same
+# model as `attach` and differs only in who owns the process.
 #
 # Endpoints are chosen for contrast, not for comprehensiveness:
 #   GET /        the cheapest route that still builds the container
@@ -45,6 +50,7 @@ APPS="${APPS:-azera}"
 CONC="${CONC:-1,4,8}"
 DUR="${DUR:-5s}"
 PHP_CGI="$(command -v php-cgi)"
+PHP_CLI="$(command -v php)"
 
 mkdir -p "$RUNDIR"
 cd "$RUNDIR" || exit 1
@@ -105,6 +111,22 @@ WRAPPER
 chmod +x "$PHP_CGI_WRAPPER"
 
 PID=""
+SUP_PID=""
+
+# The attach arm's supervisor must be up BEFORE volucer starts: volucer DIALS the relay
+# `workers` times at startup and fails its whole backend if nothing is listening yet.
+start_supervisor() {
+    local relay="$1" tag="$2"
+    ( cd "$ROOT" && BENCH_APP="$APP" VOLUCER_SDK="$SDK" VOLUCER_RELAY_SOCKET="$relay" \
+        "$PHP_CLI" deploy/volucer/attach.php >"$RUNDIR/supervisor-$tag.log" 2>&1 ) &
+    SUP_PID=$!
+    for _ in $(seq 1 80); do
+        [ -S "${relay#unix:}" ] && return 0
+        sleep 0.25
+    done
+    return 1
+}
+
 start_volucer() {
     "$BIN" serve -c "$1" >"$RUNDIR/server-$2.log" 2>&1 &
     PID=$!
@@ -113,6 +135,9 @@ stop_volucer() {
     [ -n "$PID" ] && kill "$PID" 2>/dev/null
     [ -n "$PID" ] && wait "$PID" 2>/dev/null
     PID=""
+    [ -n "$SUP_PID" ] && kill "$SUP_PID" 2>/dev/null
+    [ -n "$SUP_PID" ] && wait "$SUP_PID" 2>/dev/null
+    SUP_PID=""
 }
 RR_PID=""
 stop_rr() {
@@ -138,11 +163,9 @@ echo "  php-cgi (fair wrapper): $("$PHP_CGI_WRAPPER" -i 2>/dev/null | grep -m1 '
 echo
 
 BASE=18200
-VOLUCER_POOL_PORT=$((BASE + 0))
+VOLUCER_ATTACH_PORT=$((BASE + 0))
 VOLUCER_CGI_PORT=$((BASE + 1))
 RR_PORT=$((BASE + 2))
-# php-cgi's pool binds its own range; keep it clear of everything above.
-CGI_BASE=19200
 
 for APP in ${APPS//,/ }; do
     echo "======================================================================"
@@ -150,27 +173,32 @@ for APP in ${APPS//,/ }; do
     echo "======================================================================"
 
     # --- configurations, stamped per app ----------------------------------
+    # S-W is the `attach` backend: attach.php owns the children and listens on a
+    # relay, and volucer dials it, so this template takes a relay ADDRESS while the
+    # others take a port. The supervisor is fed the same address by start_supervisor.
+    RELAY="unix:/run/volucer-bench/fw-$APP.sock"
     sed -e "s#{{APP}}#$APP#g" \
         -e "s#{{ROOT}}#$ROOT#g" \
-        -e "s#{{SDK}}#$SDK#g" \
-        -e "s#{{PORT}}#$VOLUCER_POOL_PORT#g" \
-        "$ROOT/deploy/volucer/pool.template.toml" > "volucer-pool-$APP.toml"
+        -e "s#{{PORT}}#$VOLUCER_ATTACH_PORT#g" \
+        -e "s#{{RELAY_ADDRESS}}#$RELAY#g" \
+        "$ROOT/deploy/volucer/attach.template.toml" > "volucer-attach-$APP.toml"
 
     sed -e "s#{{APP}}#$APP#g" \
         -e "s#{{ROOT}}#$ROOT#g" \
         -e "s#{{PHP_CGI}}#$PHP_CGI_WRAPPER#g" \
         -e "s#{{PORT}}#$VOLUCER_CGI_PORT#g" \
-        -e "s#{{BASE_PORT}}#$CGI_BASE#g" \
+        -e "s#{{PROBE_KIND}}#volucer-cgi#g" \
         "$ROOT/deploy/volucer/spawn-cgi.template.toml" > "volucer-cgi-$APP.toml"
 
     # --- S-W: volucer, warm ---------------------------------------------
-    start_volucer "volucer-pool-$APP.toml" "volucer-pool-$APP"
-    if wait_port "$VOLUCER_POOL_PORT"; then
-        echo "S-W sanity: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$VOLUCER_POOL_PORT/items/1 2>/dev/null)"
-        run_client "http://127.0.0.1:$VOLUCER_POOL_PORT/" "S-W. volucer + resident worker ($APP): GET /"
-        run_client "http://127.0.0.1:$VOLUCER_POOL_PORT/items/1" "S-W. volucer + resident worker ($APP): GET /items/1"
+    start_supervisor "$RELAY" "volucer-attach-$APP"
+    start_volucer "volucer-attach-$APP.toml" "volucer-attach-$APP"
+    if wait_port "$VOLUCER_ATTACH_PORT"; then
+        echo "S-W sanity: $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$VOLUCER_ATTACH_PORT/items/1 2>/dev/null)"
+        run_client "http://127.0.0.1:$VOLUCER_ATTACH_PORT/" "S-W. volucer + attach supervisor ($APP): GET /"
+        run_client "http://127.0.0.1:$VOLUCER_ATTACH_PORT/items/1" "S-W. volucer + attach supervisor ($APP): GET /items/1"
     else
-        echo "S-W failed to start:"; cat "$RUNDIR/server-volucer-pool-$APP.log"
+        echo "S-W failed to start:"; cat "$RUNDIR/server-volucer-attach-$APP.log"
     fi
     stop_volucer; sleep 1
 

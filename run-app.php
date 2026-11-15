@@ -106,9 +106,13 @@ if ($modeName === 'cold' && !isset($opts['iterations-per-run'])) {
 $requests = isset($opts['requests'])
     ? array_map('trim', preg_split('/[,\n]/', $opts['requests']))
     : [
-        // HTML benchmark endpoints
+        // HTML benchmark endpoints — kept in step with run.php's list, because a
+        // standalone `run-app.php` invocation that measured a different set would
+        // produce a dataset the report cannot line up with the others.
         'GET /',
+        'GET /echo',
         'GET /items',
+        'GET /items-fast',
         'GET /items/1',
         'POST /items',
         'GET /items-qb',
@@ -116,6 +120,7 @@ $requests = isset($opts['requests'])
         'POST /items-qb',
         // REST API endpoints (JSON serialization category)
         'GET /api/items',
+        'GET /api/items-fast',
         'GET /api/items/1',
         'POST /api/items',
         // Feature demo endpoints (each framework participates only if it

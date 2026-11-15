@@ -100,11 +100,19 @@ class Bootstrap
         }
         $viewsPath = __DIR__ . '/Views';
         // Register the Clarity view engine lazily because not all requests need to render views.
+        //
+        // setRevalidateFreq(60) puts the template cache on the same schedule as the
+        // route cache below, the pool's `opcache.validate_timestamps=0` and php-fpm's
+        // own `opcache.revalidate_freq = 60`. Without it Clarity stats every template
+        // dependency on every render -- the one filesystem check a real production
+        // deploy of this app does not perform per request, since the deploy path
+        // clears both caches.
         $ctx->set(ViewEngine::class, fn() =>
             (new ClarityEngine())
                 ->setExtension('.clarity.html')
                 ->setViewPath($viewsPath)
                 ->setCachePath($cacheDir)
+                ->setRevalidateFreq(60)
                 ->setVars([
                     'locale'   => 'en_US',
                     'platform' => 'desktop',
@@ -113,40 +121,72 @@ class Bootstrap
         // --- Routes ---
         $router = $ctx->router();
 
+        // --- Route cache ---
+        // Declaring every route inside a cached() unit is what turns the cache on: the
+        // first read either `require`s the compiled table or rebuilds it from the units
+        // and writes it. This app compiles to a 118-route, 62 KB table, the same order as
+        // the framework's 120-route homepage measurement (191 us -> 5.7 us per request).
+        //
+        // The path is explicit rather than the derived temp default because a deploy hook
+        // warms it: temp/ is gitignored and excluded from the VM sync, so it is created
+        // fresh on every host. It is a DEDICATED SUBDIRECTORY rather than temp/routes.php
+        // directly because Router::assertSafeCacheDir() refuses a group/world-writable
+        // directory (mode & 0o022), and temp/ itself is 0775 on a host with umask 002 --
+        // it is the harness's shared scratch dir, created by several callers including
+        // some that ask for 0777. Naming a directory that does not exist yet lets the
+        // framework create it at 0700, which is the mode it requires; pointing at temp/
+        // meant the cache silently degraded to rebuilding on every request, which made
+        // this whole change measure nothing.
+        //
+        // 60 seconds matches the Clarity template cache above and the FPM pool's
+        // `opcache.validate_timestamps=0`: a long-lived worker re-checks the watched
+        // files at most once a minute instead of on every request. Under php-fpm a
+        // process serves one request, so the setting costs nothing there.
+        $router->setCachePath(__DIR__ . '/../../temp/routes/routes.php');
+        $router->setRevalidateFreq(60);
+
         // Benchmark endpoints (the ones we actually time).
         // Use the controller() group with a callback so the group stack
         // is automatically restored afterwards.
-        $router->controller(BenchController::class, function (\Azera\Core\Router $r) {
-            $r->get('/', '::indexAction');
-            // ORM endpoints (model hydration)
-            $r->get('/items', '::listAction');
-            // GET /items with the identity map removed and nothing else changed:
-            // the single-variable control for /items (see listFastAction).
-            $r->get('/items-fast', '::listFastAction');
-            $r->get('/items/{id:int}', '::showAction');
-            $r->post('/items', '::createAction');
+        $router->cached(__FILE__, function (\Azera\Core\Router $router): void {
+            $router->controller(BenchController::class, function (\Azera\Core\Router $r) {
+                // The framework floor: routed and dispatched, no work after that.
+                $r->get('/echo', '::echoAction');
+                $r->get('/', '::indexAction');
+                // ORM endpoints (model hydration)
+                $r->get('/items', '::listAction');
+                // GET /items with the identity map removed and nothing else changed:
+                // the single-variable control for /items (see listFastAction).
+                $r->get('/items-fast', '::listFastAction');
+                $r->get('/items/{id:int}', '::showAction');
+                $r->post('/items', '::createAction');
 
-            // New ORM stack endpoints (Model facade over the EM pipeline)
-            // Deactivated (2026-09-05) — the listOrmAction/showOrmAction/
-            // createOrmAction actions stay in BenchController for the next
-            // comparison run; re-enable these three routes to bring the
-            // /items-orm paths back.
-            // $r->get('/items-orm', '::listOrmAction');
-            // $r->get('/items-orm/{id:int}', '::showOrmAction');
-            // $r->post('/items-orm', '::createOrmAction');
+                // New ORM stack endpoints (Model facade over the EM pipeline)
+                // Deactivated (2026-09-05) — the listOrmAction/showOrmAction/
+                // createOrmAction actions stay in BenchController for the next
+                // comparison run; re-enable these three routes to bring the
+                // /items-orm paths back.
+                // $r->get('/items-orm', '::listOrmAction');
+                // $r->get('/items-orm/{id:int}', '::showOrmAction');
+                // $r->post('/items-orm', '::createOrmAction');
 
-            // Query Builder endpoints (no model hydration)
-            $r->get('/items-qb', '::listQbAction');
-            $r->get('/items-qb/{id:int}', '::showQbAction');
-            $r->post('/items-qb', '::createQbAction');
+                // Query Builder endpoints (no model hydration)
+                $r->get('/items-qb', '::listQbAction');
+                $r->get('/items-qb/{id:int}', '::showQbAction');
+                $r->post('/items-qb', '::createQbAction');
+            });
+
+            // --- Fill routes ---
+            // 100 dummy routes to simulate a real project's route table.
+            // We never dispatch these — they exist only so the router has a
+            // realistic number of entries to search through on every match.
+            // Mix of static, parametric, grouped, and multi-method routes.
+            //
+            // Inside this unit rather than beside it: every route has to live in a
+            // cached() block or the first read refuses the registration outright, and a
+            // route outside one would silently fall out of the compiled table.
+            self::registerFillerRoutes($router, 100);
         });
-
-        // --- Fill routes ---
-        // 100 dummy routes to simulate a real project's route table.
-        // We never dispatch these — they exist only so the router has a
-        // realistic number of entries to search through on every match.
-        // Mix of static, parametric, grouped, and multi-method routes.
-        self::registerFillerRoutes($router, 100);
 
         // --- Dispatcher + Global Middleware ---
         $dispatcher = $ctx->dispatcher();
@@ -199,26 +239,30 @@ class Bootstrap
         // --- Feature Demo Routes ---
         // Endpoints that exercise the new enterprise features (AOP,
         // events, cache, logging, security).  These don't interfere
-        // with benchmark routes.
-        $router->controller(\App\Azera\Controllers\FeatureController::class, function (\Azera\Core\Router $r) {
-            $r->get('/features', '::indexAction');
-            $r->get('/features/aop', '::aopAction');
-            $r->get('/features/cache', '::cacheAction');
-            $r->get('/features/log', '::logAction');
-            $r->get('/features/retry', '::retryAction');
-            $r->get('/features/db-events', '::dbEventsAction');
-            $r->get('/features/validation', '::validationAction');
-            $r->get('/features/config', '::configAction');
-            $r->get('/features/request-scoped', '::requestScopedAction');
-            $r->get('/features/pipeline', '::pipelineAction');
-            $r->get('/features/events', '::eventsAction');
-            $r->get('/features/rate-limit', '::rateLimitAction');
+        // with benchmark routes. A second cached() unit, because a unit is the natural
+        // granularity for a source file and the table must be entirely attributable to
+        // cached() blocks.
+        $router->cached(__FILE__, function (\Azera\Core\Router $router): void {
+            $router->controller(\App\Azera\Controllers\FeatureController::class, function (\Azera\Core\Router $r) {
+                $r->get('/features', '::indexAction');
+                $r->get('/features/aop', '::aopAction');
+                $r->get('/features/cache', '::cacheAction');
+                $r->get('/features/log', '::logAction');
+                $r->get('/features/retry', '::retryAction');
+                $r->get('/features/db-events', '::dbEventsAction');
+                $r->get('/features/validation', '::validationAction');
+                $r->get('/features/config', '::configAction');
+                $r->get('/features/request-scoped', '::requestScopedAction');
+                $r->get('/features/pipeline', '::pipelineAction');
+                $r->get('/features/events', '::eventsAction');
+                $r->get('/features/rate-limit', '::rateLimitAction');
 
-            // CSRF demo needs a real session — apply the 'session' group
-            // only to these routes.
-            $r->middleware('session', function () use ($r) {
-                $r->get('/features/security', '::securityAction');
-                $r->post('/features/security', '::securityPostAction');
+                // CSRF demo needs a real session — apply the 'session' group
+                // only to these routes.
+                $r->middleware('session', function () use ($r) {
+                    $r->get('/features/security', '::securityAction');
+                    $r->post('/features/security', '::securityPostAction');
+                });
             });
         });
 
@@ -226,13 +270,16 @@ class Bootstrap
         // A dedicated JSON API category.  Every framework implements the
         // same /api/* endpoints so routing + controller + JSON
         // serialization overhead is compared apples-to-apples.
-        $router->controller(\App\Azera\Controllers\ApiController::class, function (\Azera\Core\Router $r) {
-            $r->get('/api/items', '::indexAction');
-            // /api/items with the model replaced by the literal table: the
-            // single-variable control for /api/items (see indexFastAction).
-            $r->get('/api/items-fast', '::indexFastAction');
-            $r->get('/api/items/{id:int}', '::showAction');
-            $r->post('/api/items', '::createAction');
+        $router->cached(__FILE__, function (\Azera\Core\Router $router): void {
+            $router->controller(\App\Azera\Controllers\ApiController::class, function (\Azera\Core\Router $r) {
+                $r->get('/api/items', '::indexAction');
+                // /api/items with hydration switched off: the single-variable
+                // control for /api/items (see indexFastAction). Declared before
+                // the {id:int} placeholder so the literal segment wins.
+                $r->get('/api/items-fast', '::indexFastAction');
+                $r->get('/api/items/{id:int}', '::showAction');
+                $r->post('/api/items', '::createAction');
+            });
         });
 
         // Memoize the wired context per dbPath so a worker-mode re-bootstrap

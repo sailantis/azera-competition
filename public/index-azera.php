@@ -53,7 +53,7 @@ if (!file_exists($dbPath)) {
 $ctx = \App\Azera\Bootstrap::boot($dbPath);
 
 // Boot complete: container built, providers registered, routes loaded.
-boot_probe_record('fpm', 'azera');
+boot_probe_record(bench_probe_kind(), 'azera');
 
 // FPM memory probe: arms a shutdown hook that appends one sample when this
 // request finishes (see boot-probe.php for what each field means and why the

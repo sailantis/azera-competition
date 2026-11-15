@@ -8,58 +8,59 @@
  * routing + controller overhead is compared apples-to-apples.
  *
  * Endpoints:
- *   GET    /api/items       — list items (JSON array)
- *   GET    /api/items/{id}  — fetch a single item (JSON object)
- *   POST   /api/items       — create an item (JSON with new id)
+ *   GET    /api/items       — list items (JSON array, hydrated)
+ *   GET    /api/items-fast  — list items (JSON array, not hydrated)
+ *   GET    /api/items/{id}  — fetch a single item (JSON object, hydrated)
+ *   POST   /api/items       — create an item (JSON with new id, hydrated)
  */
 
 namespace App\Azera\Controllers;
 
 use App\Azera\Models\Item;
 use Azera\Core\Controller;
-use Azera\Db\Query;
 use Azera\Http\Response;
 
 class ApiController extends Controller
 {
     /**
-     * GET /api/items — list items as a JSON array.
+     * GET /api/items — list items as a JSON array (hydrated entities).
+     *
+     * Uses `entities()`, so each row is a heap-tracked `Item` model instance —
+     * the same hydration cost `/items` pays, which is what makes the two list
+     * endpoints comparable. {@see indexFastAction()} is the unhydrated
+     * counterpart.
+     *
+     * This used to call `select()->toArray()`, whose `fetchAllAssoc()` is
+     * `PDO::FETCH_ASSOC` — i.e. it handed the serializer associative arrays and
+     * never hydrated at all. Measured in-process at ~132 us against ~308 us for
+     * the hydrated path, so switching makes this endpoint slower by design: the
+     * benchmark compares frameworks, and every other framework hydrates here.
      */
     public function indexAction(): Response
     {
-        $items = Item::query()->orderBy('id', 'asc')->limit(20)->select();
+        $items = Item::query()->orderBy('id', 'asc')->limit(20)->entities();
 
-        return Response::json($items->toArray());
+        return Response::json(array_map($this->serialize(...), $items));
     }
 
     /**
-     * GET /api/items-fast — GET /api/items with the model replaced by the literal table.
+     * GET /api/items-fast — the same JSON as {@see indexAction()}, without
+     * hydration.
      *
-     * The JSON counterpart of `/items-fast`. It is a much smaller control than that
-     * one, because `indexAction()` already calls `select()`, whose `toArray()` is
-     * `ResultSet::fetchAllAssoc()` — i.e. `PDO::FETCH_ASSOC`. So `/api/items` hands the
-     * serializer **associative arrays**, never entities: no instantiation, no
-     * identity map, no snapshot. The expensive shape is already absent.
+     * Identical in every other respect: same model, same `source()` resolution,
+     * same builder, same SELECT, same serializer. Only the terminal differs —
+     * `select()->toArray()` fetches with `PDO::FETCH_ASSOC`, so no entity is
+     * instantiated, no identity-map entry is created and no load-time snapshot
+     * is taken.
      *
-     * What `indexAction()` still does is resolve the model: the model-backed builder
-     * asks `Item::source()` for the table and builds its column list from metadata,
-     * where `Query::raw()->table('items')` names the table literally. That is the only
-     * difference between the two routes, and it is small — measured at ~1.7 us of a
-     * ~24 us request (`scripts/api-fast-compare.php`), against the ~48 us that
-     * dropping hydration is worth on the HTML route.
-     *
-     * Verified byte-identical JSON (`scripts/api-fast-compare.php`), so the two routes
-     * differ only in how they name the table.
-     *
-     * For context on why the gap is so much smaller here: measured per row, an assoc
-     * array costs 1.21 us, a stdClass 1.39 us, and a hydrated entity 3.84 us
-     * (`scripts/data-shapes.php`). `/api/items` picked the cheapest shape on its own.
+     * Verified byte-identical JSON against {@see indexAction()}, so the
+     * difference between the two routes is hydration and only hydration.
      */
     public function indexFastAction(): Response
     {
-        $items = Query::raw()->table('items')->orderBy('id', 'asc')->limit(20)->select();
+        $items = Item::query()->orderBy('id', 'asc')->limit(20)->select();
 
-        return Response::json($items->toArray());
+        return Response::json(array_map($this->serialize(...), $items->toArray()));
     }
 
     /**
@@ -89,18 +90,25 @@ class ApiController extends Controller
     }
 
     /**
-     * Serialize a model to a plain array for JSON output.
+     * Serialize one row to a plain array for JSON output.
      *
-     * The Item model exposes public properties (id, title, created_at);
-     * we read them directly to avoid coupling the API to any internal
-     * attribute storage.
+     * Accepts either shape the two list routes produce -- a hydrated `Item` from
+     * `indexAction()` or an associative row from `indexFastAction()`. Both carry
+     * the same three values, so one serializer keeps their output byte-identical,
+     * which is what makes the pair a single-variable comparison.
      */
-    private function serialize(Item $item): array
+    private function serialize(Item|array $item): array
     {
-        return [
+        $row = \is_array($item) ? $item : [
             'id'         => $item->id,
             'title'      => $item->title,
             'created_at' => $item->created_at,
+        ];
+
+        return [
+            'id'         => $row['id'],
+            'title'      => $row['title'],
+            'created_at' => $row['created_at'],
         ];
     }
 }

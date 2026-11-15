@@ -35,6 +35,29 @@ final class ApiController extends AppController
     }
 
     /**
+     * GET /api/items-fast — the same JSON as {@see index()}, without hydration.
+     *
+     * Identical in every other respect: same Table, same `find()`, same
+     * ordering, same limit, same serializer. Only the query's hydration flag
+     * differs — `disableHydration()` makes the ORM return plain arrays instead
+     * of constructing one `Entity` per row.
+     *
+     * Verified byte-identical JSON against {@see index()}, so the difference
+     * between the two routes is hydration and only hydration.
+     */
+    public function indexFast(): \Cake\Http\Response
+    {
+        $rows = $this->items()
+            ->find()
+            ->orderByAsc('id')
+            ->limit(20)
+            ->disableHydration()
+            ->all();
+
+        return $this->json(\array_map($this->serializeRow(...), $rows->toList()));
+    }
+
+    /**
      * GET /api/items/{id} — fetch a single item as a JSON object.
      */
     public function show(?int $id = null): \Cake\Http\Response
@@ -102,6 +125,26 @@ final class ApiController extends AppController
             'id'         => $item->id,
             'title'      => $item->title,
             'created_at' => $item->created_at,
+        ];
+    }
+
+    /**
+     * Serialize a plain row as returned by a non-hydrating Cake query.
+     *
+     * `disableHydration()` yields arrays instead of entities, so the control
+     * route needs its own shape reader. Keeping the three keys explicit makes
+     * its output identical to serialize().
+     *
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed>
+     */
+    private function serializeRow(array $row): array
+    {
+        return [
+            'id'         => $row['id'],
+            'title'      => $row['title'],
+            'created_at' => $row['created_at'],
         ];
     }
 

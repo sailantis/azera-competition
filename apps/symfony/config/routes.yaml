@@ -1,6 +1,11 @@
 # Benchmark routes — parity with the azera app (same paths, same methods,
 # ~100 filler routes so the route table size matches the other frameworks).
 
+echo:
+    path: /echo
+    controller: App\Symfony\Controller\BenchController::echo
+    methods: GET
+
 home:
     path: /
     controller: App\Symfony\Controller\BenchController::index
@@ -10,6 +15,12 @@ home:
 items_list:
     path: /items
     controller: App\Symfony\Controller\BenchController::list
+    methods: GET
+# GET /items with Doctrine hydration off: the single-variable control for
+# /items (see BenchController::listFast()).
+items_list_fast:
+    path: /items-fast
+    controller: App\Symfony\Controller\BenchController::listFast
     methods: GET
 items_show:
     path: /items/{id}
@@ -42,6 +53,12 @@ items_qb_create:
 api_items_index:
     path: /api/items
     controller: App\Symfony\Controller\ApiController::index
+    methods: GET
+# Declared before api_items_show: the {id} route requires \d+, but keeping
+# the literal first makes the precedence explicit rather than incidental.
+api_items_fast:
+    path: /api/items-fast
+    controller: App\Symfony\Controller\ApiController::indexFast
     methods: GET
 api_items_show:
     path: /api/items/{id}

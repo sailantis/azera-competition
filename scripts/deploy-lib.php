@@ -28,6 +28,75 @@ declare(strict_types=1);
  */
 const BENCH_APP_ORDER = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'];
 
+// --- Interpreter selection -------------------------------------------------------
+
+/**
+ * Directory holding one PHP installation's FPM bits, e.g. `/etc/php/8.5`.
+ *
+ * The harness used to spell `/etc/php/8.3` and `php8.3-fpm` out in ten places, so
+ * the measured PHP was a property of the SOURCE CODE rather than of the VM: a run
+ * could not measure 8.5 without editing the harness. A version is therefore stated
+ * once, as the `--php-fpm` binary (`php-fpm8.5`), and everything else is derived
+ * from it: the pool.d directory, the systemd unit, and — through
+ * phpCliForFpm() — the CLI binary the RoadRunner worker must use.
+ *
+ * `/usr/sbin/php-fpm8.5` -> `8.5`. The `cgi`/`cli`/`fpm` suffixed siblings all
+ * share the prefix, so the version is whatever follows `php-fpm`.
+ */
+function phpSeriesFromFpmBin(string $fpmBin): ?string
+{
+    // basename() so an absolute override path works as well as a bare name.
+    if (preg_match('/php-fpm(\d+\.\d+)$/', basename($fpmBin), $m) !== 1) {
+        return null;
+    }
+    return $m[1];
+}
+
+/**
+ * The CLI interpreter that belongs to the same PHP installation as $fpmBin.
+ *
+ * WHY THIS MATTERS MORE THAN IT LOOKS: the two servers run DIFFERENT binaries that
+ * merely happen to share a version on a well-configured host.
+ *
+ *   nginx -> php-fpm   is the packaged `php-fpm<X.Y>` binary (FPM SAPI)
+ *   RoadRunner worker  is a bare `php` off PATH (CLI SAPI), spawned by RoadRunner
+ *
+ * Nothing links them. On 2026-10-19 the bench VM's `/etc/alternatives/php` was
+ * moved to 8.5 while its FPM pools still lived under `/etc/php/8.3`, and the
+ * harness — which hardcoded `php8.3-fpm` and let RoadRunner take `php` off PATH —
+ * would have written one dataset containing 8.5.11 RoadRunner numbers next to
+ * 8.3.35 FPM numbers, stamped `env.php_version = 8.5.11` over both. Every
+ * cross-server ratio in that file would have compared two runtimes.
+ *
+ * Deriving the CLI name from the requested FPM binary makes the pairing a
+ * property of the RUN rather than of the machine's PATH. `php<X.Y>` is the CLI
+ * package that ships beside `php-fpm<X.Y>` (php8.5-cli / php8.5-fpm), so both
+ * legs then resolve to one installation.
+ *
+ * Returns $fpmBin's own series when it names one; otherwise falls back to the
+ * interpreter RUNNING this script, which is the only other defensible answer
+ * (and is what a bare-name/path override implies).
+ */
+function phpCliForFpm(string $fpmBin): string
+{
+    $series = phpSeriesFromFpmBin($fpmBin);
+    if ($series === null) {
+        return PHP_BINARY;
+    }
+
+    // `php8.5` beside `/usr/sbin/php-fpm8.5` is the normal case; fall back to the
+    // bare name so PATH can resolve it when the binary sits elsewhere (a distro
+    // may use /usr/bin, a custom build /usr/local/bin).
+    $candidate = 'php' . $series;
+    foreach ([$candidate, '/usr/bin/' . $candidate, '/usr/local/bin/' . $candidate] as $path) {
+        if (@is_executable($path)) {
+            return $path;
+        }
+    }
+
+    return $candidate;
+}
+
 /**
  * Resolve an app's port from its canonical index instead of its position in
  * the current app list.
@@ -76,9 +145,17 @@ function stampAllDeployConfigs(
     int $rrPortBase,
     array &$ports,
     string $benchUser,
+    string $phpCli = '',
 ): void {
     if (!is_dir($deployDir)) {
         mkdir($deployDir, 0777, true);
+    }
+
+    // Empty means "whatever this orchestrator is", which is the pre-existing
+    // behaviour for callers that do not care. run-http.php always passes the
+    // resolved pairing so the two servers cannot drift apart.
+    if ($phpCli === '') {
+        $phpCli = PHP_BINARY;
     }
 
     $rrTemplate = require "{$root}/deploy/rr/config-template.php";
@@ -104,8 +181,8 @@ function stampAllDeployConfigs(
         $fpmPort = stampPort($appKey, 'fpm', $fpmPortBase, $ports);
 
         $rrYaml = str_replace(
-            ['{{APP}}', '{{PORT}}', '{{ROOT}}'],
-            [$appKey, (string) $rrPort, $root],
+            ['{{APP}}', '{{PORT}}', '{{ROOT}}', '{{PHP_CLI}}'],
+            [$appKey, (string) $rrPort, $root, $phpCli],
             $rrTemplate()
         );
         file_put_contents("{$deployDir}/.rr-{$appKey}.yaml", $rrYaml);
@@ -145,16 +222,245 @@ function stampAllDeployConfigs(
     }
 }
 
+/**
+ * The php-cgi launcher the `spawn_cgi` arm should run, mirroring the FPM pool.
+ *
+ * WHY A WRAPPER AND NOT THE BARE BINARY.
+ *
+ * `run-http.php` used to hand volucer `php-cgi<series>` directly, so this arm ran
+ * under the host's php.ini alone while the FPM arm ran under the pool template —
+ * and the pool sets two directives the ini does not:
+ *
+ *     php_admin_value[opcache.validate_timestamps] = 0
+ *     php_admin_value[memory_limit]                = 512M
+ *
+ * `validate_timestamps=0` is the one that moves numbers. With it on (the default)
+ * OPcache `stat()`s every included and required file on every request to decide
+ * whether to recompile; with it off, the cache is trusted for the life of the
+ * process. Both arms pay OPcache's `enable` cost alike, so this is not "OPcache
+ * on vs off" — it is the per-request validation sweep, and it lands in every row.
+ *
+ * The two arms were therefore NOT measuring the same deployment model's cost: the
+ * 2026-11-10 run showed volucer-cgi slower than nginx+PHP-FPM on 119 of 126
+ * endpoints, systematically (+107/-19, ~+0.10 ms fixed per request, azera
+ * +2.4% median on 21 of 21). A uniform fixed per-request gap is the signature of
+ * a per-request syscall sweep, not of a slower application. Nothing in that
+ * dataset could distinguish "volucer's spawn_cgi is 3% slower" from "the cgi arm
+ * validated its cache 126 times more often per row", and both readings were
+ * publishable. The cold view's whole claim is that the two cold servers differ
+ * only by transport, which makes this an error in the comparison rather than a
+ * detail of the setup.
+ *
+ * `max_execution_time` is deliberately NOT mirrored: php-fpm's is the FastCGI
+ * request timeout, `request_terminate_timeout` above, and php-cgi has no
+ * equivalent directive — passing one would change what is measured rather than
+ * equalise it. `xdebug.mode=off` IS mirrored, and so is the pool's
+ * `xdebug.start_with_request = no`: the pool turns Xdebug off explicitly, and a
+ * host ini is free to turn it back on. Both are passed even on a host without
+ * Xdebug, where they are inert.
+ *
+ * The script is written next to the rendered volucer configs and named per
+ * series, so a run that switches interpreters cannot leave a wrapper pointing at
+ * the previous one. Returns the bare binary when no wrapper can be written, so a
+ * missing deploy dir degrades to the old behaviour instead of failing the run —
+ * but the caller should treat that as "not equalised".
+ *
+ * @return string absolute path to an executable wrapper, or $phpCgi unchanged
+ */
+function writePhpCgiWrapper(string $deployDir, string $phpCgi): string
+{
+    // Derive the series from the binary the caller resolved (`php-cgi8.5`), so the
+    // wrapper name tracks the interpreter without a second lookup.
+    $series = preg_match('/(\d+\.\d+)$/', basename($phpCgi), $m) === 1 ? $m[1] : 'default';
+    $path   = "{$deployDir}/php-cgi-wrapper-{$series}.sh";
+
+    // Same directives the pool's php_admin_value sets, plus the two flags the
+    // standalone fw-bench.sh wrapper already proved necessary for this SAPI:
+    // php-cgi reads `opcache.enable_cli`, not `opcache.enable`, and xdebug must be
+    // off explicitly because it is the one extension whose cost is per-request.
+    //
+    // `opcache.jit` has to be a `-d` here for the same reason `enable_cli` does:
+    // this SAPI is spawned by volucer, not by php-fpm, so the pool's
+    // php_admin_value never reaches it. Without these two lines the spawn_cgi arm
+    // would run WITHOUT the JIT the FPM arm has, and the two cold arms — whose
+    // whole purpose is to differ only by server — would differ by interpreter
+    // configuration instead.
+    $script = "#!/bin/sh\n"
+        . "# Generated by writePhpCgiWrapper(). Mirrors deploy/fpm/pool.conf.template\n"
+        . "# so the volucer spawn_cgi arm and the nginx+php-fpm arm run the SAME directives.\n"
+        . "# Regenerated on every run; do not edit.\n"
+        . 'exec ' . escapeshellarg($phpCgi)
+        . " -d opcache.enable=1"
+        . " -d opcache.enable_cli=1"
+        . " -d opcache.validate_timestamps=0"
+        . " -d opcache.jit=tracing"
+        . " -d opcache.jit_buffer_size=64M"
+        . " -d xdebug.mode=off"
+        . " -d xdebug.start_with_request=no"
+        . " -d memory_limit=512M"
+        . " \"\$@\"\n";
+
+    if (@file_put_contents($path, $script) === false) {
+        return $phpCgi;
+    }
+    @chmod($path, 0755);
+
+    return $path;
+}
+
+/**
+ * Stamp one volucer config per (arm, app) into $deployDir.
+ *
+ * Separate from stampAllDeployConfigs() because the placeholder set differs per arm —
+ * `attach` needs a relay address, `spawn_cgi` needs the php-cgi binary — and a single
+ * str_replace list would have to carry every placeholder for every template, silently
+ * leaving any name it did not know about in the rendered file. Volucer rejects an
+ * unknown key, so that failure would at least be loud; it would also be at block time
+ * rather than here.
+ *
+ * @param list<string> $arms
+ */
+function stampVolucerConfigs(
+    string $root,
+    string $deployDir,
+    array $apps,
+    array $arms,
+    string $phpCli,
+    string $phpCgi,
+    int $volucerPortBase,
+    array &$ports,
+): void {
+    if ($arms === []) {
+        return;
+    }
+
+    $sdk = "{$root}/vendor/sailantis/volucer-worker";
+
+    // The spawn_cgi arm gets a wrapper that mirrors the FPM pool's directives,
+    // so the two cold servers differ by transport rather than by php.ini. Only
+    // computed when that arm is selected: it writes a file, and a dry run of the
+    // attach arm should not litter the deploy dir.
+    if (in_array('volucer-cgi', $arms, true)) {
+        $phpCgi = writePhpCgiWrapper($deployDir, $phpCgi);
+    }
+
+    // One PORT BANK per arm. stampPort() keys its collision check on the kind, so two
+    // arms sharing a base each start at 8800 for the first app and the second server
+    // silently binds a port the first one freed — which is how volucer-attach and
+    // volucer-cgi both ended up on 8800 in the same run. The offset is per arm, so the
+    // banks stay disjoint however many arms are selected. The retired `volucer`
+    // (worker) arm keeps offset 0 reserved so re-enabling it cannot collide.
+    //
+    // This is the port volucer LISTENS on, one per (arm, app). The php-cgi pool behind
+    // spawn_cgi has its own addresses and they are unix sockets, not ports — see the
+    // socket note in spawn-cgi.template.toml.
+    $armOffset = ['volucer-attach' => 10, 'volucer-cgi' => 20];
+
+    foreach ($arms as $arm) {
+        $template = match ($arm) {
+            'volucer-attach' => "{$root}/deploy/volucer/attach.template.toml",
+            'volucer-cgi'    => "{$root}/deploy/volucer/spawn-cgi.template.toml",
+            default          => throw new RuntimeException("unknown volucer arm '{$arm}'"),
+        };
+        $tpl = (string) file_get_contents($template);
+
+        foreach ($apps as $appKey) {
+            $appKey = trim($appKey);
+            $port   = stampPort($appKey, $arm, $volucerPortBase + $armOffset[$arm], $ports);
+            $relay  = volucerRelayAddress($appKey);
+
+            $rendered = str_replace(
+                ['{{APP}}', '{{PORT}}', '{{ROOT}}', '{{SDK}}', '{{PHP_CLI}}', '{{PHP_CGI}}', '{{RELAY_ADDRESS}}', '{{PROBE_KIND}}'],
+                [$appKey, (string) $port, $root, $sdk, $phpCli, $phpCgi, $relay, $arm],
+                $tpl
+            );
+
+            // A surviving placeholder means this arm's template grew a name the list
+            // above does not know: volucer would reject the key, or silently use a
+            // literal "{{...}}" as a path. Both are worse than refusing here.
+            if (preg_match('/\{\{[A-Z_]+\}\}/', $rendered, $m) === 1) {
+                throw new RuntimeException(
+                    "stampVolucerConfigs(): '{$m[0]}' was not substituted in {$template} — "
+                    . 'add it to the str_replace lists so the arm cannot start with a literal placeholder'
+                );
+            }
+
+            file_put_contents("{$deployDir}/.volucer-{$arm}-{$appKey}.toml", $rendered);
+        }
+    }
+}
+
 // --- SQLite seeding --------------------------------------------------------------
 
-function seedDatabase(string $root, int $rows): void
+function seedDatabase(string $root, int $rows, string $phpCli = ''): void
 {
     echo "  seeding SQLite ({$rows} rows)...\n";
+    // The seed runs under the PINNED interpreter, not a bare `php`. Every other
+    // deploy step does the same: the rows are written once and read by both
+    // servers, so compiling the write path with a different runtime than the one
+    // measured is a difference nothing in the dataset records.
     shellRun(sprintf(
-        'cd %s && php seed.php --rows=%d',
+        'cd %s && %s seed.php --rows=%d',
         escapeshellarg($root),
+        $phpCli !== '' ? escapeshellarg($phpCli) : 'php',
         $rows
     ), 'seed.php');
+}
+
+/**
+ * Warm every route cache the deploy is expected to warm, before the server starts.
+ *
+ * The point is FAIRNESS, not speed. A production deploy of any of these applications
+ * runs one command that compiles its route table, and every server then serves from
+ * that artifact; Azera (since its 0.4.0 cache), Symfony (its matcher is a disk cache)
+ * and Laravel (`route:cache`) all have one — CodeIgniter and CakePHP have no persisted
+ * route table at all and build from config on every request, which is a property of
+ * those frameworks and is reported as such.
+ *
+ * Without this step the comparison measures WHO HAS BEEN WARMED rather than whose
+ * router is faster: the runner that happens to have a cache file in its tree would be
+ * credited with a routing win that is really a deploy-step difference.
+ *
+ * Each entry is `[app, command]`; an app with no route-cache command is simply absent,
+ * so adding a framework here is one line rather than a branch. A command that fails is
+ * reported and the block continues: a cold table is a legitimate (if slower) state, and
+ * the benchmark must not abort because an optional optimisation did not run.
+ */
+function warmRouteCaches(string $root, string $appKey, string $phpCli = ''): void
+{
+    // The warmers run under the PINNED interpreter: they compile an artifact both
+    // servers then require, so building it with a different runtime than the one
+    // measured would put a compiler version into a file the dataset describes as
+    // the measured build.
+    $php = $phpCli !== '' ? escapeshellarg($phpCli) : 'php';
+
+    // The azera route cache is warmed by the app itself: declaring the routes inside
+    // `cached()` means the first read writes the table, so one CLI bootstrap compiles it
+    // exactly as `azera routes:cache` would. Doing it here keeps the cost OUT of the
+    // timed rows — which is where a deploy hook pays it.
+    $commands = [
+        'azera'   => "{$php} scripts/warm-azera-routes.php",
+        // `route:cache` needs an artisan entry point, and apps/laravel has none: the bench
+        // app is booted by a plain bootstrap file, not a console kernel. The equivalent is
+        // the same three steps the command performs — boot, prepareForSerialization(),
+        // write the compiled table — so a cache file appears exactly where
+        // Application::routesAreCached() looks for it.
+        'laravel' => "{$php} scripts/warm-laravel-routes.php",
+    ];
+
+    if (!isset($commands[$appKey])) {
+        return;
+    }
+
+    echo "  warming route cache ({$appKey})...\n";
+    $out = trim(shellProcessOutput(
+        'cd ' . escapeshellarg($root) . ' && ' . $commands[$appKey] . ' 2>&1'
+    ));
+    if ($out !== '') {
+        foreach (explode("\n", $out) as $line) {
+            echo '    ', trim($line), "\n";
+        }
+    }
 }
 
 // --- RoadRunner -------------------------------------------------------------------
@@ -331,6 +637,282 @@ function stopRoadRunner(array $procRef): void
     echo "  RoadRunner stopped.\n";
 }
 
+// --- Volucer ----------------------------------------------------------------------
+//
+// Two arms, and they are two DEPLOYMENT MODELS rather than two spellings of one:
+//
+//   volucer-attach    `attach` backend. deploy/volucer/attach.php is the SUPERVISOR:
+//                     it LISTENS on a unix relay and forks a child per connection,
+//                     and volucer DIALS it. The framework boots once in the master,
+//                     before the first fork, so no child pays it. volucer MUST start
+//                     after the supervisor, and its `workers` must match what the
+//                     supervisor can serve.
+//   volucer-cgi       `spawn_cgi` backend. volucer runs public/index-<app>.php per
+//                     request through php-cgi, exactly as nginx+php-fpm does, so the
+//                     framework boot is paid on every request.
+//
+// volucer's `worker` backend (volucer SPAWNS deploy/volucer/worker.php) is not part of
+// the dataset: it is resident like `attach`, shares the same handler (app.php) and the
+// same probe kind, so it measures the same thing and differs only in who owns the
+// process. deploy/volucer/pool.template.toml and worker.php are kept runnable for spot
+// checks, but stampVolucerConfigs() no longer renders them and --servers rejects the
+// name, so a dataset cannot silently gain a duplicate row.
+
+/**
+ * The unix relay PATH (no scheme) for one app.
+ *
+ * Kept short on purpose: `sun_path` is 108 bytes on Linux, and a long checkout path plus
+ * an app name can exceed it. It lives under /run because the socket is runtime state,
+ * not part of the deployment.
+ *
+ * Callers must decide whether they need the bare path or the `unix:`-prefixed address:
+ * the CONFIG file wants `unix:<path>`, while Supervisor::serve() resolves and validates
+ * an ADDRESS and rejects a bare path ("a relay is either "unix:/path" or "host:port"").
+ * Handing the wrong one to either side is a startup failure, so the two are named
+ * separately below rather than left to the caller to remember.
+ */
+function volucerRelayPath(string $appKey): string
+{
+    return "/run/volucer-bench/{$appKey}.sock";
+}
+
+/**
+ * The relay ADDRESS volucer's config and Supervisor::serve() both speak.
+ */
+function volucerRelayAddress(string $appKey): string
+{
+    return 'unix:' . volucerRelayPath($appKey);
+}
+
+/**
+ * Kill every benchmark volucer and attach supervisor (any app) before a run.
+ *
+ * The same discipline as killAllBenchRoadRunners(): an orphan holds its HTTP port and
+ * its relay, and the next block would either fail to bind or — worse, for `attach` —
+ * connect to the PREVIOUS app's supervisor and get that app's pages under this app's
+ * name.
+ */
+function killAllBenchVolucers(): void
+{
+    $killed = false;
+    foreach (
+        [
+            // Only OUR configs: an operator's own volatile deployment must survive.
+            'volucer serve -c ' . dirname(__DIR__) . '/temp/deploy/.volucer-',
+            'deploy/volucer/attach.php',
+        ] as $pattern
+    ) {
+        exec('pkill -f ' . escapeshellarg($pattern) . ' 2>/dev/null', $o, $rc);
+        $killed = $killed || $rc === 0;
+    }
+    if ($killed) {
+        usleep(400_000);
+        echo "  killed stale benchmark volucer process(es) before starting\n";
+    }
+}
+
+/**
+ * Start volucer (or its prefork supervisor) for one app.
+ *
+ * $arm is 'volucer-attach' (attach backend) or 'volucer-cgi' (spawn_cgi). The config
+ * must already have been stamped for ($arm, $appKey) — see stampVolucerConfigs().
+ *
+ * Returns the SAME shape startRoadRunner() does, plus 'supervisor' for the attach arm,
+ * so the block loop and stopVolucer() can treat every volucer arm alike.
+ *
+ * @return array{proc: resource, pipes: array, supervisor: mixed}
+ */
+function startVolucer(
+    string $root,
+    string $deployDir,
+    string $appKey,
+    string $arm,
+    string $volucerBinary,
+    string $phpCli,
+    int $port,
+): array {
+    if (is_dir($root)) {
+        chdir($root);
+    }
+
+    $cfg = "{$deployDir}/.volucer-{$arm}-{$appKey}.toml";
+    if (!is_file($cfg)) {
+        fwrite(STDERR, "[run-http] missing volucer config {$cfg} — stamping did not run for {$appKey}\n");
+        exit(1);
+    }
+
+    if (!waitForPortFree($port)) {
+        fwrite(STDERR, "[run-http] Port {$port} is still in use before starting volucer ({$arm}/{$appKey}) — refusing to benchmark a stale server.\n");
+        exit(1);
+    }
+
+    // --- attach: the SUPERVISOR must be listening first ----------------------
+    //
+    // Volucer is the client on this backend: it dials the relay `workers` times and
+    // fails the whole pool if nobody is listening ("every connection to this pool will
+    // fail at startup"). So the supervisor starts here and volucer starts after it.
+    $supervisor = null;
+    if ($arm === 'volucer-attach') {
+        $relay = volucerRelayAddress($appKey);
+        @unlink(volucerRelayPath($appKey));
+        $sup = startVolucerSupervisor($root, $deployDir, $appKey, volucerRelayAddress($appKey), $phpCli);
+        // Wait on the PATH: file_exists() on "unix:/run/..." is always false, which read
+        // as "the supervisor never started" while it was in fact listening.
+        if (!waitForRelay(volucerRelayPath($appKey))) {
+            stopVolucer(['proc' => $sup['proc'], 'pipes' => $sup['pipes'], 'supervisor' => null]);
+            fwrite(STDERR, "[run-http] the attach supervisor never created {$relay}" . workerLogTail($sup['log']));
+            exit(1);
+        }
+        $supervisor = $sup;
+        echo "  attach supervisor listening on {$relay}\n";
+    }
+
+    echo "  starting volucer ({$arm}/{$appKey}, port {$port})...\n";
+
+    // `exec` so the pid proc_open returns IS the server holding the port, not a shell
+    // wrapper — the bug startRoadRunner() documents in full.
+    $cmd     = sprintf('exec %s serve -c %s 2>&1', escapeshellarg($volucerBinary), escapeshellarg($cfg));
+    $logPath = "{$deployDir}/volucer-{$arm}-{$appKey}.log";
+    $pipes   = [];
+    $logFp   = fopen($logPath, 'w');
+    $descr   = $logFp === false
+        ? [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']]
+        : [['pipe', 'r'], $logFp, $logFp];
+
+    $proc = proc_open($cmd, $descr, $pipes);
+    if (!is_resource($proc)) {
+        if ($supervisor !== null) {
+            stopVolucer(['proc' => $supervisor['proc'], 'pipes' => $supervisor['pipes'], 'supervisor' => null]);
+        }
+        fwrite(STDERR, "[run-http] Failed to start volucer for {$appKey}\n");
+        exit(1);
+    }
+
+    if ($logFp === false) {
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+    }
+
+    return [
+        'proc'       => $proc,
+        'pipes'      => $pipes,
+        'deployDir'  => $deployDir,
+        'appKey'     => $appKey,
+        'arm'        => $arm,
+        'log'        => $logPath,
+        'supervisor' => $supervisor,
+    ];
+}
+
+/**
+ * Start deploy/volucer/attach.php — the prefork supervisor the attach backend dials.
+ *
+ * The relay is passed through BOTH argv[1] and VOLUCER_RELAY_SOCKET: attach.php prefers
+ * the argument, and volucer reads the variable when its config omits `relay`. Writing
+ * both means a stamping mistake surfaces as a mismatch rather than as two processes
+ * quietly using different sockets.
+ *
+ * @return array{proc: resource, pipes: array, log: string}
+ */
+function startVolucerSupervisor(string $root, string $deployDir, string $appKey, string $relay, string $phpCli): array
+{
+    @mkdir(dirname($relay), 0777, true);
+
+    $cmd = sprintf(
+        'exec env BENCH_APP=%s VOLUCER_RELAY_SOCKET=%s %s -d opcache.enable_cli=1 '
+            . '-d opcache.validate_timestamps=0 -d opcache.jit=tracing '
+            . '-d opcache.jit_buffer_size=64M %s 2>&1',
+        escapeshellarg($appKey),
+        escapeshellarg($relay),
+        escapeshellarg($phpCli),
+        escapeshellarg("{$root}/deploy/volucer/attach.php"),
+    );
+
+    $logPath = "{$deployDir}/volucer-attach-{$appKey}.supervisor.log";
+    $pipes   = [];
+    $logFp   = fopen($logPath, 'w');
+    $descr   = $logFp === false
+        ? [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']]
+        : [['pipe', 'r'], $logFp, $logFp];
+
+    $proc = proc_open($cmd, $descr, $pipes);
+    if (!is_resource($proc)) {
+        fwrite(STDERR, "[run-http] Failed to start the volucer attach supervisor for {$appKey}\n");
+        exit(1);
+    }
+    if ($logFp === false) {
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+    }
+
+    return ['proc' => $proc, 'pipes' => $pipes, 'log' => $logPath];
+}
+
+/**
+ * Block until the relay socket exists, i.e. the supervisor is accepting connections.
+ */
+function waitForRelay(string $relay, float $timeoutSec = 15.0): bool
+{
+    $deadline = microtime(true) + $timeoutSec;
+    while (microtime(true) < $deadline) {
+        clearstatcache(true, $relay);
+        if (file_exists($relay)) {
+            return true;
+        }
+        usleep(50_000);
+    }
+
+    return false;
+}
+
+/**
+ * Stop volucer and, for the attach arm, its supervisor.
+ *
+ * Order matters: volucer goes first so its connection closes cleanly before the
+ * supervisor's listener disappears underneath it. Both are killed by process GROUP
+ * because volucer forks (its Go runtime) and the supervisor forks a child per
+ * connection — SIGTERM to the pid alone leaves those behind, holding the port.
+ */
+function stopVolucer(array $procRef): void
+{
+    foreach (['proc' => $procRef['proc'] ?? null, 'supervisor' => $procRef['supervisor']['proc'] ?? null] as $role => $proc) {
+        if (!is_resource($proc)) {
+            continue;
+        }
+
+        $pid = (int) (proc_get_status($proc)['pid'] ?? 0);
+        if ($pid > 0) {
+            @posix_kill(-$pid, 15);
+            @posix_kill($pid, 15);
+            for ($i = 0; $i < 30; $i++) {
+                if (!proc_get_status($proc)['running']) {
+                    break;
+                }
+                usleep(100_000);
+            }
+            if (proc_get_status($proc)['running']) {
+                @posix_kill(-$pid, 9);
+                @posix_kill($pid, 9);
+                usleep(100_000);
+            }
+        }
+        proc_close($proc);
+    }
+
+    // Hammer survivors: a volucer that ignored SIGTERM keeps its port bound, and the
+    // next block would silently measure the previous app.
+    if (isset($procRef['deployDir'], $procRef['appKey'])) {
+        exec('pkill -f ' . escapeshellarg('volucer serve -c ' . $procRef['deployDir'] . '/.volucer-') . ' 2>/dev/null');
+        exec('pkill -f ' . escapeshellarg("deploy/volucer/attach.php") . ' 2>/dev/null');
+    }
+
+    if (isset($procRef['appKey'])) {
+        @unlink(volucerRelayPath($procRef['appKey']));
+    }
+
+    echo "  volucer stopped.\n";
+}
+
 // --- FPM + nginx (system services, root assumed) ------------------------------------
 
 /**
@@ -414,16 +996,24 @@ function rrMaxJobsFromTemplate(string $root): ?int
  *             installed is the config that ran. Same discipline as
  *             fpmMaxRequestsFromTemplate(): a template edit cannot silently
  *             re-label an already-published number.
- *   roadrunner — PROBED, with the same binary and the same absence of `-d`
- *             overrides. deploy/rr/config-template.php's `server.command` is a
- *             bare `php <root>/deploy/rr/worker.php`, and RoadRunner spawns it
- *             itself: neither `rr serve` nor the worker ever receives a
- *             `-d opcache.*` flag, so both the probe and the worker resolve
- *             `opcache.enable_cli` from the host's php.ini alone. The probe
- *             therefore reads exactly what the worker reads. (A `-d` on the
- *             ORCHESTRATOR does not travel to the worker either, which is why
- *             probing without one is the faithful choice rather than a
- *             simplification.)
+ *   roadrunner — PROBED, with the same binary and the same `-d` overrides.
+ *             deploy/rr/config-template.php's `server.command` runs {{PHP_CLI}},
+ *             the interpreter run-http.php resolved for this run, and RoadRunner
+ *             spawns it itself. The command carries the same OPcache/JIT flags
+ *             the pool sets for FPM — including `opcache.enable_cli=1`, because
+ *             CLI is the one SAPI where that is the switch that matters. Before
+ *             those flags were added the worker inherited the host php.ini alone,
+ *             which on this VM means `opcache.jit=disable` beside a defaulted
+ *             64M buffer: a run could be described as JIT-enabled and have
+ *             compiled nothing. The probe below therefore carries the SAME flags,
+ *             so it reads what the worker reads rather than what a bare `php`
+ *             would have read.
+ *
+ *             The probe asks $phpCli, NOT a bare `php`. Those were the same binary
+ *             only while PATH happened to point at the version the template
+ *             hardcoded; once the VM's default `php` moved to 8.5 while the
+ *             worker was pinned elsewhere, a bare-name probe would have recorded
+ *             one installation's setting as another's.
  *
  * A mode whose answer cannot be established is OMITTED, never defaulted to
  * false: "not recorded" and "off" are different claims, and collapsing them is
@@ -434,9 +1024,16 @@ function rrMaxJobsFromTemplate(string $root): ?int
  *                                        drive this without a VM.
  * @return array<string,bool>
  */
-function deploymentOpcache(string $root, ?callable $runProcess = null): array
+function deploymentOpcache(string $root, ?callable $runProcess = null, string $phpCli = ''): array
 {
     $out = [];
+
+    // The flags the RoadRunner/attach/spawn-cgi commands carry, kept in ONE place
+    // so the probe and the spawned processes cannot drift. See
+    // deploy/rr/config-template.php and writePhpCgiWrapper() for the copies that
+    // are baked into generated configs; a change here must be mirrored there.
+    $flags = '-d opcache.enable_cli=1 -d opcache.validate_timestamps=0 '
+        . '-d opcache.jit=tracing -d opcache.jit_buffer_size=64M';
 
     // --- php-fpm: the directive fpm-fcgi actually reads ----------------------
     $pool = @file_get_contents("{$root}/deploy/fpm/pool.conf.template");
@@ -452,8 +1049,12 @@ function deploymentOpcache(string $root, ?callable $runProcess = null): array
     // --- roadrunner: the CLI SAPI's own switch, as the worker sees it --------
     if ($runProcess !== null) {
         // `-n` would SKIP php.ini and answer a different question; the worker
-        // loads php.ini, so the probe must too.
-        $probe = "php -r \"echo (int) ini_get('opcache.enable_cli');\"";
+        // loads php.ini, so the probe must too. And it carries the SAME `-d`
+        // OPcache/JIT flags the RR command carries: probing a bare interpreter
+        // while the worker runs with `opcache.enable_cli=1 -d opcache.jit=tracing`
+        // would record the host's defaults as the worker's configuration.
+        $cli   = $phpCli !== '' ? escapeshellarg($phpCli) : 'php';
+        $probe = "{$cli} {$flags} -r \"echo (int) ini_get('opcache.enable_cli');\"";
         $val   = trim($runProcess($probe));
         if ($val === '0' || $val === '1') {
             $out['roadrunner'] = $val === '1';
@@ -461,6 +1062,191 @@ function deploymentOpcache(string $root, ?callable $runProcess = null): array
     }
 
     return $out;
+}
+
+/**
+ * The JIT ini drop-in, as content. ONE definition, used by the installer below and
+ * by the tests that assert the settings.
+ *
+ * WHY A DROP-IN AND NOT `php_admin_value` IN THE POOL. `opcache.jit` is a
+ * PHP_INI_SYSTEM directive: it can only be changed at startup. FPM therefore
+ * ACCEPTS `php_admin_value[opcache.jit]` without logging an error and the worker
+ * still reports `disable` — verified 2026-11-11 by serving a request through the
+ * pool and reading `opcache_get_status()`. The sibling `opcache.jit_buffer_size`
+ * behaves the same way, so both have to live in the ini.
+ *
+ * Both lines are required. A mode with a 0-byte buffer selects a strategy for a
+ * buffer that does not exist and compiles nothing; PHP 8.4+ ships 64M as the
+ * default, which is exactly what makes "there is a buffer" read as "the JIT is
+ * on".
+ *
+ * `tracing` is PHP's recommended mode and the one the sibling volucer-competition
+ * matrix uses, so a number from either repo is described the same way. It compiles
+ * HOT paths, which means it needs the counters to warm up: a cold-mode row that
+ * boots once and serves one request will show almost no JIT benefit, and that is a
+ * property of tracing, not evidence against the JIT.
+ */
+function jitIniContent(): string
+{
+    return "; Generated by deploy-lib.php. Installed as /etc/php/<series>/<sapi>/conf.d/99-jit.ini\n"
+        . "; opcache.jit is PHP_INI_SYSTEM: it cannot be set per FPM pool, so it is\n"
+        . "; stated here, at startup, for every SAPI the benchmark runs.\n"
+        . "opcache.jit=tracing\n"
+        . "opcache.jit_buffer_size=64M\n";
+}
+
+/**
+ * Install the JIT drop-in for every SAPI that serves a measured request.
+ *
+ * The three SAPIs matter separately and none inherits from another:
+ *
+ *   fpm   nginx + PHP-FPM (mode php-fpm)
+ *   cgi   volucer's spawn_cgi arm, which reads `opcache.enable_cli` (mode volucer-cgi)
+ *   cli   the RoadRunner worker and the attach supervisor (modes roadrunner /
+ *         volucer-attach), which ALSO receive the pair as `-d` flags — the ini makes
+ *         both routes agree rather than leaving one to a flag list
+ *
+ * Returns the list of installed paths (or [] when the series cannot be derived, so
+ * a caller can report "not installed" instead of assuming success). Idempotent:
+ * rewriting identical content and reloading is harmless.
+ *
+ * @return list<string>
+ */
+function installJitIni(string $fpmBin, ?callable $runProcess = null): array
+{
+    if ($runProcess === null) {
+        return [];
+    }
+
+    $series = phpSeriesFromFpmBin($fpmBin);
+    if ($series === null) {
+        return [];
+    }
+
+    $content = jitIniContent();
+    $staged  = sys_get_temp_dir() . '/bench-99-jit.ini';
+    if (@file_put_contents($staged, $content) === false) {
+        return [];
+    }
+
+    $installed = [];
+    foreach (['fpm', 'cgi', 'cli'] as $sapi) {
+        $dest = "/etc/php/{$series}/{$sapi}/conf.d/99-jit.ini";
+        $runProcess(sprintf('sudo -n cp %s %s', escapeshellarg($staged), escapeshellarg($dest)));
+        $installed[] = $dest;
+    }
+    @unlink($staged);
+
+    return $installed;
+}
+
+/**
+ * The JIT settings the measured deployments actually ran under.
+ *
+ * WHY THIS IS RECORDED AT ALL: because "JIT is on" and "JIT is off" are both
+ * claims a reader would otherwise have to assume, and the assumption goes wrong in
+ * this exact direction. PHP 8.4+ ships `opcache.jit_buffer_size=64M` by DEFAULT
+ * while leaving `opcache.jit=disable`, and `-i` prints that 64M buffer next to a
+ * disabled engine, so "there is a JIT buffer" reads as "JIT is on" to anyone not
+ * reading both lines. The 2026-11-10 run was reported as having gained from JIT;
+ * it had not, and nothing in that dataset could disprove it. Recording the pair
+ * is what makes either answer checkable.
+ *
+ * The values are read WITH THE SAME `-d` FLAGS the measured processes carry, not
+ * from the bare interpreter. That distinction is the whole test: this VM's php.ini
+ * states no `opcache.jit` at all, so a bare `php -r 'ini_get(...)'` answers
+ * `disable` — while every arm in the run is started with
+ * `-d opcache.jit=tracing -d opcache.jit_buffer_size=64M` and compiles for real.
+ * Probing the bare interpreter would stamp a dataset that describes the host's
+ * defaults as the run's configuration, which is the same class of error as the
+ * absent-`opcache`-key bug above: a fact about the machine published as a fact
+ * about the measurement.
+ *
+ * Read from `$phpCli`, which is the interpreter run-http.php resolved for this
+ * run and the same one probed for OPcache above — the two answers must
+ * describe one installation. Absent keys mean "not establishable", never "off"
+ * (see deploymentOpcache): a host without the opcache extension cannot answer,
+ * and a dataset claiming JIT was off there would be inventing a measurement.
+ *
+ * ONE PAIR DESCRIBES EVERY ARM, which is why a single global value is honest
+ * rather than a per-mode map like `opcache_by_mode`. The FPM pool states the pair
+ * via `php_admin_value`, and every spawned interpreter (RoadRunner, attach,
+ * spawn_cgi) receives the identical pair as `-d` flags, so all four servers
+ * compile under the same configuration. If an arm's JIT settings ever diverge,
+ * this function must return a per-mode map instead — stamping one value would
+ * then describe one arm and misdescribe the rest.
+ *
+ * @return array<string,string|bool>
+ */
+function deploymentJit(?callable $runProcess = null, string $phpCli = ''): array
+{
+    if ($runProcess === null) {
+        return [];
+    }
+
+    // Keep in step with the flags in deploymentOpcache(), writePhpCgiWrapper(),
+    // startVolucerSupervisor(), the floor-RR worker and deploy/rr/config-template.php.
+    $cli   = $phpCli !== '' ? escapeshellarg($phpCli) : 'php';
+    $flags = '-d opcache.enable_cli=1 -d opcache.validate_timestamps=0 '
+        . '-d opcache.jit=tracing -d opcache.jit_buffer_size=64M';
+    $probe = "{$cli} {$flags} -r \"echo ini_get('opcache.jit'), '/', ini_get('opcache.jit_buffer_size');\"";
+    $raw   = trim((string) $runProcess($probe));
+
+    $parts = explode('/', $raw, 2);
+    if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+        return [];
+    }
+
+    $mode   = trim($parts[0]);
+    $buffer = trim($parts[1]);
+
+    // The mode/buffer rule lives in ONE place (see jitConfigurationFrom), so a
+    // dataset stamped by the deployment harness and one stamped by the
+    // view-engine harness cannot disagree about what "enabled" means.
+    return jitConfigurationFrom($mode, $buffer, null);
+}
+
+/**
+ * The JIT facts a dataset carries, from a mode, a buffer size and an optional
+ * runtime answer.
+ *
+ * TWO CALLERS, ONE RULE, and that is the point: `deploymentJit()` reads the pair
+ * from the interpreter the benchmarked servers run, and the view-engine harness
+ * reads it from a child spawned with the same flags its measured children get.
+ * Both must decide "enabled" identically, or two pages can describe one
+ * configuration two ways — the drift this repository has paid for repeatedly.
+ *
+ * `$runtimeEnabled` is the JIT's own answer (`opcache_get_status()['jit']`).
+ * null means the caller could not obtain one, which is NOT "off": the key is
+ * then decided from the configuration alone, exactly as it was before the
+ * runtime probe existed. A `false` is a real observation and overrides the
+ * configuration-derived guess, because a mode and a buffer that look correct
+ * while the JIT never started is precisely the case worth publishing.
+ *
+ * `disable` / `off` / `0` (and the trace modes `tracing`, `function`, `1205`,
+ * ...) are reported VERBATIM rather than normalised to a boolean: a trace mode
+ * names WHICH compilation is in play, and collapsing it would discard the only
+ * distinguishing information there is.
+ *
+ * @return array<string,string|bool>
+ */
+function jitConfigurationFrom(string $mode, string $buffer, ?bool $runtimeEnabled): array
+{
+    $modeOn = !in_array(strtolower($mode), ['', 'disable', 'off', '0'], true);
+
+    // A MODE IS NOT AN ENGINE. `opcache.jit=tracing` with
+    // `opcache.jit_buffer_size=0` compiles NOTHING — the mode selects a strategy
+    // for a buffer that does not exist. This is not hypothetical: it is the
+    // host's own state while the VM has the mirror image (`disable` + `64M`).
+    // Reporting either half alone gives the wrong answer in one direction or the
+    // other, so "enabled" requires BOTH and the pair is always shown.
+    $bufferOn = !in_array(strtolower($buffer), ['', '0'], true);
+
+    return [
+        'opcache_jit'             => $mode,
+        'opcache_jit_buffer_size' => $buffer,
+        'opcache_jit_enabled'     => $runtimeEnabled ?? ($modeOn && $bufferOn),
+    ];
 }
 
 /**
@@ -500,8 +1286,18 @@ function ensureFpmRunning(string $root, string $phpFpmBin, string $deployDir): a
 
     echo "  installing FPM pools + nginx vhosts...\n";
 
+    // Everything FPM-side is derived from the version that $phpFpmBin names, so
+    // measuring a different PHP is a flag rather than a source edit. When the
+    // binary name does not carry a version (a custom build, an absolute path to
+    // something else) the harness keeps its historical 8.3 layout instead of
+    // guessing — a wrong pool directory would install pools no master reads, and
+    // the block would then be measured against a server that never reloaded.
+    $series  = phpSeriesFromFpmBin($phpFpmBin) ?? '8.3';
+    $poolDir = "/etc/php/{$series}/fpm/pool.d";
+    $fpmUnit = "php{$series}-fpm";
+
     foreach (glob("{$deployDir}/bench-*.conf") ?: [] as $pool) {
-        shellRun(sprintf('sudo -n cp %s /etc/php/8.3/fpm/pool.d/%s', escapeshellarg($pool), escapeshellarg(basename($pool))), 'cp pool');
+        shellRun(sprintf('sudo -n cp %s %s', escapeshellarg($pool), escapeshellarg($poolDir . '/' . basename($pool))), 'cp pool');
     }
     // nginx.conf ships with `include /etc/nginx/conf.d/*.conf;` — vhosts
     // MUST land with a .conf suffix or the glob ignores them (silent: reload
@@ -515,11 +1311,11 @@ function ensureFpmRunning(string $root, string $phpFpmBin, string $deployDir): a
     shellRun('sudo -n mkdir -p /run/php-fpm-bench', 'mkdir sockdir');
     shellRun('sudo -n chown www-data:www-data /run/php-fpm-bench', 'chown sockdir');
 
-    // php-fpm --test opens the GLOBAL error_log (/var/log/php8.3-fpm.log)
+    // php-fpm --test opens the GLOBAL error_log (/var/log/php<X.Y>-fpm.log)
     // during validation — root-writable only, so the test itself must run
     // via sudo even though the benchmark user owns everything else.
     shellRun("sudo -n {$phpFpmBin} --test", 'fpm config test');
-    shellRun('sudo -n systemctl reload php8.3-fpm || sudo -n systemctl restart php8.3-fpm', 'fpm reload');
+    shellRun("sudo -n systemctl reload {$fpmUnit} || sudo -n systemctl restart {$fpmUnit}", 'fpm reload');
     // nginx -t opens /run/nginx.pid (and the global error log) during
     // validation — root-only, so sudo here too.
     shellRun('sudo -n nginx -t', 'nginx config test');
@@ -533,18 +1329,23 @@ function ensureFpmRunning(string $root, string $phpFpmBin, string $deployDir): a
 
 /**
  * Remove benchmark pools/vhosts and reload services (teardown after the run).
+ *
+ * The pool sweep is deliberately version-AGNOSTIC: it globs every /etc/php/* on
+ * the host rather than the one directory this run installed into. A pool left
+ * behind by an earlier run under a DIFFERENT PHP version keeps its `listen`
+ * socket and its bench-<app> name alive, and FPM fails the whole master's reload
+ * when two pools claim one socket — so a leftover from the 8.3 era breaks an 8.5
+ * run in a way that reads as "FPM did not reload".
  */
 function removeDeployConfigs(string $deployDir): void
 {
-    foreach (glob("{$deployDir}/bench-*.conf") ?: [] as $pool) {
-        @unlink('/etc/php/8.3/fpm/pool.d/' . basename($pool));
-    }
     foreach (glob("{$deployDir}/bench-*.nginx") ?: [] as $vhost) {
         // Mirror ensureFpmRunning(): installed as <name>.conf (include glob).
         @unlink('/etc/nginx/conf.d/' . str_replace('.nginx', '.conf', basename($vhost)));
     }
-    shellRun('sudo -n sh -c "rm -f /etc/php/8.3/fpm/pool.d/bench-* /etc/nginx/conf.d/bench-*"', 'rm configs');
-    shellRun('sudo -n systemctl reload php8.3-fpm || true', 'fpm reload');
+    shellRun('sudo -n sh -c "rm -f /etc/php/*/fpm/pool.d/bench-* /etc/nginx/conf.d/bench-*"', 'rm configs');
+    // Reload every FPM master that exists, so none keeps a pool whose file is gone.
+    shellRun('sudo -n sh -c ' . escapeshellarg('for u in php*-fpm; do systemctl reload "$u" 2>/dev/null || true; done'), 'fpm reload');
     shellRun('sudo -n systemctl reload nginx || true', 'nginx reload');
     echo "FPM pools + nginx vhosts removed.\n";
 }
@@ -672,12 +1473,13 @@ function workerLogTail(?string $logPath, int $lines = 25): string
 
 // --- http-bench child -------------------------------------------------------------------
 
-function runHttpBench(string $root, string $server, string $appKey, string $baseUrl, int $itersPerRun, int $runs, string $tmpJson, string $extraArgs = ''): void
+function runHttpBench(string $root, string $server, string $appKey, string $baseUrl, int $itersPerRun, int $runs, string $tmpJson, string $extraArgs = '', string $phpCli = ''): void
 {
     echo "  benchmarking {$server}/{$appKey} @ {$baseUrl}...\n";
     shellRun(sprintf(
-        'cd %s && php scripts/http-bench.php --server=%s --app=%s --base-url=%s --iterations-per-run=%d --runs=%d --out-json=%s %s',
+        'cd %s && %s scripts/http-bench.php --server=%s --app=%s --base-url=%s --iterations-per-run=%d --runs=%d --out-json=%s %s',
         escapeshellarg($root),
+        $phpCli !== '' ? escapeshellarg($phpCli) : 'php',
         escapeshellarg($server),
         escapeshellarg($appKey),
         escapeshellarg($baseUrl),
@@ -709,7 +1511,16 @@ function measureFloors(
     string $rrBinary,
     string $phpFpmBin,
     string $benchUser,
+    string $phpCli = '',
+    array $volucerArms = [],
+    string $volucerBinary = '',
+    int $volucerPortBase = 8800,
 ): array {
+    // Same defaulting rule as stampAllDeployConfigs(): empty means "this
+    // orchestrator", so the floor probe runs on the interpreter the RR workers use.
+    if ($phpCli === '') {
+        $phpCli = PHP_BINARY;
+    }
     $floors = [];
 
     // floor-http: static file through nginx (port 9900, separate vhost).
@@ -733,7 +1544,7 @@ function measureFloors(
         shellRun(sprintf('sudo -n cp %s /etc/nginx/conf.d/%s', escapeshellarg("{$deployDir}/bench-floor-http.nginx"), escapeshellarg('bench-floor-http.conf')), 'cp floor vhost');
         shellRun('sudo -n systemctl reload nginx || sudo -n systemctl restart nginx', 'nginx reload');
 
-        $floors[] = measureFloorApp($root, 'floor-http', 'php-fpm', 'http://127.0.0.1:9900', $itersPerRun, $runs);
+        $floors[] = measureFloorApp($root, 'floor-http', 'php-fpm', 'http://127.0.0.1:9900', $itersPerRun, $runs, $phpCli);
 
         // floor-php: hello-world through FPM (real PHP cost, no framework).
         $vhost = <<<NGINX
@@ -759,11 +1570,15 @@ function measureFloors(
         file_put_contents("{$staticDir}/hello.php", "<?php echo 'floor-php';\n");
 
         shellRun(sprintf('sudo -n cp %s /etc/nginx/conf.d/%s', escapeshellarg("{$deployDir}/bench-floor-php.nginx"), escapeshellarg('bench-floor-php.conf')), 'cp floor vhost');
-        shellRun(sprintf('sudo -n cp %s /etc/php/8.3/fpm/pool.d/%s', escapeshellarg("{$deployDir}/bench-floor-php.conf"), escapeshellarg('bench-floor-php.conf')), 'cp floor pool');
-        shellRun('sudo -n systemctl reload php8.3-fpm || sudo -n systemctl restart php8.3-fpm', 'fpm reload');
+        $floorSeries = phpSeriesFromFpmBin($phpFpmBin) ?? '8.3';
+        shellRun(sprintf('sudo -n cp %s %s', escapeshellarg("{$deployDir}/bench-floor-php.conf"), escapeshellarg("/etc/php/{$floorSeries}/fpm/pool.d/bench-floor-php.conf")), 'cp floor pool');
+        // The floor probe must run on the SAME master that serves the measured
+        // apps, or its "constant webserver overhead" baseline is a number from a
+        // different runtime than the cells it is subtracted from / compared with.
+        shellRun("sudo -n systemctl reload php{$floorSeries}-fpm || sudo -n systemctl restart php{$floorSeries}-fpm", 'fpm reload');
         shellRun('sudo -n systemctl reload nginx || sudo -n systemctl restart nginx', 'nginx reload');
 
-        $floors[] = measureFloorApp($root, 'floor-php', 'php-fpm', 'http://127.0.0.1:9901', $itersPerRun, $runs);
+        $floors[] = measureFloorApp($root, 'floor-php', 'php-fpm', 'http://127.0.0.1:9901', $itersPerRun, $runs, $phpCli);
     }
 
     // floor-rr: hello-world through RoadRunner (bare worker cost).
@@ -776,12 +1591,12 @@ function measureFloors(
         file_put_contents($worker, floorRrWorkerSource());
         $cfg = "{$deployDir}/.rr-{$floorKey}.yaml";
         file_put_contents($cfg, str_replace(
-            ['{{APP}}', '{{PORT}}'],
-            [$floorKey, '9902'],
+            ['{{APP}}', '{{PORT}}', '{{ROOT}}', '{{PHP_CLI}}'],
+            [$floorKey, '9902', $root, $phpCli],
             <<<YAML
             version: "3"
             server:
-              command: "php -d xdebug.mode=off {$worker}"
+              command: "{{PHP_CLI}} -d xdebug.mode=off -d opcache.enable_cli=1 -d opcache.validate_timestamps=0 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M {$worker}"
             http:
               address: "127.0.0.1:9902"
               pool:
@@ -794,7 +1609,7 @@ function measureFloors(
         $proc = startRoadRunner($root, $deployDir, $floorKey, $rrBinary, 9902);
         try {
             waitForServer('http://127.0.0.1:9902', 'rr', $floorKey, $proc['log'] ?? null);
-            $floors[] = measureFloorApp($root, 'floor-rr', 'roadrunner', 'http://127.0.0.1:9902', $itersPerRun, $runs);
+            $floors[] = measureFloorApp($root, 'floor-rr', 'roadrunner', 'http://127.0.0.1:9902', $itersPerRun, $runs, $phpCli);
         } finally {
             stopRoadRunner($proc);
         }
@@ -807,12 +1622,12 @@ function measureFloors(
  * Measure one floor pseudo-app (single request label GET /) via http-bench
  * and return an app entry shaped like the real apps.
  */
-function measureFloorApp(string $root, string $name, string $mode, string $baseUrl, int $itersPerRun, int $runs): array
+function measureFloorApp(string $root, string $name, string $mode, string $baseUrl, int $itersPerRun, int $runs, string $phpCli = ''): array
 {
     $tmpJson = "{$root}/temp/bench-floor-{$name}.json";
     // Floors are single-endpoint probes (GET / only) — never the full label
     // list; the report only reads the GET / entry.
-    runHttpBench($root, $mode === 'roadrunner' ? 'rr' : 'fpm', $name, $baseUrl, $itersPerRun, $runs, $tmpJson, '--requests="GET /"');
+    runHttpBench($root, $mode === 'roadrunner' ? 'rr' : 'fpm', $name, $baseUrl, $itersPerRun, $runs, $tmpJson, '--requests="GET /"', $phpCli);
 
     $data = json_decode((string) file_get_contents($tmpJson), true);
     unlink($tmpJson);

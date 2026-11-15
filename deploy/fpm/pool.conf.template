@@ -37,6 +37,31 @@ request_slowlog_timeout = 0
 php_admin_value[opcache.enable] = 1
 php_admin_value[opcache.enable_cli] = 1
 php_admin_value[opcache.validate_timestamps] = 0
+; JIT is DELIBERATELY NOT SET HERE.
+;
+; `php_admin_value[opcache.jit]` looks like it should work and does not: opcache.jit
+; is a PHP_INI_SYSTEM directive, changeable only at startup, so FPM accepts the line
+; without complaint and the worker still reports `opcache.jit=disable`. Verified
+; 2026-11-11: the pool loaded with no error in the FPM log, and a request served
+; through the pool returned `ini_jit=disable / jit_on=false`. A silently inert
+; directive is the same trap as the defaulted 64M buffer, one layer down.
+;
+; The JIT therefore comes from a drop-in ini on the host:
+;
+;     /etc/php/8.5/{fpm,cgi,cli}/conf.d/99-jit.ini
+;         opcache.jit=tracing
+;         opcache.jit_buffer_size=64M
+;
+; which installs the setting where a PHP_INI_SYSTEM directive can take effect.
+; scripts/run-remote.ps1 and scripts/run-http.php install it before a run;
+; jitIniContent()/installJitIni() in scripts/deploy-lib.php hold the content and the
+; installer. Both lines are required — a mode with a 0-byte buffer compiles
+; nothing, and `tracing` (PHP's recommended mode) needs the hot-path counters to
+; warm up, so a cold row that boots once and serves once will show almost no JIT
+; benefit and must not be read as "the JIT did not help".
+;
+; deploymentJit() reads the live interpreter rather than assuming, so a dataset
+; always states what actually ran.
 php_admin_value[error_log] = {{ROOT}}/temp/fpm-{{APP}}.log
 php_admin_value[memory_limit] = 512M
 

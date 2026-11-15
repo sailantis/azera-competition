@@ -44,7 +44,7 @@ final class EntryScriptBootProbeTest extends TestCase
         $src = $this->source($app);
         $this->assertStringContainsString("require_once __DIR__ . '/../boot-probe.php'", $src, "{$app}: probe helper not required");
         $this->assertStringContainsString('boot_probe_start()', $src, "{$app}: clock never started");
-        $this->assertStringContainsString("boot_probe_record('fpm', '{$app}')", $src, "{$app}: no boot sample recorded");
+        $this->assertStringContainsString("boot_probe_record(bench_probe_kind(), '{$app}')", $src, "{$app}: no boot sample recorded");
     }
 
     /**
@@ -82,7 +82,7 @@ final class EntryScriptBootProbeTest extends TestCase
     public function testSampleIsRecordedBeforeTheResponseIsHandled(string $app): void
     {
         $src = $this->source($app);
-        $rec = strpos($src, "boot_probe_record('fpm', '{$app}')");
+        $rec = strpos($src, "boot_probe_record(bench_probe_kind(), '{$app}')");
         $this->assertNotFalse($rec);
 
         // The marker that starts serving the request in each entry script.
@@ -107,7 +107,7 @@ final class EntryScriptBootProbeTest extends TestCase
         // app.php container build and understate Laravel's boot several-fold.
         $src  = $this->source('laravel');
         $boot = strpos($src, '$kernel->bootstrap()');
-        $rec  = strpos($src, "boot_probe_record('fpm', 'laravel')");
+        $rec  = strpos($src, "boot_probe_record(bench_probe_kind(), 'laravel')");
         $this->assertNotFalse($boot, 'laravel: $kernel->bootstrap() missing — boot would be under-measured');
         $this->assertNotFalse($rec);
         $this->assertLessThan($rec, $boot, 'laravel: bootstrap() must run before the sample is recorded');
@@ -143,7 +143,7 @@ final class EntryScriptBootProbeTest extends TestCase
         // outside it would race Kernel::run().
         $src = $this->source('spiral');
         $cb  = strpos($src, '$kernel->bootstrapped(');
-        $rec = strpos($src, "boot_probe_record('fpm', 'spiral')");
+        $rec = strpos($src, "boot_probe_record(bench_probe_kind(), 'spiral')");
         $this->assertNotFalse($cb);
         $this->assertNotFalse($rec);
         $this->assertGreaterThan($cb, $rec);
@@ -194,14 +194,25 @@ final class EntryScriptBootProbeTest extends TestCase
         );
     }
 
-    public function testRoadRunnerDoesNotStampBootOnItsLatencyRows(): void
+    public function testResidentArmsDoNotStampBootOnTheirLatencyRows(): void
     {
-        // A RoadRunner worker boots BEFORE serving, so its boot is not inside
-        // the timed rows. Stamping boot_ms there would double-count the boot in
-        // every latency number. Only php-fpm rows carry boot_ms.
+        // A resident worker (RoadRunner, and volucer's attach arm) boots BEFORE
+        // serving, so its boot is not inside the timed rows. Stamping boot_ms there
+        // would double-count the boot in every latency number. Only per-request arms
+        // carry boot_ms — php-fpm and volucer's spawn_cgi.
+        //
+        // $bootKind is now per server rather than a two-way rr/fpm choice, because a
+        // second per-request arm exists. The assertion therefore pins the KIND test
+        // (which is what protects the latency rows) and the mapping that produces it,
+        // instead of the old ternary that hardcoded the pair.
         $src = (string) file_get_contents(dirname(__DIR__) . '/scripts/http-bench.php');
         $this->assertStringContainsString("\$bootKind === 'fpm' && \$bootMs !== null", $src);
-        $this->assertStringContainsString("\$bootKind    = (\$server === 'rr') ? 'rr' : 'fpm';", $src);
+        $this->assertStringContainsString('$bootKind    = $probeKind;', $src);
+        $this->assertStringContainsString(
+            "'volucer-cgi'    => 'volucer-cgi',",
+            $src,
+            'the cold volucer arm must map to its own probe kind, not FPM\'s'
+        );
     }
 
     public function testCakePhpRecordsAfterItsRouteTableAndContainerExist(): void
@@ -222,7 +233,7 @@ final class EntryScriptBootProbeTest extends TestCase
         // boot. A revert here is silent (the chart simply flips), so it is
         // pinned rather than left to a comment.
         $src = $this->source('cakephp');
-        $rec = strpos($src, "boot_probe_record('fpm', 'cakephp')");
+        $rec = strpos($src, "boot_probe_record(bench_probe_kind(), 'cakephp')");
         $this->assertNotFalse($rec);
 
         foreach ([

@@ -16,7 +16,12 @@ final class Api extends BaseController
     private const SENTINEL_API_ID = 999998;
 
     /**
-     * GET /api/items — list 20 items as a JSON array.
+     * GET /api/items — list 20 items as a JSON array (hydrated entities).
+     *
+     * The Model's `$returnType` is the entity class, so `findAll()` constructs
+     * one entity per row — the same hydration cost `/items` pays, which is what
+     * makes the two list endpoints comparable. {@see indexFast()} is the
+     * unhydrated counterpart.
      */
     public function index(): \CodeIgniter\HTTP\ResponseInterface|string
     {
@@ -28,7 +33,33 @@ final class Api extends BaseController
     }
 
     /**
-     * GET /api/items/{id} — fetch a single item as a JSON object.
+     * GET /api/items-fast — the same JSON as {@see index()}, without hydration.
+     *
+     * Identical in every other respect: same Model, same table resolution, same
+     * builder, same SELECT, same serializer. Only the fetch differs — this one
+     * asks the builder for `getResultObject()` (one `stdClass` per row) instead
+     * of letting the Model construct an entity per row.
+     *
+     * Verified byte-identical JSON against {@see index()}, so the difference
+     * between the two routes is hydration and only hydration.
+     */
+    public function indexFast(): \CodeIgniter\HTTP\ResponseInterface|string
+    {
+        $rows = (new Item())
+            ->builder()
+            ->orderBy('id', 'ASC')
+            ->limit(20)
+            ->get()
+            ->getResultObject();
+
+        return $this->response->setJSON($this->serializeAll($rows));
+    }
+
+    /**
+     * GET /api/items/{id} — fetch a single item as a JSON object (hydrated).
+     *
+     * `find()` goes through the Model, so the row arrives as an entity.
+     * {@see serialize()} reads the three public values off it.
      */
     public function show(?int $id = null): \CodeIgniter\HTTP\ResponseInterface|string
     {

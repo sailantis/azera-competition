@@ -29,6 +29,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/report/BenchmarkConfig.php';
+require_once __DIR__ . '/report/Provenance.php';
 require_once __DIR__ . '/report/ResultStore.php';
 require_once __DIR__ . '/report/SvgChart.php';
 require_once __DIR__ . '/report/Tables.php';
@@ -136,6 +137,7 @@ if ($onlyView !== null) {
 $viewFiles = []; // viewKey => html filename
 $mdFiles   = []; // viewKey => md filename
 $svgByView = []; // viewKey => [chartKey => rel path]
+$viewApps  = []; // viewKey => list<string> apps that view actually rendered
 
 foreach ($views as $key => $view) {
     // A view may pin its own dataset (e.g. the php-fpm view reads the
@@ -154,7 +156,20 @@ foreach ($views as $key => $view) {
             fwrite(STDERR, "View {$key} declares unknown dataset: {$viewDsKey}\n");
             exit(1);
         }
-        $viewStore = resolveDataset($manifest['datasets'][$viewDsKey]);
+        // `optional: true` lets a view ship before its dataset is in the tree.
+        // Without it, adding a view whose dataset is produced by a separate run
+        // (Volucer's arms are measured on their own) would break `php scripts/
+        // report.php` for anyone who has the canonical datasets but not that one —
+        // turning a missing optional input into a total rendering failure.
+        $optional = (bool) ($manifest['datasets'][$viewDsKey]['optional'] ?? false);
+        $viewStore = tryResolveDataset($manifest['datasets'][$viewDsKey]);
+        if ($viewStore === null) {
+            if ($optional) {
+                echo "  - {$key}: skipped (optional dataset '{$viewDsKey}' not present)\n";
+                continue;
+            }
+            $viewStore = resolveDataset($manifest['datasets'][$viewDsKey]);
+        }
     } else {
         $viewStore = $store;
     }
@@ -207,6 +222,9 @@ foreach ($views as $key => $view) {
     $htmlFile = 'view-' . $key . '.html';
     file_put_contents($outDir . '/' . $htmlFile, $html);
     $viewFiles[$key] = $htmlFile;
+    // What this view actually rendered, for the dashboard card's chips. Collected
+    // per VIEW because views may read different datasets (see HtmlReport::index()).
+    $viewApps[$key] = $md->renderedApps() ?? [];
 
     echo "  ✓ {$key}: {$htmlFile}, {$mdFile}, " . count($chartFiles) . " charts [dataset: "
         . ($viewStore === $store ? $dsLabel : ($view['dataset'] ?? '?')) . "]"
@@ -215,7 +233,7 @@ foreach ($views as $key => $view) {
 
 // --- Index -----------------------------------------------------------------
 
-$index = (new HtmlReport($store, $manifest))->index($viewFiles, $outDir);
+$index = (new HtmlReport($store, $manifest))->index($viewFiles, $outDir, $viewApps);
 file_put_contents($outDir . '/index.html', $index);
 file_put_contents($outDir . '/.nojekyll', ''); // GitHub Pages: skip Jekyll
 echo "  ✓ index.html (+ .nojekyll)\n";

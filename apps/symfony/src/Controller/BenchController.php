@@ -33,6 +33,19 @@ class BenchController extends AbstractController
     }
 
     /**
+     * GET /echo — a constant handler through the whole HTTP path.
+     *
+     * The framework floor for this app: Symfony's router, the kernel event
+     * listeners, the request stack and controller resolution with its two
+     * injected services all run, then the action returns three bytes. The gap
+     * between this and GET / is what a Twig render costs.
+     */
+    public function echo(): Response
+    {
+        return new Response('bench', 200, ['Content-Type' => 'text/plain; charset=utf-8']);
+    }
+
+    /**
      * GET / — welcome page via Twig template (no DB).
      */
     public function index(): Response
@@ -60,6 +73,59 @@ class BenchController extends AbstractController
 
         return $this->render('items.html.twig', \array_merge(self::viewGlobals(), [
             'baseUrl'    => '/items',
+            'items'      => $items,
+            'pagination' => self::pagination($page, $total),
+        ]));
+    }
+
+    /**
+     * GET /items-fast — GET /items with Doctrine's object hydration removed.
+     *
+     * Identical to {@see list()} except for `getArrayResult()` in place of iterating
+     * the `Paginator`. The same `QueryBuilder` is built from the same `Item`
+     * mapping, the same DQL is generated and the same SQL runs with the same
+     * LIMIT/OFFSET, and the total still comes from `Paginator::count()` — which
+     * issues its own COUNT and never hydrated anything in the first place. What is
+     * skipped is the hydrator: no entity instantiation, no reflection on mapped
+     * properties, no `UnitOfWork` registration, no managed-object identity.
+     *
+     * The same single-variable control azera's `listFastAction()` provides:
+     * `/items` vs `/items-qb` also swaps the data-access layer, this swaps only
+     * hydration.
+     *
+     * WHY THE ARRAYS ARE NOT CAST TO stdClass. Casting is the obvious symmetry with
+     * azera (which returns stdClass) and it was measured rather than assumed: both
+     * shapes were rendered through this same `items.html.twig`, 3000 iterations
+     * each. stdClass came out ~3% SLOWER (525 us vs 541 us per page; ~10% slower
+     * under a JIT). Twig resolves `item.id` on an array through
+     * `Twig\Environment::getAttribute()`, which indexes it directly; on an object
+     * it must go through `isset($object->id)` / `$object->id`, i.e. two magic-method
+     * dispatches per field. Doctrine's array hydrator also already produces exactly
+     * these arrays, so casting would ADD a per-row conversion to reach a slower
+     * access path.
+     *
+     * That is a finding about Twig, and it is why this route returns arrays while
+     * azera's returns objects: the cheapest row shape is a property of the template
+     * engine, not of the ORM. Comparing the two frameworks' `/items`-vs-`-fast` gaps
+     * is still valid, because each is measured against its own engine's expensive
+     * shape.
+     */
+    public function listFast(Request $request): Response
+    {
+        $page = (int) ($request->query->get('page', 1));
+
+        $qb = $this->em->createQueryBuilder()
+            ->select('i')
+            ->from(Item::class, 'i')
+            ->orderBy('i.id', 'ASC')
+            ->setFirstResult(($page - 1) * self::PAGE_SIZE)
+            ->setMaxResults(self::PAGE_SIZE);
+
+        $total = \count(new Paginator(clone $qb, fetchJoinCollection: false));
+        $items = $qb->getQuery()->getArrayResult();
+
+        return $this->render('items.html.twig', \array_merge(self::viewGlobals(), [
+            'baseUrl'    => '/items-fast',
             'items'      => $items,
             'pagination' => self::pagination($page, $total),
         ]));

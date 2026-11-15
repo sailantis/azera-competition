@@ -18,6 +18,22 @@ use Cake\ORM\Entity;
 final class BenchController extends AppController
 {
     /**
+     * GET /echo — a constant handler through the whole HTTP path.
+     *
+     * The framework floor for this app: Cake's Router, RoutingMiddleware, the
+     * controller factory and controller instantiation all run, then the action
+     * returns three bytes. The gap between this and GET / is what a Cake view
+     * render costs, which no other endpoint in the set isolates.
+     *
+     * A plain string body, not `$this->render()`: rendering would add the view
+     * layer back and there would be nothing left to compare against.
+     */
+    public function echo(): \Cake\Http\Response
+    {
+        return $this->response->withStringBody('bench');
+    }
+
+    /**
      * GET / — welcome page via Cake View template (no DB).
      */
     public function index(): \Cake\Http\Response
@@ -49,6 +65,49 @@ final class BenchController extends AppController
         $this->set('pagination', $this->pagination($page, $total));
 
         return $this->render();
+    }
+
+    /**
+     * GET /items-fast — GET /items with hydration removed, and nothing else.
+     *
+     * Identical to {@see list()} except that the query runs with
+     * `disableHydration()`. The Table, its `find()`, the association loader, the
+     * column mapping and the pagination COUNT all still happen; what is skipped is
+     * the step that turns each row into an `Entity` — no instantiation, no
+     * constructor, no per-column cast, no dirty-tracking registry.
+     *
+     * That single difference is the point. `/items` vs `/items-qb` changes two
+     * things at once (the ORM AND hydration), so it cannot say which one costs
+     * what; this route changes exactly one. It is the same control azera's
+     * `listFastAction()` provides, so the two frameworks' rows are comparable.
+     *
+     * Rows come back as arrays, but the list template reads `$item->id`, so they
+     * are cast to stdClass — the same treatment `listQb()` gives its raw rows.
+     */
+    public function listFast(): \Cake\Http\Response
+    {
+        $page = max(1, (int) ($this->request->getQuery('page') ?? '1'));
+
+        $rows = $this->items()
+            ->find()
+            ->disableHydration()
+            ->orderByAsc('id')
+            ->limit(Benchmark::PAGE_SIZE)
+            ->offset(($page - 1) * Benchmark::PAGE_SIZE)
+            ->all()
+            ->toList();
+
+        $total = $this->items()->find()->count();
+
+        $this->set('title', 'Items');
+        $this->set('items', $this->qbObjects($rows));
+        $this->set('baseUrl', '/items-fast');
+        $this->set('pagination', $this->pagination($page, $total));
+
+        // Named explicitly, not left to auto-resolution: the route must serve the
+        // SAME page as /items, so it renders the same template rather than a
+        // `list_fast.php` copy that could drift.
+        return $this->render('list');
     }
 
     /**

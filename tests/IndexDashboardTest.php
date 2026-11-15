@@ -21,11 +21,11 @@ use PHPUnit\Framework\TestCase;
  * order, and these tests hold the two apart.
  *
  * The order is the reader's first question — which DEPLOYMENT MODEL — answered
- * first: the two views measured on a real server, then the in-process harness
- * view of each of those two models, so a reader who picks a model finds both of
- * its views adjacent. The two published SUMMARIES come last: they are subsets
- * of the measured views above them, so a reader who wants the headline should
- * meet the full pages first.
+ * first: every view measured on a real server (RoadRunner, PHP-FPM and Volucer's
+ * two arms), then the in-process harness view of each of those models, so a
+ * reader who picks a model finds its views adjacent. The two published
+ * SUMMARIES come last: they are subsets of the measured views above them, so a
+ * reader who wants the headline should meet the full pages first.
  */
 final class IndexDashboardTest extends TestCase
 {
@@ -39,10 +39,13 @@ final class IndexDashboardTest extends TestCase
     private const EXPECTED = [
         'view-real-roadrunner.html',
         'view-real-fpm.html',
+        'view-real-volucer-attach.html',
+        'view-real-volucer-cgi.html',
         'view-warm-start.html',
         'view-cold-start.html',
         'view-summary-roadrunner.html',
         'view-summary-fpm.html',
+        'view-summary-volucer.html',
     ];
 
     /** @return array<string,array<string,mixed>> */
@@ -91,9 +94,9 @@ final class IndexDashboardTest extends TestCase
         $manifest = $this->manifest();
         $manifest['views'] = array_reverse($manifest['views'], true);
 
-        // views.php declares warm-start … summary-fpm; reversed, the dashboard
-        // would be driven by summary-fpm first.
-        self::assertSame('summary-fpm', array_key_first($manifest['views']));
+        // views.php now ends with summary-volucer, so reversed it starts there:
+        // the dashboard must not follow it.
+        self::assertSame('summary-volucer', array_key_first($manifest['views']));
 
         self::assertSame(self::EXPECTED, self::cardHrefs($this->indexHtml($manifest)));
     }

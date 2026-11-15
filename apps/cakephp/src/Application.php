@@ -68,9 +68,16 @@ final class Application extends BaseApplication
 
         $routes->scope('/', function (RouteBuilder $builder): void {
             // --- Core benchmark endpoints ---
+            $builder->connect('/echo', ['controller' => 'Bench', 'action' => 'echo'])
+                ->setMethods(['GET']);
             $builder->connect('/', ['controller' => 'Bench', 'action' => 'index'])
                 ->setMethods(['GET']);
             $builder->connect('/items', ['controller' => 'Bench', 'action' => 'list'])
+                ->setMethods(['GET']);
+            // GET /items with hydration off: the single-variable control for /items
+            // (see BenchController::listFast()). Declared before /items/{id} so the
+            // literal segment is not swallowed by the id pattern.
+            $builder->connect('/items-fast', ['controller' => 'Bench', 'action' => 'listFast'])
                 ->setMethods(['GET']);
             $builder->connect('/items/{id}', ['controller' => 'Bench', 'action' => 'show'])
                 ->setPatterns(['id' => '\d+'])
@@ -91,6 +98,11 @@ final class Application extends BaseApplication
 
             // --- REST API ---
             $builder->connect('/api/items', ['controller' => 'Api', 'action' => 'index'])
+                ->setMethods(['GET']);
+            // Declared before /api/items/{id} so the literal segment is matched
+            // before the placeholder (whose pattern is \d+ anyway, but the
+            // ordering makes the precedence explicit rather than incidental).
+            $builder->connect('/api/items-fast', ['controller' => 'Api', 'action' => 'indexFast'])
                 ->setMethods(['GET']);
             $builder->connect('/api/items/{id}', ['controller' => 'Api', 'action' => 'show'])
                 ->setPatterns(['id' => '\d+'])

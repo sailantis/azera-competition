@@ -6,26 +6,69 @@
 # `Bootstrap::boot()` lands inside every timed row here exactly as it does under FPM,
 # and the two servers can be compared for free.
 #
-# Read it alongside `pool.template.toml`: the application, the adapter, the worker
-# count and the document root are identical, and the only difference is whether the
-# framework's bootstrap is paid once (worker) or per request (spawn_cgi). A gap between
-# them is the price of the boot, measured rather than inferred.
+# Read it alongside `attach.template.toml`: the application, the adapter and the
+# one-connection rule are identical, and the only difference is whether the framework's
+# bootstrap is paid once (attach forks its children from an already-booted master) or
+# per request (spawn_cgi). A gap between them is the price of the boot, measured rather
+# than inferred.
 #
 # `php-cgi` rather than `php-fpm` because volucer manages these processes itself and
 # needs no external pool, which keeps the cold arm to one moving part. Hazard 26 in the
 # volucer plan records that `-b` accepts a unix socket too; loopback TCP is used here
 # because on this VM the two were within noise of each other (hazard 25's sweep).
 
-default_backend = "cgi"
-
+# `default_backend` lives INSIDE [server] since 0.3.0; at top level 0.6.0 refuses to
+# start. Same stale-template failure as attach.template.toml.
 [server]
+default_backend = "cgi"
 http = "127.0.0.1:{{PORT}}"
 document_root = "{{ROOT}}/public"
 front_controller = "index-{{APP}}.php"
+
+# Off for the same comparability reason as attach.template.toml, and written as a TABLE
+# because `static_files` is a struct: `static_files = false` would be silently ignored.
+# `document_root` stays because `front_controller` is resolved against it.
+[server.static_files]
+enabled = false
 
 [backends.cgi]
 kind = "spawn_cgi"
 binary = "{{PHP_CGI}}"
 workers = 1
-bind_host = "127.0.0.1"
-base_port = {{BASE_PORT}}
+
+# UNIX SOCKETS, not loopback TCP. This is not a micro-optimisation — TCP here produced a
+# flat 42 ms per request on `GET /items`, against 1.57 ms for php-fpm on the same route.
+#
+# A FastCGI response is written as a header frame and then one or more body frames, and a
+# body large enough to need a second frame hits Nagle on the second write: the peer must
+# ACK the first before the second leaves, and Linux delays that ACK by ~40 ms while it
+# hopes to piggyback on a reply of its own. The 42 ms was the delayed ACK, not the
+# application — `min_ms` 41.87 and `max_ms` 42.98 across every run, i.e. a constant, which
+# is the signature. Small responses never split a frame and were unaffected.
+#
+# The comparison also demands it: nginx reaches php-fpm over
+# `unix:/run/php-fpm-bench/<app>.sock`, so a TCP cold arm would differ from the FPM cold
+# arm by its TRANSPORT rather than by its server. Volucer's own configuration reference
+# measures a loopback TCP relay at 38.96 ms against 0.06 ms for the same protocol over a
+# unix socket, for exactly this reason.
+#
+# `socket` is a PREFIX, not a path: slot i binds `<prefix>.<i>.sock`, one socket per
+# process so a slot stays countable and recyclable. It must be spelled `unix:<prefix>`
+# — volucer rejects a bare path here with "must start with `unix:`", unlike `php-cgi -b`
+# which wants the bare form and would read `unix:` as a hostname. `bind_host` and
+# `base_port` are unused when it is set. /run is used for the same reason the attach
+# arm's relay lives there: `sun_path` is 108 bytes on Linux and a checkout path plus an
+# app name can approach it.
+socket = "unix:/run/volucer-bench/cgi-{{APP}}"
+
+# This arm RE-RUNS public/index-<app>.php for every request — the same entry scripts
+# nginx+php-fpm runs — so without this they would append their probe samples to
+# temp/boot-fpm-<app>.jsonl and temp/mem-fpm-<app>.jsonl and the harness would read
+# those SAME files for both arms. The second arm's numbers would then be the first
+# arm's leftovers, with no error anywhere because the samples are plausible.
+#
+# `env` on this backend is merged over volatile's server-level env and is written AFTER
+# the FCGI_* variables, so naming BENCH_PROBE_KIND here is the one way to tell the entry
+# scripts which process family they are in. bench_probe_kind() falls back to 'fpm' when
+# it is unset, which keeps every pre-existing arm's file names byte-identical.
+env = { BENCH_PROBE_KIND = "{{PROBE_KIND}}" }

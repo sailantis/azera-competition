@@ -19,9 +19,16 @@ final class HtmlReport
     ) {}
 
     /**
-     * @param array<string,string> $viewFiles viewKey => relative html filename
+     * @param array<string,string>            $viewFiles viewKey => relative html filename
+     * @param array<string,list<string>>|null $viewApps  viewKey => the apps that view
+     *        actually RENDERED. Required once views read different datasets: the
+     *        chips used to come from this object's own store, which is the
+     *        CLI/default dataset, so a view pinned to another dataset advertised
+     *        the default one's frameworks. On a Volucer page that meant claiming
+     *        six frameworks had been measured on it when the run covered one.
+     *        Null keeps the old behaviour for callers that render a single dataset.
      */
-    public function index(array $viewFiles, string $outDir): string
+    public function index(array $viewFiles, string $outDir, ?array $viewApps = null): string
     {
         $env = $this->store->env();
 
@@ -30,9 +37,14 @@ final class HtmlReport
             if (!isset($viewFiles[$key])) {
                 continue;
             }
-            $apps  = $view['apps'] ?? $this->store->apps();
+            // When the caller supplies what the view rendered, that list is
+            // authoritative and must NOT be intersected with this object's store —
+            // the store is the default dataset, and a view pinned to another one
+            // would have its chips silently emptied or mislabelled.
+            $apps = $viewApps[$key]
+                ?? array_values(array_intersect($view['apps'] ?? $this->store->apps(), $this->store->apps()));
             $chips = '';
-            foreach (array_values(array_intersect($apps, $this->store->apps())) as $app) {
+            foreach ($apps as $app) {
                 $chips .= sprintf(
                     '<span class="chip" style="--c:%s">%s</span>',
                     BenchmarkConfig::appColor($app),
@@ -129,6 +141,13 @@ HTML;
         $order = [
             'real-roadrunner', // real server, resident worker
             'real-fpm',        // real server, boot paid per request
+            // Volucer's two arms next to the other two real servers: the same
+            // pair of models in a third server, which is what makes the
+            // boot-vs-no-boot finding about the MODEL rather than one
+            // implementation. A manifest key missing from this list is still
+            // appended below, so a view added to views.php always gets a card.
+            'real-volucer-attach',
+            'real-volucer-cgi',
             'warm-start',      // harness: the resident-worker model
             'cold-start',      // harness: the boot-per-request model
             // The published summaries last: each is a SUBSET of the measured view
@@ -136,6 +155,9 @@ HTML;
             // pages first (see the summary views in views.php).
             'summary-roadrunner',
             'summary-fpm',
+            // The same resident model in a second server, right after the first
+            // one: the pair is the evidence that the finding is about the MODEL.
+            'summary-volucer',
         ];
 
         $out = [];
@@ -174,7 +196,7 @@ HTML;
         // Same flag guard as MarkdownReport: only claim boot inclusion when
         // the dataset was recorded with boot inside the request clock.
         $subtitle = (string) ($view['subtitle'] ?? '');
-        if (in_array($mode, ['cold', 'php-fpm'], true) && !$this->store->coldBootIncluded()) {
+        if ($this->store->isPerRequestMode($mode) && !$this->store->coldBootIncluded()) {
             $subtitle = str_replace(
                 'the application boots for every request (harness cold mode, opcache retained).',
                 'the application boots for every request (harness cold mode, opcache retained) — boot is timed separately, the request numbers show post-boot work only.',
@@ -308,11 +330,28 @@ HTML;
             return 'Framework startup';
         }
         if ($this->store->isProbedBoot()) {
-            return $mode === 'roadrunner'
-                ? 'Framework startup — worker re-init (RoadRunner)'
-                : 'Framework startup — per-request boot (PHP-FPM)';
+            return $this->store->isResidentMode($mode)
+                ? 'Framework startup — worker re-init (' . $this->serverLabel($mode) . ')'
+                : 'Framework startup — per-request boot (' . $this->serverLabel($mode) . ')';
         }
         return 'Framework startup — boot + teardown (cold + FPM rebuild + warm)';
+    }
+
+    /**
+     * The human name of the server behind a mode, for a caption.
+     *
+     * Passes an unrecognised mode through rather than guessing: "(volucer-attach)"
+     * is honest, while "(PHP-FPM)" on a Volucer chart is a false attribution.
+     */
+    private function serverLabel(string $mode): string
+    {
+        return match ($mode) {
+            'roadrunner', 'warm' => 'RoadRunner',
+            'php-fpm', 'cold'    => 'PHP-FPM',
+            'volucer-attach'     => 'Volucer attach',
+            'volucer-cgi'        => 'Volucer spawn_cgi',
+            default              => $mode,
+        };
     }
 
     /**
@@ -322,7 +361,7 @@ HTML;
      */
     private function memoryCaption(string $mode): string
     {
-        return $mode === 'php-fpm'
+        return $this->store->isPerRequestMode($mode)
             ? 'Per-request memory — lightest, typical and heaviest endpoint'
             : 'Resident worker memory';
     }
@@ -404,18 +443,20 @@ HTML;
             }
             return ' — boot included: a fresh framework rebuild is timed inside every request';
         }
-        if (in_array($mode, ['warm', 'roadrunner'], true)) {
+        if ($this->store->isResidentMode($mode)) {
             // The recycle's own duration is measured in the startup chart, so
             // the note states the MODEL only. A figure copied into this line
             // would be a number a re-measure cannot keep in sync. Where that
             // chart LIVES depends on the view: the summaries draw none, so the
             // note must not cross-reference one they do not have.
             $where = in_array('hero', $charts, true) ? 'the startup chart' : 'the full report';
-            return match ($this->store->rrRecycleModel()) {
-                'never' => ' — the worker is never recycled (max_jobs=0), so no boot is '
-                    . 'added to these requests; the one-time recycle is measured in ' . $where,
+            // The accessor is mode-aware: a Volucer page must describe Volucer's
+            // own recycle mechanism, not RoadRunner's max_jobs.
+            return match ($this->store->modeRecycleModel($mode)) {
+                'never' => ' — the worker is never recycled (' . $this->store->recycleSettingLabel($mode)
+                    . '), so no boot is added to these requests; the one-time recycle is measured in ' . $where,
                 'every' => ' — boot included: each request carries its share of the worker\'s recycle '
-                    . 'divided by max_jobs',
+                    . 'divided by ' . $this->store->recycleSettingLabel($mode),
                 default => ' — boot included: the worker\'s recycle cost is added to every request'
             };
         }
@@ -436,7 +477,7 @@ HTML;
         }
         $ms = static fn(string $key): ?float => $floors[$key]['ms'] ?? null;
 
-        if (in_array($mode, ['cold', 'php-fpm'], true)) {
+        if ($this->store->isPerRequestMode($mode)) {
             $php = $ms('floor-php');
             if ($php === null) {
                 return '';

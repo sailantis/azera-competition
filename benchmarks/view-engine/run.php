@@ -794,7 +794,7 @@ function viewEngineEnv(int $itemsCount, int $itersPerRun, int $runs, array $engi
 {
     $root = dirname(__DIR__, 2);
 
-    return [
+    $env = [
         'php_version' => PHP_VERSION,
         'os'          => PHP_OS . ' ' . php_uname('r'),
         // The CLI gate, stated as such: opcache.enable_cli is the switch that
@@ -865,8 +865,91 @@ function viewEngineEnv(int $itemsCount, int $itersPerRun, int $runs, array $engi
         'clarity_modes' => in_array('clarity-open', array_map('trim', $engines), true)
             ? ['clarity' => 'sandboxed', 'clarity-open' => 'open']
             : null,
+        // How long a Clarity template-freshness verdict was reused during the
+        // run. It is a stated measurement condition, not a detail: Twig, Latte
+        // and Blade memoize that check per process, so a Clarity row taken at the
+        // default 0 would be charged a per-render stat cost none of them pays.
+        // Stated in the dataset so a reader does not have to find the harness to
+        // learn which configuration the numbers describe.
+        'clarity_revalidate_freq' => in_array('clarity', array_map('trim', $engines), true)
+            || in_array('clarity-open', array_map('trim', $engines), true)
+                ? BENCHMARK_CLARITY_REVALIDATE_FREQ
+                : null,
         'engine_versions' => viewEngineVersions($root, $engines),
     ];
+
+    // The JIT configuration, stamped from a CHILD launched with the same flags
+    // the measured children get (see jit-probe.php). It is read in a child for
+    // the same reason the memory columns are: the parent may carry its own `-d`
+    // flags from whoever launched it, and this process is not one any published
+    // figure was measured in.
+    //
+    // Absent keys mean "not establishable" — a host without the opcache
+    // extension cannot answer — and never "off". Provenance::jitClause() renders
+    // nothing for a dataset without them, which is what keeps a figure from
+    // claiming a JIT state nobody observed.
+    $jit = viewEngineJit();
+    if ($jit !== []) {
+        $env = array_merge($env, $jit);
+    }
+
+    return $env;
+}
+
+/**
+ * The JIT facts the measured children ran under.
+ *
+ * Spawns jit-probe.php with `-d opcache.enable_cli=1` and nothing else — the
+ * exact command line the steady-state, memory and first-render children use — so
+ * the answer describes THEIR configuration rather than the harness process's.
+ *
+ * Parsed defensively, like the other probes: a child that printed a partial line
+ * (or a warning that reached stdout) must leave the keys ABSENT so a chart can
+ * omit the clause, rather than present at a fabricated value.
+ *
+ * @return array<string,string|bool>
+ */
+function viewEngineJit(): array
+{
+    $null = DIRECTORY_SEPARATOR === '\\' ? '2>NUL' : '2>/dev/null';
+    $out  = shell_exec(sprintf(
+        '%s -d opcache.enable_cli=1 %s %s',
+        escapeshellarg(PHP_BINARY),
+        escapeshellarg(__DIR__ . '/jit-probe.php'),
+        $null
+    ));
+
+    if (!is_string($out) || trim($out) === '') {
+        return [];
+    }
+
+    $reading = [];
+    foreach (explode(';', trim($out)) as $pair) {
+        $parts = explode('=', $pair, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+        $reading[trim($parts[0])] = trim($parts[1]);
+    }
+
+    // The mode and the buffer are the two facts the clause is built from; a
+    // reading missing either is not a reading, and half of it would print a
+    // sentence about a configuration nobody measured.
+    $mode   = $reading['opcache_jit'] ?? '';
+    $buffer = $reading['opcache_jit_buffer_size'] ?? '';
+    if ($mode === '' || $buffer === '') {
+        return [];
+    }
+
+    // The runtime answer is `1`/`0` from opcache_get_status(); anything else is
+    // a shape this build does not understand, and is treated as unknown rather
+    // than coerced (see jitConfigurationFrom()).
+    $runtime = $reading['opcache_jit_enabled'] ?? '';
+    $runtime = $runtime === '1' ? true : ($runtime === '0' ? false : null);
+
+    require_once dirname(__DIR__, 2) . '/scripts/deploy-lib.php';
+
+    return jitConfigurationFrom($mode, $buffer, $runtime);
 }
 
 $results = [];

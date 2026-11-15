@@ -42,6 +42,21 @@ results/*-local-*
 results/view-engine-*-r[0-9]-*
 results/view-engine-*-r[0-9][0-9]-*
 
+# -Quick smoke runs write results/smoke-<date>.json, which is the OPPOSITE order
+# from the `*-smoke.*` patterns above; without this the file sat untracked after
+# every smoke run and was one `git add -A` away from being committed as a dataset.
+# Its rendered report is ignored alongside it.
+results/smoke-*
+
+# Manual pre-splice snapshots (`cp results/real-deployments.json
+# results/real-deployments.pre-jit.json`) taken before scripts/merge-modes.php
+# rewrites a dataset, and the fresh run fed into it. They are working copies of a
+# file that is itself committed: `real-deployments.pre-volucer.json` was
+# byte-identical to the `real-deployments.json` of its day, and the others sit in
+# the same history. Recoverable from git, so they must not be added as datasets.
+results/*.pre-*.json
+results/cold-refresh.json
+
 # OS / IDE
 .idea/
 .vscode/

@@ -195,7 +195,7 @@ register_shutdown_function(static function (): void {
 // wrong name is an uncaught Error thrown while the file is still being
 // loaded, so every request 500s with a 335-byte body.
 \CodeIgniter\Events\Events::on('pre_system', static function (): void {
-    boot_probe_record('fpm', 'codeigniter');
+    boot_probe_record(bench_probe_kind(), 'codeigniter');
     mem_probe_arm('codeigniter');
 });
 

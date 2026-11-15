@@ -399,6 +399,305 @@ final class OpcacheProvenanceTest extends TestCase
     }
 
     /**
+     * A real dataset with the JIT keys replaced, for the same reason as
+     * syntheticReal(): the committed dataset pins today's values, so driving the
+     * renderer's ON case needs a fixture rather than a claim about the VM.
+     *
+     * @param array<string,string|bool>|null $jit null = no JIT keys at all
+     */
+    private static function syntheticJit(?array $jit): string
+    {
+        $data = json_decode((string) file_get_contents(
+            dirname(__DIR__) . self::REAL_DATASET
+        ), true);
+
+        unset(
+            $data['env']['opcache_jit'],
+            $data['env']['opcache_jit_buffer_size'],
+            $data['env']['opcache_jit_enabled']
+        );
+        if ($jit !== null) {
+            $data['env'] = array_merge($data['env'], $jit);
+        }
+
+        $path = sys_get_temp_dir() . '/tmp-jit-synth-' . md5(json_encode($jit) ?: 'none') . '.json';
+        file_put_contents($path, json_encode($data));
+
+        return $path;
+    }
+
+    /**
+     * A dataset that predates the JIT stamp renders NO clause.
+     *
+     * "Not recorded" and "off" are different claims, exactly as they are for
+     * OPcache above. Printing "JIT: off" from an absent field would be a
+     * fabricated measurement — and here specifically it would be the RIGHT
+     * answer by luck, which is worse: a test that only checked today's dataset
+     * would pass while the renderer invented the value.
+     */
+    public function testADatasetWithoutJitRendersNoJitClause(): void
+    {
+        $manifest = self::manifest();
+        $md = (new MarkdownReport(
+            ResultStore::load(self::syntheticJit(null)),
+            'real-fpm',
+            $manifest['views']['real-fpm']
+        ))->render(sys_get_temp_dir() . '/tmp-jit-none', 'svg/x');
+
+        self::assertStringNotContainsString('JIT:', $md);
+    }
+
+    /**
+     * A run with JIT DISABLED says so, and shows the buffer that made it look
+     * enabled.
+     *
+     * This is the state the VM is actually in: PHP 8.5 ships
+     * `opcache.jit_buffer_size=64M` by default while `opcache.jit` stays
+     * `disable`, so `php -i` prints a 64M buffer beside a disabled engine. The
+     * 2026-11-10 run was reported as having benefited from JIT; it had none.
+     * Printing the pair makes that checkable instead of assumable.
+     */
+    public function testADisabledJitIsStatedWithItsBuffer(): void
+    {
+        $manifest = self::manifest();
+        $md = (new MarkdownReport(
+            ResultStore::load(self::syntheticJit([
+                'opcache_jit'             => 'disable',
+                'opcache_jit_buffer_size' => '64M',
+                'opcache_jit_enabled'     => false,
+            ])),
+            'real-fpm',
+            $manifest['views']['real-fpm']
+        ))->render(sys_get_temp_dir() . '/tmp-jit-off', 'svg/x');
+
+        self::assertStringContainsString(
+            'JIT: off (buffer 64M)',
+            $md,
+            'a disabled JIT must be stated, not omitted: the 64M buffer is what '
+                . 'makes "JIT is on" the likely wrong assumption'
+        );
+    }
+
+    /**
+     * A run WITH JIT names the MODE, not a boolean.
+     *
+     * `tracing` and `function` compile different things, and the numeric modes
+     * (`1205`) encode both. Collapsing any of them to "yes" would discard the
+     * only distinguishing information the stamp carries.
+     */
+    public function testAnEnabledJitNamesItsMode(): void
+    {
+        $manifest = self::manifest();
+        $md = (new MarkdownReport(
+            ResultStore::load(self::syntheticJit([
+                'opcache_jit'             => 'tracing',
+                'opcache_jit_buffer_size' => '64M',
+                'opcache_jit_enabled'     => true,
+            ])),
+            'real-fpm',
+            $manifest['views']['real-fpm']
+        ))->render(sys_get_temp_dir() . '/tmp-jit-on', 'svg/x');
+
+        self::assertStringContainsString('JIT: tracing', $md);
+        self::assertStringNotContainsString('JIT: off', $md);
+    }
+
+    /**
+     * A mode set with no buffer names BOTH halves, because either alone misleads.
+     *
+     * `opcache.jit=tracing` with `opcache.jit_buffer_size=0` compiles nothing: the
+     * mode selects a strategy for a buffer that was never allocated. That is the
+     * mirror of the VM's state (`disable` + 64M) and this codebase's own host was
+     * in it. Flattening this to "off" would hide a php.ini a reader can see and
+     * would be checking precisely because the numbers looked odd.
+     */
+    public function testAModeWithoutABufferSaysNothingWasCompiled(): void
+    {
+        $manifest = self::manifest();
+        $md = (new MarkdownReport(
+            ResultStore::load(self::syntheticJit([
+                'opcache_jit'             => 'tracing',
+                'opcache_jit_buffer_size' => '0',
+                'opcache_jit_enabled'     => false,
+            ])),
+            'real-fpm',
+            $manifest['views']['real-fpm']
+        ))->render(sys_get_temp_dir() . '/tmp-jit-nobuf', 'svg/x');
+
+        self::assertStringContainsString('JIT: tracing but no buffer', $md);
+        self::assertStringContainsString('nothing compiled', $md);
+        self::assertStringNotContainsString('JIT: off', $md);
+    }
+
+    /**
+     * Every generated run states its JIT setting.
+     *
+     * The stamp lives in run-http.php's env block, which no VM is needed to
+     * assemble — asserting on the source is what keeps a future edit from
+     * dropping the key silently, since a dataset without it renders cleanly and
+     * says nothing at all.
+     */
+    public function testTheHarnessStampsJitIntoEveryRealRun(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/scripts/run-http.php');
+
+        self::assertStringContainsString("'opcache_by_mode' =>", $src);
+        self::assertStringContainsString(
+            'deploymentJit(',
+            $src,
+            'run-http.php must stamp the JIT state; without it a page cannot state it'
+        );
+
+        $lib = (string) file_get_contents(dirname(__DIR__) . '/scripts/deploy-lib.php');
+        self::assertStringContainsString('function deploymentJit(', $lib);
+        self::assertStringContainsString(
+            "opcache.jit_buffer_size",
+            $lib,
+            'the buffer size is half the pair that misleads, so it must be probed'
+        );
+    }
+
+    /**
+     * "Enabled" requires BOTH a mode and a buffer.
+     *
+     * Asserted on the helper rather than through a page, because this is the
+     * derivation both the dataset and every renderer depend on: a run that
+     * reported `tracing` + `0` as enabled would publish an accelerator that
+     * compiled nothing, and no page-level assertion would notice.
+     */
+    public function testJitCountsAsEnabledOnlyWithABuffer(): void
+    {
+        $off     = deploymentJit(static fn(string $c): string => 'disable/64M', 'php');
+        $noBuf   = deploymentJit(static fn(string $c): string => 'tracing/0', 'php');
+        $on      = deploymentJit(static fn(string $c): string => 'tracing/64M', 'php');
+        $unknown = deploymentJit(static fn(string $c): string => '', 'php');
+
+        self::assertFalse($off['opcache_jit_enabled'], 'a disabled mode is off even with a buffer allocated');
+        self::assertFalse($noBuf['opcache_jit_enabled'], 'a mode with no buffer compiles nothing and must not read as on');
+        self::assertTrue($on['opcache_jit_enabled']);
+        self::assertSame([], $unknown, 'an unparseable probe records nothing rather than guessing');
+    }
+
+    /**
+     * The view-engine harness states its JIT setting too.
+     *
+     * The template-engine comparison ran for three releases without recording
+     * the JIT at all, so a JIT-on run and a JIT-off run produced byte-identical
+     * provenance and neither chart could say which it was. The stamp now comes
+     * from a child spawned with the SAME flags the measured cells get, because
+     * the parent may carry `-d` flags of its own from whoever launched it.
+     *
+     * Asserted at the source, like the run-http.php check above: a dataset
+     * without the keys renders cleanly and silently loses the clause, which is
+     * the failure this pins.
+     */
+    public function testTheViewEngineHarnessStampsJitIntoItsDataset(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/benchmarks/view-engine/run.php');
+
+        self::assertStringContainsString(
+            'viewEngineJit()',
+            $src,
+            'the view-engine harness must stamp the JIT state; without it the charts cannot state it'
+        );
+        self::assertStringContainsString(
+            'jit-probe.php',
+            $src,
+            'the stamp must come from a child, not from the parent process'
+        );
+        self::assertStringContainsString(
+            'jitConfigurationFrom(',
+            $src,
+            'the mode/buffer rule must be the shared one, or two pages can describe one configuration two ways'
+        );
+    }
+
+    /**
+     * The runtime answer overrides the configuration-derived guess.
+     *
+     * A mode and a buffer that look correct while the JIT never started is
+     * exactly the case worth publishing, and it is invisible to `ini_get()`:
+     * `opcache.jit=tracing` beside a 64M buffer can still come up `enabled:
+     * false`. The optional third argument carries that observation, and `null`
+     * must mean "not observed" rather than "off" — otherwise a host that cannot
+     * report the status would have its configuration silently overruled.
+     */
+    public function testTheRuntimeJitAnswerOverridesTheConfiguredGuess(): void
+    {
+        $configured = jitConfigurationFrom('tracing', '64M', null);
+        $neverRan   = jitConfigurationFrom('tracing', '64M', false);
+        $didRun     = jitConfigurationFrom('tracing', '64M', true);
+
+        self::assertTrue($configured['opcache_jit_enabled'], 'unobserved falls back to the configuration');
+        self::assertFalse(
+            $neverRan['opcache_jit_enabled'],
+            'a configuration that never came up must publish as not enabled'
+        );
+        self::assertTrue($didRun['opcache_jit_enabled']);
+        self::assertSame('tracing', $neverRan['opcache_jit'], 'the mode is still reported verbatim');
+        self::assertSame('64M', $neverRan['opcache_jit_buffer_size']);
+    }
+
+    /**
+     * The spawn_cgi arm runs the same OPcache directives as the FPM pool.
+     *
+     * The two cold servers are supposed to differ by TRANSPORT. They did not:
+     * `run-http.php` handed volucer the bare `php-cgi`, so the cgi arm took
+     * php.ini's `opcache.validate_timestamps=1` while the FPM pool set `0` —
+     * a per-request stat() sweep in every row of one arm and no arm of the
+     * other. The 2026-11-10 run showed the cgi arm slower on 119 of 126
+     * endpoints, +107/-19, ~+0.10 ms fixed: a uniform per-request gap, which
+     * is a syscall signature rather than an application one.
+     *
+     * Asserted on the generated wrapper rather than on intent, because the
+     * failure mode is a directive that is simply absent.
+     */
+    public function testTheSpawnCgiWrapperMirrorsTheFpmPoolDirectives(): void
+    {
+        $dir = sys_get_temp_dir() . '/tmp-cgi-wrapper-' . getmypid();
+        @mkdir($dir, 0777, true);
+
+        $path = writePhpCgiWrapper($dir, '/usr/bin/php-cgi8.5');
+        $script = (string) file_get_contents($path);
+
+        self::assertStringContainsString('/usr/bin/php-cgi8.5', $script);
+        foreach ([
+            'opcache.enable=1',
+            'opcache.enable_cli=1',
+            'opcache.validate_timestamps=0',
+            'xdebug.mode=off',
+            'xdebug.start_with_request=no',
+            'memory_limit=512M',
+        ] as $directive) {
+            self::assertStringContainsString(
+                $directive,
+                $script,
+                "the spawn_cgi wrapper must pass {$directive}, or it diverges from the FPM pool"
+            );
+        }
+
+        // The wrapper must be executable AND must forward its arguments: php-cgi
+        // is invoked by volucer as `<binary> <socket-or-args>`, so a wrapper that
+        // drops "$@" breaks the arm instead of equalising it.
+        //
+        // The exec bit is a POSIX concept and NTFS has nowhere to store it, so
+        // this assertion is skipped on Windows: the run only ever happens on the
+        // Linux VM, and asserting it here would make the suite fail on the
+        // machine that develops it while proving nothing about the one that
+        // measures. The shebang IS asserted everywhere, because that is what
+        // makes the file executable-by-interpreter on both.
+        if (DIRECTORY_SEPARATOR === '\\') {
+            self::assertStringStartsWith('#!/bin/sh', $script);
+        } else {
+            self::assertTrue(is_executable($path), 'the wrapper must be executable');
+        }
+        self::assertStringContainsString('"$@"', $script);
+
+        @unlink($path);
+        @rmdir($dir);
+    }
+
+    /**
      * The clause is carried into the HTML verbatim, never re-escaped.
      *
      * The clause is plain text today, so double-escaping would be invisible —

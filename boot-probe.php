@@ -58,6 +58,36 @@ function boot_probe_start(): void
 }
 
 /**
+ * Which probe family this PROCESS belongs to.
+ *
+ * The entry scripts in public/ are shared by every arm that re-runs a front
+ * controller per request: nginx+php-fpm and volucer's `spawn_cgi`. They used to
+ * hardcode the kind 'fpm', which was correct while FPM was the only such arm and
+ * became a silent bug the moment a second one existed: the cold Volucer arm would
+ * append to temp/boot-fpm-<app>.jsonl and temp/mem-fpm-<app>.jsonl, and the
+ * harness would then read those files for BOTH arms. The second arm's numbers
+ * would have been the first arm's leftovers — with no error anywhere, because the
+ * samples are plausible.
+ *
+ * So the kind comes from the DEPLOYMENT (BENCH_PROBE_KIND, stamped into the pool /
+ * template that starts the process), not from the script. Unset means 'fpm', which
+ * is what every pre-existing arm relies on and keeps its file names byte-identical.
+ *
+ * The value is used verbatim as a filename component, so it is restricted to the
+ * characters those names already use. A typo becomes a loud fallback rather than a
+ * new file nobody reads.
+ */
+function bench_probe_kind(string $default = 'fpm'): string
+{
+    $kind = (string) (getenv('BENCH_PROBE_KIND') ?: '');
+    if ($kind === '' || preg_match('/^[a-z0-9][a-z0-9-]*$/', $kind) !== 1) {
+        return $default;
+    }
+
+    return $kind;
+}
+
+/**
  * Record one sample into temp/boot-<kind>-<app>.jsonl.
  *
  * $kind is 'fpm' (a per-request boot: the entry script re-runs every request)
@@ -293,10 +323,13 @@ function mem_probe_proc_mem(): array
  * Sample file for one app. temp/ is gitignored and excluded from the benchmark
  * sync, so samples never leak between machines — the same rule boot_probe_file()
  * documents.
+ *
+ * The kind follows the PROCESS's probe family (see bench_probe_kind()), so the
+ * cold volucer arm writes its own file instead of appending to FPM's.
  */
 function mem_probe_file(string $app): string
 {
-    return __DIR__ . "/temp/mem-fpm-{$app}.jsonl";
+    return __DIR__ . '/temp/mem-' . bench_probe_kind() . "-{$app}.jsonl";
 }
 
 /**

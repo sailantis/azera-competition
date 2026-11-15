@@ -40,6 +40,19 @@ class BenchController
     }
 
     /**
+     * GET /echo — a constant handler through the whole HTTP path.
+     *
+     * The framework floor for this app: Spiral's router, the interceptor
+     * pipeline, the scope/container resolution for this controller and its two
+     * injected services all run, then the action returns three bytes. The gap
+     * between this and GET / is what a Stempler render costs.
+     */
+    public function echo(): Response
+    {
+        return $this->response->html('bench', 200, 'text/plain; charset=utf-8');
+    }
+
+    /**
      * GET / — welcome page via Stempler template (no DB).
      */
     public function index(): Response
@@ -66,6 +79,42 @@ class BenchController
         $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
             'baseUrl'    => '/items',
             'items'      => $rows,
+            'pagination' => self::pagination($page, $count),
+        ]));
+
+        return $this->response->html($html);
+    }
+
+    /**
+     * GET /items-fast — GET /items with Cycle ORM hydration removed.
+     *
+     * Identical to {@see list()} except for `fetchData()` in place of `fetchAll()`.
+     * The `Select` still resolves the `Item` mapping, still reads the compiled
+     * schema for the column list, and still runs the same SQL with the same
+     * LIMIT/OFFSET; the pagination COUNT still runs through the same `Select`.
+     * What is skipped is the mapper — no entity instantiation, no property
+     * assignment and typecasting, no identity map / Heap entry.
+     *
+     * The same single-variable control azera's `listFastAction()` provides:
+     * `/items` vs `/items-qb` also swaps the data-access layer, this swaps only
+     * hydration. Rows arrive as arrays, cast to stdClass for the template.
+     */
+    public function listFast(): Response
+    {
+        $page = (int) ($this->request->getQueryParams()['page'] ?? 1);
+
+        $select = new Select($this->orm, Item::class);
+        $count  = (clone $select)->count();
+        $rows   = $select->offset(($page - 1) * self::PAGE_SIZE)
+            ->limit(self::PAGE_SIZE)
+            ->orderBy('id', 'ASC')
+            ->fetchData();
+
+        $items = \array_map(static fn(array $row): object => (object) $row, $rows);
+
+        $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
+            'baseUrl'    => '/items-fast',
+            'items'      => $items,
             'pagination' => self::pagination($page, $count),
         ]));
 

@@ -132,12 +132,22 @@ final class AppRoutesBootloader extends RoutesBootloader
     protected function defineRoutes(RoutingConfigurator $routes): void
     {
         // --- Core benchmark endpoints -----------------------------------
+        $routes->add('echo', '/echo')
+            ->action(BenchController::class, 'echo')
+            ->methods('GET');
+
         $routes->add('home', '/')
             ->action(BenchController::class, 'index')
             ->methods('GET');
 
         $routes->add('items:list', '/items')
             ->action(BenchController::class, 'list')
+            ->methods('GET');
+        // GET /items with Cycle hydration off: the single-variable control for
+        // /items (see BenchController::listFast()). Declared before the id
+        // route so the literal segment is not swallowed by the pattern.
+        $routes->add('items:list-fast', '/items-fast')
+            ->action(BenchController::class, 'listFast')
             ->methods('GET');
         $routes->add('items:show', '/items/<id:\d+>')
             ->action(BenchController::class, 'show')
@@ -160,6 +170,11 @@ final class AppRoutesBootloader extends RoutesBootloader
         // --- REST API ----------------------------------------------------
         $routes->add('api:items:index', '/api/items')
             ->action(ApiController::class, 'index')
+            ->methods('GET');
+        // Declared before api:items:show so the literal segment is matched
+        // before the <id:\d+> placeholder.
+        $routes->add('api:items:fast', '/api/items-fast')
+            ->action(ApiController::class, 'indexFast')
             ->methods('GET');
         $routes->add('api:items:show', '/api/items/<id:\d+>')
             ->action(ApiController::class, 'show')
