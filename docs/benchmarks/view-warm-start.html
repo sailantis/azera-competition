@@ -81,12 +81,12 @@ main{padding-bottom:10px}
 <section class="figures">
 <figure>
   <figcaption>Routing</figcaption>
-  <p class="workload"><code>GET /</code> — dispatches a plain request through the router and returns a rendered template — no database access.</p>
+  <p class="workload"><code>GET /</code> — dispatches a request through the router and returns a rendered template — no database access. The `/echo` band runs the same path with a constant handler instead, so what the template render costs can be read off directly rather than inferred.</p>
   <img src="svg/warm-start/feature-routing.svg" alt="Routing" loading="lazy">
 </figure>
 <figure>
   <figcaption>ORM / Active Record</figcaption>
-  <p class="workload"><code>GET /items</code> — loads one page of the 1,000 seeded rows through each framework&#039;s ORM / Active Record layer: 20 items plus a COUNT for the pagination total.</p>
+  <p class="workload"><code>GET /items</code> — loads one page of the 1,000 seeded rows through each framework&#039;s ORM / Active Record layer: 20 items plus a COUNT for the pagination total. The `-fast` band repeats that page with hydration switched off, so the cost of building one object per row can be read directly instead of inferred.</p>
   <img src="svg/warm-start/feature-orm.svg" alt="ORM / Active Record" loading="lazy">
 </figure>
 <figure>
@@ -96,7 +96,7 @@ main{padding-bottom:10px}
 </figure>
 <figure>
   <figcaption>REST API (JSON)</figcaption>
-  <p class="workload"><code>GET /api/items</code> — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.</p>
+  <p class="workload"><code>GET /api/items</code> — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work. The `-fast` band repeats that response with hydration switched off, so serialization cost and hydration cost can be told apart.</p>
   <img src="svg/warm-start/feature-rest-api.svg" alt="REST API (JSON)" loading="lazy">
 </figure>
 <figure>
@@ -145,13 +145,16 @@ main{padding-bottom:10px}
 <thead><tr><th>Request</th><th>Workload</th><th><span class="chip" style="--c:#3459e6">Azera</span></th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th><th><span class="chip" style="--c:#0ca678">Spiral</span></th><th><span class="chip" style="--c:#e8590c">CodeIgniter</span></th><th><span class="chip" style="--c:#d6409f">CakePHP</span></th></tr></thead>
 <tbody>
 <tr><td><code>GET /</code></td><td class="muted">no DB — routing + template only</td><td class="win">0.017 <sub>0.001+0.015+0.001</sub></td><td class="">2.73 <sub>2.52+0.21+0.00</sub></td><td class="">0.620 <sub>0.533+0.085+0.002</sub></td><td class="">3.76 <sub>3.48+0.27+0.01</sub></td><td class="">0.466 <sub>0.000+0.457+0.009</sub></td><td class="">0.136 <sub>0.006+0.129+0.001</sub></td></tr>
+<tr><td><code>GET /echo</code></td><td class="muted">no DB — routing + dispatch only</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
 <tr><td><code>GET /items</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">0.143 <sub>0.001+0.139+0.003</sub></td><td class="">3.25 <sub>2.51+0.74+0.00</sub></td><td class="">1.07 <sub>0.54+0.53+0.00</sub></td><td class="">4.03 <sub>3.48+0.53+0.02</sub></td><td class="">0.761 <sub>0.000+0.749+0.012</sub></td><td class="">0.488 <sub>0.006+0.481+0.001</sub></td></tr>
+<tr><td><code>GET /items-fast</code></td><td class="muted">20 of 1000 items (page 1, + COUNT), hydrated rows not built</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
 <tr><td><code>GET /items/1</code></td><td class="muted">1 item by id</td><td class="win">0.054 <sub>0.001+0.051+0.002</sub></td><td class="">2.90 <sub>2.51+0.39+0.00</sub></td><td class="">0.701 <sub>0.534+0.165+0.002</sub></td><td class="">3.85 <sub>3.48+0.36+0.01</sub></td><td class="">0.664 <sub>0.000+0.652+0.012</sub></td><td class="">0.313 <sub>0.006+0.306+0.001</sub></td></tr>
 <tr><td><code>POST /items</code></td><td class="muted">1 row upserted (sentinel #999999)</td><td class="win">0.110 <sub>0.001+0.107+0.002</sub></td><td class="">2.93 <sub>2.52+0.41+0.00</sub></td><td class="">0.789 <sub>0.533+0.253+0.003</sub></td><td class="">3.90 <sub>3.48+0.41+0.01</sub></td><td class="">0.737 <sub>0.000+0.725+0.012</sub></td><td class="">0.423 <sub>0.006+0.416+0.001</sub></td></tr>
 <tr><td><code>GET /items-qb</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">0.095 <sub>0.001+0.093+0.001</sub></td><td class="">2.94 <sub>2.52+0.42+0.00</sub></td><td class="">0.770 <sub>0.533+0.235+0.002</sub></td><td class="">3.86 <sub>3.49+0.36+0.01</sub></td><td class="">0.747 <sub>0.000+0.735+0.012</sub></td><td class="">0.287 <sub>0.006+0.280+0.001</sub></td></tr>
 <tr><td><code>GET /items-qb/1</code></td><td class="muted">1 item by id</td><td class="win">0.051 <sub>0.001+0.049+0.001</sub></td><td class="">2.82 <sub>2.51+0.31+0.00</sub></td><td class="">0.669 <sub>0.533+0.134+0.002</sub></td><td class="">3.81 <sub>3.48+0.32+0.01</sub></td><td class="">0.656 <sub>0.000+0.644+0.012</sub></td><td class="">0.226 <sub>0.006+0.219+0.001</sub></td></tr>
 <tr><td><code>POST /items-qb</code></td><td class="muted">1 row upserted (sentinel #999997)</td><td class="win">0.085 <sub>0.001+0.083+0.001</sub></td><td class="">2.91 <sub>2.51+0.40+0.00</sub></td><td class="">0.807 <sub>0.533+0.271+0.003</sub></td><td class="">3.85 <sub>3.49+0.35+0.01</sub></td><td class="">0.849 <sub>0.000+0.836+0.013</sub></td><td class="">0.295 <sub>0.006+0.288+0.001</sub></td></tr>
 <tr><td><code>GET /api/items</code></td><td class="muted">20 of 1000 items as JSON</td><td class="win">0.041 <sub>0.001+0.039+0.001</sub></td><td class="">3.13 <sub>2.52+0.61+0.00</sub></td><td class="">0.763 <sub>0.534+0.227+0.002</sub></td><td class="">3.90 <sub>3.49+0.40+0.01</sub></td><td class="">0.610 <sub>0.000+0.600+0.010</sub></td><td class="">0.265 <sub>0.006+0.258+0.001</sub></td></tr>
+<tr><td><code>GET /api/items-fast</code></td><td class="muted">20 of 1000 items as JSON, rows not hydrated</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
 <tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="win">0.039 <sub>0.001+0.037+0.001</sub></td><td class="">2.91 <sub>2.51+0.40+0.00</sub></td><td class="">0.678 <sub>0.533+0.143+0.002</sub></td><td class="">3.82 <sub>3.49+0.32+0.01</sub></td><td class="">0.577 <sub>0.000+0.566+0.011</sub></td><td class="">0.233 <sub>0.006+0.226+0.001</sub></td></tr>
 <tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="win">0.056 <sub>0.001+0.053+0.002</sub></td><td class="">2.86 <sub>2.51+0.35+0.00</sub></td><td class="">0.772 <sub>0.534+0.236+0.002</sub></td><td class="">3.85 <sub>3.48+0.36+0.01</sub></td><td class="">0.651 <sub>0.000+0.640+0.011</sub></td><td class="">0.320 <sub>0.006+0.313+0.001</sub></td></tr>
 <tr><td><code>GET /features/aop</code></td><td class="muted">no DB — interceptor pipeline</td><td class="win">0.130 <sub>0.001+0.128+0.001</sub></td><td class="">2.84 <sub>2.52+0.32+0.00</sub></td><td class="">0.759 <sub>0.534+0.223+0.002</sub></td><td class="">4.00 <sub>3.48+0.51+0.01</sub></td><td class="muted">—</td><td class="muted">—</td></tr>

@@ -2,11 +2,11 @@
 
 The headline numbers from the measured RoadRunner deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and the worker memory that survives a request. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-rr in the dataset). The deployment model actually measured is stated with the table.
 
-**Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache: yes · 1000 iterations per run over 10 runs, lower is better.
+**Environment** — PHP 8.5.11 · Linux 6.8.0-139-generic · OPcache: yes · JIT: tracing (buffer 64M) · 1000 iterations per run over 10 runs, lower is better.
 
-**Frameworks** — Azera dev-main (v0.1.0) · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0.
+**Frameworks** — Azera v0.4.1-5-gf9b2de0 · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0.
 
-_Measured 2026-09-29T12:55:05+00:00_
+_Measured 2026-11-11T19:29:49+00:00_
 
 ## Total response times
 
@@ -19,17 +19,17 @@ Total time to serve one pass over every benchmarked endpoint — each framework'
 One race per framework feature, each run as a real request against a real database. Each feature states the request it measures under its own heading. Every figure — the winner of each race and the margin over the runner-up — is in that feature's own chart below, which anchors each endpoint at its fastest framework.
 
 ### Routing
- `GET /` — dispatches a plain request through the router and returns a rendered template — no database access.
+ `GET /` — dispatches a request through the router and returns a rendered template — no database access. The `/echo` band runs the same path with a constant handler instead, so what the template render costs can be read off directly rather than inferred.
 
 ![Routing](svg/summary-roadrunner/feature-routing.svg)
 
 ### ORM / Active Record
- `GET /items` — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total.
+ `GET /items` — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total. The `-fast` band repeats that page with hydration switched off, so the cost of building one object per row can be read directly instead of inferred.
 
 ![ORM / Active Record](svg/summary-roadrunner/feature-orm.svg)
 
 ### REST API (JSON)
- `GET /api/items` — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.
+ `GET /api/items` — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work. The `-fast` band repeats that response with hydration switched off, so serialization cost and hydration cost can be told apart.
 
 ![REST API (JSON)](svg/summary-roadrunner/feature-rest-api.svg)
 
@@ -55,38 +55,42 @@ These rows are end-to-end for a resident worker with a pool that never recycles 
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `GET /` | no DB — routing + template only | **0.264** | 0.608 | 0.382 | 0.653 | 0.906 | 0.476 |
-| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.478** | 1.23 | 1.05 | 1.01 | 1.26 | 0.955 |
-| `GET /items/1` | 1 item by id | **0.335** | 0.836 | 0.604 | 0.759 | 1.12 | 0.742 |
-| `POST /items` | 1 row upserted (sentinel #999999) | **0.464** | 0.863 | 0.792 | 0.812 | 1.22 | 0.867 |
-| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.422** | 0.901 | 0.655 | 0.812 | 1.23 | 0.745 |
-| `GET /items-qb/1` | 1 item by id | **0.355** | 0.755 | 0.545 | 0.711 | 1.11 | 0.648 |
-| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.397** | 0.854 | 0.693 | 0.795 | 1.33 | 0.748 |
-| `GET /api/items` | 20 of 1000 items as JSON | **0.319** | 1.04 | 0.689 | 0.815 | 1.05 | 0.676 |
-| `GET /api/items/1` | 1 item by id as JSON | **0.309** | 0.851 | 0.499 | 0.735 | 1.03 | 0.644 |
-| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.341** | 0.787 | 0.733 | 0.782 | 1.08 | 0.730 |
-| `GET /features/aop` | no DB — interceptor pipeline | **0.459** | 0.744 | 0.615 | 0.946 | — | — |
-| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **0.246** | 0.594 | 0.361 | 0.693 | 0.790 | 0.379 |
-| `GET /features/log` | no DB — buffered log handlers | **0.242** | 0.536 | 0.363 | 0.687 | — | — |
-| `GET /features/retry` | no DB — retry policy | **0.237** | 0.589 | 0.369 | 0.706 | — | — |
-| `GET /features/pipeline` | no DB — middleware pipeline | **0.241** | 0.586 | 0.353 | 0.695 | — | — |
-| `GET /features/db-events` | 1 event row INSERTed per request | **0.325** | 0.838 | 0.608 | 0.944 | 1.21 | 0.670 |
-| `GET /features/events` | no DB — in-process listeners | **0.298** | 0.728 | 0.439 | 0.781 | 1.16 | 0.569 |
-| `GET /features/validation` | no DB — validator run | **0.244** | 1.29 | 0.563 | 0.711 | 1.13 | 0.515 |
-| `GET /features/config` | no DB — config lookup | **0.223** | 0.583 | 0.378 | 0.661 | 0.824 | 0.361 |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **0.235** | 0.569 | 0.378 | 0.700 | 0.826 | 0.365 |
-| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.236** | 0.596 | 0.384 | 0.705 | 0.829 | 0.385 |
+| `GET /` | no DB — routing + template only | **0.174** | 0.478 | 0.250 | 0.475 | 0.654 | 0.286 |
+| `GET /echo` | no DB — routing + dispatch only | **0.158** | 0.390 | 0.215 | 0.457 | 0.533 | 0.227 |
+| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.297** | 1.09 | 0.803 | 0.855 | 1.09 | 0.801 |
+| `GET /items-fast` | 20 of 1000 items (page 1, + COUNT), hydrated rows not built | **0.265** | 0.804 | 0.762 | 0.787 | 1.04 | 0.692 |
+| `GET /items/1` | 1 item by id | **0.212** | 0.729 | 0.449 | 0.643 | 0.972 | 0.571 |
+| `POST /items` | 1 row upserted (sentinel #999999) | **0.279** | 0.764 | 0.637 | 0.725 | 1.11 | 0.713 |
+| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.264** | 0.781 | 0.488 | 0.663 | 0.984 | 0.556 |
+| `GET /items-qb/1` | 1 item by id | **0.210** | 0.637 | 0.372 | 0.596 | 0.885 | 0.485 |
+| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.252** | 0.732 | 0.546 | 0.640 | 1.14 | 0.575 |
+| `GET /api/items` | 20 of 1000 items as JSON | **0.240** | 0.874 | 0.491 | 0.742 | 0.944 | 0.483 |
+| `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | **0.218** | 0.677 | 0.426 | 0.622 | 0.879 | 0.467 |
+| `GET /api/items/1` | 1 item by id as JSON | **0.195** | 0.753 | 0.391 | 0.594 | 0.887 | 0.551 |
+| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.221** | 0.749 | 0.597 | 0.681 | 0.900 | 0.689 |
+| `GET /features/aop` | no DB — interceptor pipeline | **0.313** | 0.676 | 0.458 | 0.802 | — | — |
+| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **0.167** | 0.465 | 0.229 | 0.535 | 0.692 | 0.304 |
+| `GET /features/log` | no DB — buffered log handlers | **0.168** | 0.437 | 0.226 | 0.529 | — | — |
+| `GET /features/retry` | no DB — retry policy | **0.164** | 0.456 | 0.239 | 0.541 | — | — |
+| `GET /features/pipeline` | no DB — middleware pipeline | **0.169** | 0.433 | 0.229 | 0.632 | — | — |
+| `GET /features/db-events` | 1 event row INSERTed per request | **0.227** | 0.707 | 0.475 | 0.825 | 1.04 | 0.543 |
+| `GET /features/events` | no DB — in-process listeners | **0.212** | 0.594 | 0.307 | 0.632 | 0.968 | 0.426 |
+| `GET /features/validation` | no DB — validator run | **0.175** | 1.21 | 0.416 | 0.573 | 0.976 | 0.391 |
+| `GET /features/config` | no DB — config lookup | **0.165** | 0.536 | 0.236 | 0.511 | 0.700 | 0.231 |
+| `GET /features/request-scoped` | no DB — scoped service resolve | **0.163** | 0.532 | 0.228 | 0.533 | 0.602 | 0.230 |
+| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.166** | 0.569 | 0.237 | 0.543 | 0.608 | 0.243 |
 
 **Full comparison** — this page is a summary. The complete report, with every feature chart and the endpoint table for all six frameworks, is published at:
 
 - The complete report (all six frameworks, every feature chart) — <https://sailantis.github.io/azera-competition/benchmarks/>
 - This model, measured end to end — <https://sailantis.github.io/azera-competition/benchmarks/view-real-roadrunner.html>
+- The same model in Volucer — <https://sailantis.github.io/azera-competition/benchmarks/view-summary-volucer.html>
 - The PHP-FPM summary — <https://sailantis.github.io/azera-competition/benchmarks/view-summary-fpm.html>
 
 ---
 
 > **Auto-generated.** This page and its charts are produced by the `azera-competition` repository:
 > `php run.php --apps=azera,laravel,symfony,spiral,codeigniter,cakephp --warm --cold --seed --out=results/free-for-all-opcache-iso`
-> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php --publish=framework`. Do not edit by hand — re-run the benchmark to update it.
+> then `php scripts/derive-fpm.php results/free-for-all-opcache-iso` and `php scripts/report.php`. Do not edit by hand — re-run the benchmark to update it.
 
 Every chart is a plain SVG generated from the result JSON, so the numbers and the diagrams can never disagree.

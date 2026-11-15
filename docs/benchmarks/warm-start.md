@@ -4,7 +4,7 @@ RoadRunner/Octane-style resident worker: the framework boots once, then serves e
 
 **Environment** — PHP 8.3.33 · Linux 6.8.0-139-generic · OPcache: yes · 1000 iterations per run over 30 runs, lower is better.
 
-**Frameworks** — Azera 0.1.0 (daeb5a6) · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0.
+**Frameworks** — Azera daeb5a6 · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0.
 
 _Measured 2026-09-20T14:28:59+00:00 · azera-framework `daeb5a6`_
 
@@ -31,12 +31,12 @@ Total time to serve one pass over every benchmarked endpoint — each framework'
 One race per framework feature, each run as a real request against a real database. Each feature states the request it measures under its own heading. Every figure — the winner of each race and the margin over the runner-up — is in that feature's own chart below, which anchors each endpoint at its fastest framework.
 
 ### Routing
- `GET /` — dispatches a plain request through the router and returns a rendered template — no database access.
+ `GET /` — dispatches a request through the router and returns a rendered template — no database access. The `/echo` band runs the same path with a constant handler instead, so what the template render costs can be read off directly rather than inferred.
 
 ![Routing](svg/warm-start/feature-routing.svg)
 
 ### ORM / Active Record
- `GET /items` — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total.
+ `GET /items` — loads one page of the 1,000 seeded rows through each framework's ORM / Active Record layer: 20 items plus a COUNT for the pagination total. The `-fast` band repeats that page with hydration switched off, so the cost of building one object per row can be read directly instead of inferred.
 
 ![ORM / Active Record](svg/warm-start/feature-orm.svg)
 
@@ -46,7 +46,7 @@ One race per framework feature, each run as a real request against a real databa
 ![Query Builder](svg/warm-start/feature-query-builder.svg)
 
 ### REST API (JSON)
- `GET /api/items` — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work.
+ `GET /api/items` — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work. The `-fast` band repeats that response with hydration switched off, so serialization cost and hydration cost can be told apart.
 
 ![REST API (JSON)](svg/warm-start/feature-rest-api.svg)
 
@@ -107,13 +107,16 @@ These rows are end-to-end for a resident worker: every headline and every chart 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|
 | `GET /` | no DB — routing + template only | **0.017 <sub>0.001+0.015+0.001</sub>** | 2.73 <sub>2.52+0.21+0.00</sub> | 0.620 <sub>0.533+0.085+0.002</sub> | 3.76 <sub>3.48+0.27+0.01</sub> | 0.466 <sub>0.000+0.457+0.009</sub> | 0.136 <sub>0.006+0.129+0.001</sub> |
+| `GET /echo` | no DB — routing + dispatch only | — | — | — | — | — | — |
 | `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.143 <sub>0.001+0.139+0.003</sub>** | 3.25 <sub>2.51+0.74+0.00</sub> | 1.07 <sub>0.54+0.53+0.00</sub> | 4.03 <sub>3.48+0.53+0.02</sub> | 0.761 <sub>0.000+0.749+0.012</sub> | 0.488 <sub>0.006+0.481+0.001</sub> |
+| `GET /items-fast` | 20 of 1000 items (page 1, + COUNT), hydrated rows not built | — | — | — | — | — | — |
 | `GET /items/1` | 1 item by id | **0.054 <sub>0.001+0.051+0.002</sub>** | 2.90 <sub>2.51+0.39+0.00</sub> | 0.701 <sub>0.534+0.165+0.002</sub> | 3.85 <sub>3.48+0.36+0.01</sub> | 0.664 <sub>0.000+0.652+0.012</sub> | 0.313 <sub>0.006+0.306+0.001</sub> |
 | `POST /items` | 1 row upserted (sentinel #999999) | **0.110 <sub>0.001+0.107+0.002</sub>** | 2.93 <sub>2.52+0.41+0.00</sub> | 0.789 <sub>0.533+0.253+0.003</sub> | 3.90 <sub>3.48+0.41+0.01</sub> | 0.737 <sub>0.000+0.725+0.012</sub> | 0.423 <sub>0.006+0.416+0.001</sub> |
 | `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.095 <sub>0.001+0.093+0.001</sub>** | 2.94 <sub>2.52+0.42+0.00</sub> | 0.770 <sub>0.533+0.235+0.002</sub> | 3.86 <sub>3.49+0.36+0.01</sub> | 0.747 <sub>0.000+0.735+0.012</sub> | 0.287 <sub>0.006+0.280+0.001</sub> |
 | `GET /items-qb/1` | 1 item by id | **0.051 <sub>0.001+0.049+0.001</sub>** | 2.82 <sub>2.51+0.31+0.00</sub> | 0.669 <sub>0.533+0.134+0.002</sub> | 3.81 <sub>3.48+0.32+0.01</sub> | 0.656 <sub>0.000+0.644+0.012</sub> | 0.226 <sub>0.006+0.219+0.001</sub> |
 | `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.085 <sub>0.001+0.083+0.001</sub>** | 2.91 <sub>2.51+0.40+0.00</sub> | 0.807 <sub>0.533+0.271+0.003</sub> | 3.85 <sub>3.49+0.35+0.01</sub> | 0.849 <sub>0.000+0.836+0.013</sub> | 0.295 <sub>0.006+0.288+0.001</sub> |
 | `GET /api/items` | 20 of 1000 items as JSON | **0.041 <sub>0.001+0.039+0.001</sub>** | 3.13 <sub>2.52+0.61+0.00</sub> | 0.763 <sub>0.534+0.227+0.002</sub> | 3.90 <sub>3.49+0.40+0.01</sub> | 0.610 <sub>0.000+0.600+0.010</sub> | 0.265 <sub>0.006+0.258+0.001</sub> |
+| `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | — | — | — | — | — | — |
 | `GET /api/items/1` | 1 item by id as JSON | **0.039 <sub>0.001+0.037+0.001</sub>** | 2.91 <sub>2.51+0.40+0.00</sub> | 0.678 <sub>0.533+0.143+0.002</sub> | 3.82 <sub>3.49+0.32+0.01</sub> | 0.577 <sub>0.000+0.566+0.011</sub> | 0.233 <sub>0.006+0.226+0.001</sub> |
 | `POST /api/items` | 1 row upserted (sentinel #999998) | **0.056 <sub>0.001+0.053+0.002</sub>** | 2.86 <sub>2.51+0.35+0.00</sub> | 0.772 <sub>0.534+0.236+0.002</sub> | 3.85 <sub>3.48+0.36+0.01</sub> | 0.651 <sub>0.000+0.640+0.011</sub> | 0.320 <sub>0.006+0.313+0.001</sub> |
 | `GET /features/aop` | no DB — interceptor pipeline | **0.130 <sub>0.001+0.128+0.001</sub>** | 2.84 <sub>2.52+0.32+0.00</sub> | 0.759 <sub>0.534+0.223+0.002</sub> | 4.00 <sub>3.48+0.51+0.01</sub> | — | — |
