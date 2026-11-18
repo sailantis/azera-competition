@@ -54,6 +54,24 @@ return [
             'label' => 'Real deployments — RoadRunner + nginx/FPM + Volucer on the benchmark VM (HTTP over loopback)',
             'file'  => $root . '/results/real-deployments.json',
         ],
+
+        // The 0.5.0 release run: nginx/PHP-FPM and Volucer `attach`, all six
+        // frameworks, one budget (1000x10), on the same VM as the file above.
+        //
+        // WHY THIS IS A SECOND DATASET RATHER THAN A SPLICE INTO THE ONE ABOVE.
+        // The run behind it measured TWO modes, and `real-deployments` carries
+        // four. merge-modes.php splices per mode correctly, but it also replaces
+        // env.frameworks for the WHOLE file - so the RoadRunner and volucer-cgi
+        // views would then state "Azera v0.5.0" over numbers measured on
+        // v0.4.1-5-gf9b2de0. A provenance stamp that names a build the row was
+        // not measured on is the one error the version stamp exists to prevent,
+        // so the refreshed modes get their own file and the views that read them
+        // are pointed at it explicitly. Every remaining view keeps the stamp of
+        // the run its numbers actually came from.
+        'real-0.5.0' => [
+            'label' => 'Real deployments (0.5.0) - nginx/FPM + Volucer attach on the benchmark VM (HTTP over loopback)',
+            'file'  => $root . '/results/real-0.5.0.json',
+        ],
     ],
 
     // --- Views ------------------------------------------------------------
@@ -156,7 +174,7 @@ return [
         'real-fpm' => [
             'title'     => 'Framework Competition — Real PHP-FPM',
             'subtitle'  => 'Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool\'s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.',
-            'dataset'   => 'real-deployments',
+            'dataset'   => 'real-0.5.0',
             'baseline'  => 'azera',
             'mode'      => 'php-fpm',
             'log_scale' => false,
@@ -186,7 +204,7 @@ return [
         'real-volucer-attach' => [
             'title'     => 'Framework Competition — Volucer (attach)',
             'subtitle'  => 'Volucer\'s `attach` backend: the framework boots ONCE, in a supervisor the deployment owns, and every request is served from that already-built state. `deploy/volucer/attach.php` listens on a unix relay and forks a child per connection; volucer dials it. End-to-end HTTP over loopback — includes the constant webserver overhead; framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker\'s boot depends on the pool\'s max_jobs, which the dataset records.',
-            'dataset'   => 'real-deployments',
+            'dataset'   => 'real-0.5.0',
             'baseline'  => 'azera',
             'mode'      => 'volucer-attach',
             'log_scale' => false,
@@ -282,7 +300,7 @@ return [
         'summary-fpm' => [
             'title'     => 'Framework Competition — PHP-FPM Summary',
             'subtitle'  => 'The headline numbers from the measured nginx + PHP-FPM deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and what one request costs in memory. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-http/floor-php in the dataset). The worker-recycling setting of the pool is stated with the server floor below, because it changes what each row contains.',
-            'dataset'   => 'real-deployments',
+            'dataset'   => 'real-0.5.0',
             'baseline'  => 'azera',
             'mode'      => 'php-fpm',
             'log_scale' => false,
@@ -316,7 +334,7 @@ return [
         'summary-volucer' => [
             'title'     => 'Framework Competition — Volucer Summary',
             'subtitle'  => 'The headline numbers from the measured Volucer deployment. Volucer runs the app as a resident worker under a supervisor the deployment owns: the framework boots ONCE, before the supervisor forks, and every request is served from that already-built state. End-to-end HTTP over loopback, so the constant webserver overhead is included.',
-            'dataset'   => 'real-deployments',
+            'dataset'   => 'real-0.5.0',
             'baseline'  => 'azera',
             'mode'      => 'volucer-attach',
             'log_scale' => false,
