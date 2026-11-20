@@ -26,7 +26,7 @@ declare(strict_types=1);
  * fixed ports (9900/9901/9902) by measureFloors() and are never stamped from
  * this table.
  */
-const BENCH_APP_ORDER = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'];
+const BENCH_APP_ORDER = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'];
 
 // --- Interpreter selection -------------------------------------------------------
 

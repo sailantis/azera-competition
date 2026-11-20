@@ -152,6 +152,9 @@ class Bootstrap
             $router->controller(BenchController::class, function (\Azera\Core\Router $r) {
                 // The framework floor: routed and dispatched, no work after that.
                 $r->get('/echo', '::echoAction');
+                // Routing cost with a typed parameter and no ORM: the only
+                // endpoint whose measured time is route matching.
+                $r->get('/routing/{id:int}', '::routingAction');
                 $r->get('/', '::indexAction');
                 // ORM endpoints (model hydration)
                 $r->get('/items', '::listAction');

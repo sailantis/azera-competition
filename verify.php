@@ -24,11 +24,13 @@ $adapterClasses = [
     'spiral'      => 'SpiralAdapter',
     'codeigniter' => 'CodeIgniterAdapter',
     'cakephp'     => 'CakePhpAdapter',
+    'phalcon'     => 'PhalconAdapter',
 ];
 
 // Expected substring per endpoint (loose — we check that key content appears).
 $expect = [
     'GET /echo'                    => 'bench',
+    'GET /routing/1'               => 'routing',
     'GET /'                        => 'Welcome',
     'GET /items'                   => '<table>',
     'GET /items-fast'              => '<table>',

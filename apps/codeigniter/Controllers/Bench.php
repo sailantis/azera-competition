@@ -36,6 +36,20 @@ final class Bench extends BaseController
     }
 
     /**
+     * GET /routing/{id} — routing cost with nothing after it.
+     *
+     * `/echo` is static, so a router that indexes literals can answer it without
+     * ever walking candidates; the endpoint measures throughput, not routing.
+     * This one carries a numeric placeholder, which is the path a compiled index
+     * actually changes. The handler is constant on purpose: the id is ignored,
+     * so the measured time is matching and dispatch and nothing else.
+     */
+    public function routing(string $id = ''): string
+    {
+        return 'routing';
+    }
+
+    /**
      * GET / — welcome page via CodeIgniter(View) template (no DB).
      */
     public function index(): \CodeIgniter\HTTP\ResponseInterface|string

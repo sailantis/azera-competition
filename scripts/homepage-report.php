@@ -172,7 +172,7 @@ const HOMEPAGE_MODELS = [
  * own (`BenchmarkConfig::appColor`), so a framework is the same colour on the
  * product page as in the report a reader follows the link to.
  */
-const HOMEPAGE_APPS = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'];
+const HOMEPAGE_APPS = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'];
 
 /**
  * Where the homepage serves the generated charts from.

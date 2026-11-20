@@ -130,6 +130,13 @@ $requests  = isset($opts['requests'])
         // requestOrder() mirrors it — reordering here silently rewrites a
         // published memory trajectory.
         'GET /echo',
+        // Routing cost with nothing after it: a typed parameter and a constant
+        // handler, so the measured time is route matching alone. `/echo` is
+        // static, so an indexed router can answer it without walking candidates
+        // — it measures throughput, not routing. Placed here rather than at the
+        // end because the resident-heap probe walks this list once per endpoint
+        // and BenchmarkConfig's requestOrder() mirrors it.
+        'GET /routing/1',
         'GET /items',
         // GET /items with hydration off and nothing else changed — the
         // single-variable control for /items (see each app's listFast action).

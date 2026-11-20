@@ -45,6 +45,7 @@ final class EndpointParityTest extends TestCase
             'laravel'     => $root . '/apps/laravel/routes/web.php',
             'spiral'      => $root . '/apps/spiral/src/Bootloader/AppRoutesBootloader.php',
             'symfony'     => $root . '/apps/symfony/config/routes.yaml',
+            'phalcon'     => $root . '/apps/phalcon/src/Bootstrap.php',
         ];
     }
 
@@ -74,8 +75,10 @@ final class EndpointParityTest extends TestCase
 
         // Symfony and Cake declare routes in YAML / with a builder, so the
         // literal appears either as `path: /echo` or as `'/echo'`. Matching the
-        // bare path is what all six forms have in common.
-        foreach (['/echo', '/items-fast'] as $path) {
+        // bare path is what all six forms have in common. `$r->get('/echo')`
+        // is not matched by requiring the literal `'/echo'`, so the check only
+        // requires the path text and the app's own quote style supplies the rest.
+        foreach (['/echo', '/items-fast', '/routing'] as $path) {
             self::assertMatchesRegularExpression(
                 '~[\'"]?' . preg_quote($path, '~') . '[\'"]?~',
                 $source,
@@ -136,15 +139,16 @@ final class EndpointParityTest extends TestCase
         }
 
         // The first id-style item route in the same file. Matched by SHAPE
-        // rather than by an enumerated list of spellings — the six apps write
-        // it as `/items/{id}`, `/items/{id:int}`, `/items/<id:\\d+>` or
-        // `/items/(:num)`, and a list would silently skip the next framework
-        // that picks a fifth form (which is exactly what happened here: azera
-        // says `{id:int}` and the first version of this test never looked).
+        // rather than by an enumerated list of spellings — the seven apps write
+        // it as `/items/{id}`, `/items/{id:int}`, `/items/<id:\d+>`,
+        // `/items/(:num)` or `/items/([0-9]+)`, and a list would silently skip
+        // the next framework that picks a sixth form (which is exactly what
+        // happened here: azera says `{id:int}` and the first version of this
+        // test never looked, and Phalcon's `([0-9]+)` was missed the same way).
         //
         // The path must follow a quote or `path:`, so `/api/items/{id}` is not
         // mistaken for it.
-        if (preg_match('~(?<=[\'"]|path:\s|path:\s{2})/items/(?:<|\{|\(:num)~', $source, $m, PREG_OFFSET_CAPTURE) === 1) {
+        if (preg_match('~(?<=[\'"]|path:\s|path:\s{2})/items/(?:<|\{|\(:num|\(\[)~', $source, $m, PREG_OFFSET_CAPTURE) === 1) {
             self::assertLessThan(
                 $m[0][1],
                 $fast,
@@ -168,6 +172,11 @@ final class EndpointParityTest extends TestCase
             "'GET /echo'",
             $run,
             'run.php does not request GET /echo'
+        );
+        self::assertStringContainsString(
+            "'GET /routing/1'",
+            $run,
+            'run.php does not request GET /routing/1 — the routing endpoint would measure nothing'
         );
         self::assertStringContainsString(
             "'GET /items-fast'",
@@ -241,7 +250,7 @@ final class EndpointParityTest extends TestCase
 
         // The two new routes specifically, since they are the ones this change
         // introduced and the ones a future edit is most likely to half-add.
-        foreach (['GET /echo', 'GET /items-fast'] as $request) {
+        foreach (['GET /echo', 'GET /items-fast', 'GET /routing/1'] as $request) {
             self::assertContains($request, $order, "{$request} is missing from featureMap()");
             self::assertNotSame(
                 '',

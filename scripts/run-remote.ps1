@@ -90,7 +90,7 @@ param(
     # A partial run must therefore name its own scratch output, which is then
     # spliced locally by merge-app.php / merge-modes.php.
     [string]$Out = '',
-    [string]$Apps = 'azera,laravel,symfony,spiral,codeigniter,cakephp',
+    [string]$Apps = 'azera,laravel,symfony,spiral,codeigniter,cakephp,phalcon',
     # Comma-separated. PowerShell binds an actual array (`-Servers rr,fpm,volucer`) to a
     # [string] parameter by joining the elements with SPACES, giving "rr fpm volucer";
     # `explode(',')` then sees ONE unknown server, run-http.php rejects it, and because

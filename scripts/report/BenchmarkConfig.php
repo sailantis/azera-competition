@@ -23,7 +23,8 @@ final class BenchmarkConfig
     {
         return [
             'GET /'                        => 'routing',
-            'GET /echo'                    => 'routing',
+            'GET /echo'                    => 'throughput',
+            'GET /routing/1'               => 'routing',
             'GET /items'                   => 'orm',
             'GET /items-fast'              => 'orm',
             'GET /items/1'                 => 'orm',
@@ -65,6 +66,12 @@ final class BenchmarkConfig
             'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
             'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
             'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            // Phalcon 6 has no AOP layer, and its /features/* routes are not
+            // implemented by this entrant, so it takes part in the data,
+            // query-builder and REST races only. An adapter that lacks a feature
+            // is excluded from that feature's comparison rather than shown as a
+            // failure.
+            'phalcon'     => ['routing', 'orm', 'query-builder', 'rest-api'],
         ];
     }
 
@@ -75,7 +82,7 @@ final class BenchmarkConfig
      */
     public static function appOrder(): array
     {
-        return ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'];
+        return ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'];
     }
 
     /**
@@ -140,6 +147,7 @@ final class BenchmarkConfig
             'spiral'      => ['label' => 'Spiral', 'color' => '#0ca678'],
             'codeigniter' => ['label' => 'CodeIgniter', 'color' => '#e8590c'],
             'cakephp'     => ['label' => 'CakePHP', 'color' => '#d6409f'],
+            'phalcon'     => ['label' => 'Phalcon 6 (RC)', 'color' => '#8b5a2b'],
         ];
     }
 
@@ -150,6 +158,7 @@ final class BenchmarkConfig
     {
         return [
             'routing'        => 'Routing',
+            'throughput'     => 'Throughput (static)',
             'orm'            => 'ORM / Active Record',
             'query-builder'  => 'Query Builder',
             'rest-api'       => 'REST API (JSON)',
@@ -181,7 +190,8 @@ final class BenchmarkConfig
     {
         return [
             'GET /'                        => 'no DB — routing + template only',
-            'GET /echo'                    => 'no DB — routing + dispatch only',
+            'GET /echo'                    => 'no DB — static route, constant body (throughput floor)',
+            'GET /routing/1'               => 'no DB — typed route + constant body (routing only)',
             'GET /items'                   => '20 of 1000 items (page 1, + COUNT)',
             'GET /items-fast'              => '20 of 1000 items (page 1, + COUNT), hydrated rows not built',
             'GET /items/1'                 => '1 item by id',

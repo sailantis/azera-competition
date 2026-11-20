@@ -6,6 +6,15 @@ echo:
     controller: App\Symfony\Controller\BenchController::echo
     methods: GET
 
+# Routing cost with a typed parameter and no ORM: the only endpoint whose
+# measured time is route matching. See BenchController::routing().
+routing:
+    path: /routing/{id}
+    controller: App\Symfony\Controller\BenchController::routing
+    methods: GET
+    requirements:
+        id: \d+
+
 home:
     path: /
     controller: App\Symfony\Controller\BenchController::index

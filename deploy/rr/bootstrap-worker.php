@@ -16,6 +16,7 @@ function benchAdapterClasses(): array
         'spiral'      => 'SpiralAdapter',
         'codeigniter' => 'CodeIgniterAdapter',
         'cakephp'     => 'CakePhpAdapter',
+        'phalcon'     => 'PhalconAdapter',
     ];
 }
 

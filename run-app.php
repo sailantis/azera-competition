@@ -111,6 +111,7 @@ $requests = isset($opts['requests'])
         // produce a dataset the report cannot line up with the others.
         'GET /',
         'GET /echo',
+        'GET /routing/1',
         'GET /items',
         'GET /items-fast',
         'GET /items/1',

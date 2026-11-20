@@ -46,6 +46,20 @@ class BenchController extends AbstractController
     }
 
     /**
+     * GET /routing/{id} — routing cost with nothing after it.
+     *
+     * `/echo` is static, so a router that indexes literals can answer it without
+     * ever walking candidates; the endpoint measures throughput, not routing.
+     * This one carries a numeric requirement, which is the path a compiled index
+     * actually changes. The handler is constant on purpose: the id is ignored,
+     * so the measured time is matching and dispatch and nothing else.
+     */
+    public function routing(int $id): Response
+    {
+        return new Response('routing', 200, ['Content-Type' => 'text/plain; charset=utf-8']);
+    }
+
+    /**
      * GET / — welcome page via Twig template (no DB).
      */
     public function index(): Response

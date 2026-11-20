@@ -26,7 +26,7 @@ return [
         // ambiguity). The legacy per-pair azera-vs-* files were superseded by
         // this and removed; there is no longer a merge fallback.
         'free-for-all' => [
-            'label' => 'Free-for-all — all six frameworks in one run (warm + cold, per-endpoint-block fresh process)',
+            'label' => 'Free-for-all — all seven frameworks in one run (warm + cold, per-endpoint-block fresh process)',
             'file'  => $root . '/results/free-for-all-opcache-iso.json',
         ],
 
@@ -290,7 +290,7 @@ return [
             'charts'       => ['speedup', 'features', 'resident-memory'],
             'feature_keys' => ['routing', 'orm', 'rest-api'],
             'links'        => [
-                'The complete report (all six frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
+                'The complete report (all seven frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
                 'This model, measured end to end'                               => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-roadrunner.html',
                 'The same model in Volucer'                                     => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-volucer.html',
                 'The PHP-FPM summary'                                           => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-fpm.html',
@@ -310,7 +310,7 @@ return [
             'charts'       => ['speedup', 'features', 'resident-memory'],
             'feature_keys' => ['routing', 'orm', 'rest-api'],
             'links'        => [
-                'The complete report (all six frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
+                'The complete report (all seven frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
                 'This model, measured end to end'                               => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-fpm.html',
                 'The same work as a resident worker (Volucer)'                  => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-volucer.html',
             ],
@@ -344,7 +344,7 @@ return [
             'charts'       => ['speedup', 'features', 'resident-memory'],
             'feature_keys' => ['routing', 'orm', 'rest-api'],
             'links'        => [
-                'The complete report (all six frameworks, every deployment model)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
+                'The complete report (all seven frameworks, every deployment model)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
                 'This model, measured end to end'                                  => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-volucer-attach.html',
                 'The per-request model (PHP-FPM)'                                  => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-fpm.html',
             ],

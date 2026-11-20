@@ -46,7 +46,7 @@ $opts = getopt('', [
     'bench-user::',
 ]);
 
-$apps        = isset($opts['apps']) ? explode(',', (string) $opts['apps']) : ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'];
+$apps        = isset($opts['apps']) ? explode(',', (string) $opts['apps']) : ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'];
 $itersPerRun = (int) ($opts['iterations-per-run'] ?? 1000);
 $runs        = (int) ($opts['runs'] ?? 10);
 $rows        = (int) ($opts['rows'] ?? 1000);

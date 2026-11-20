@@ -16,6 +16,9 @@ use CodeIgniter\Router\RouteCollection;
 
 // --- Core benchmark endpoints -------------------------------------------
 $routes->get('/echo', 'Bench::echo');
+// Routing cost with a typed parameter and no ORM: the only endpoint whose
+// measured time is route matching. See Bench::routing().
+$routes->get('/routing/(:num)', 'Bench::routing/$1');
 $routes->get('/', 'Bench::index');
 $routes->get('/items', 'Bench::list');
 // GET /items with the row shape reduced to plain arrays: the single-variable

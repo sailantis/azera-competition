@@ -155,6 +155,11 @@ function parseRequestsArg(?string $raw): array
             // The framework floor, kept beside `GET /` — the two are read together
             // (what a template render costs is this minus that).
             'GET /echo',
+            // Routing cost with nothing after it: a typed parameter and a constant
+            // handler, so the measured time is route matching alone. `/echo` is
+            // static, so an indexed router can answer it without walking
+            // candidates — it measures throughput, not routing.
+            'GET /routing/1',
             'GET /items',
             // GET /items with row hydration off: the single-variable control for
             // /items. Must stay in step with run.php's list, which is the same set

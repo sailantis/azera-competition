@@ -136,6 +136,12 @@ final class AppRoutesBootloader extends RoutesBootloader
             ->action(BenchController::class, 'echo')
             ->methods('GET');
 
+        // Routing cost with a typed parameter and no ORM: the only endpoint
+        // whose measured time is route matching. See BenchController::routing().
+        $routes->add('routing', '/routing/<id:\d+>')
+            ->action(BenchController::class, 'routing')
+            ->methods('GET');
+
         $routes->add('home', '/')
             ->action(BenchController::class, 'index')
             ->methods('GET');

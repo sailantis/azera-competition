@@ -34,6 +34,20 @@ final class BenchController extends AppController
     }
 
     /**
+     * GET /routing/{id} — routing cost with nothing after it.
+     *
+     * `/echo` is static, so a router that indexes literals can answer it without
+     * ever walking candidates; the endpoint measures throughput, not routing.
+     * This one carries a typed parameter, which is the path a compiled index
+     * actually changes. The handler is constant on purpose: the id is ignored,
+     * so the measured time is matching and dispatch and nothing else.
+     */
+    public function routing(string $id = ''): \Cake\Http\Response
+    {
+        return $this->response->withStringBody('routing');
+    }
+
+    /**
      * GET / — welcome page via Cake View template (no DB).
      */
     public function index(): \Cake\Http\Response

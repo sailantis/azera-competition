@@ -53,6 +53,20 @@ class BenchController
     }
 
     /**
+     * GET /routing/{id} — routing cost with nothing after it.
+     *
+     * `/echo` is static, so a router that indexes literals can answer it without
+     * ever walking candidates; the endpoint measures throughput, not routing.
+     * This one carries a typed parameter, which is the path a compiled index
+     * actually changes. The handler is constant on purpose: the id is ignored,
+     * so the measured time is matching and dispatch and nothing else.
+     */
+    public function routing(string $id): Response
+    {
+        return $this->response->html('routing', 200, 'text/plain; charset=utf-8');
+    }
+
+    /**
      * GET / — welcome page via Stempler template (no DB).
      */
     public function index(): Response

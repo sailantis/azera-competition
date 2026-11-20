@@ -33,6 +33,7 @@ $map = [
     'spiral'      => 'SpiralAdapter',
     'codeigniter' => 'CodeIgniterAdapter',
     'cakephp'     => 'CakePhpAdapter',
+    'phalcon'     => 'PhalconAdapter',
 ];
 
 if (!isset($map[$key])) {
@@ -45,6 +46,7 @@ require_once __DIR__ . "/adapters/{$map[$key]}.php";
 $checks = [
     'GET /',
     'GET /echo',
+    'GET /routing/1',
     'GET /items',
     'GET /items-fast',
     'GET /items/1',

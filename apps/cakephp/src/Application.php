@@ -70,6 +70,12 @@ final class Application extends BaseApplication
             // --- Core benchmark endpoints ---
             $builder->connect('/echo', ['controller' => 'Bench', 'action' => 'echo'])
                 ->setMethods(['GET']);
+            // Routing cost with a typed parameter and no ORM: the only endpoint
+            // whose measured time is route matching. See BenchController::routing().
+            $builder->connect('/routing/{id}', ['controller' => 'Bench', 'action' => 'routing'])
+                ->setMethods(['GET'])
+                ->setPatterns(['id' => '\d+'])
+                ->setPass(['id']);
             $builder->connect('/', ['controller' => 'Bench', 'action' => 'index'])
                 ->setMethods(['GET']);
             $builder->connect('/items', ['controller' => 'Bench', 'action' => 'list'])
