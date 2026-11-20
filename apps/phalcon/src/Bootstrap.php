@@ -97,7 +97,6 @@ final class Bootstrap
         $router->setDI($di);
 
         $router->addGet('/echo', ['controller' => 'bench', 'action' => 'echo']);
-        $router->addGet('/routing/([0-9]+)', ['controller' => 'bench', 'action' => 'routing', 'id' => 1]);
         $router->addGet('/', ['controller' => 'bench', 'action' => 'index']);
 
         $router->addGet('/items', ['controller' => 'bench', 'action' => 'list']);
@@ -109,8 +108,10 @@ final class Bootstrap
         $router->addGet('/items-qb/([0-9]+)', ['controller' => 'bench', 'action' => 'showQb', 'id' => 1]);
         $router->addPost('/items-qb', ['controller' => 'bench', 'action' => 'createQb']);
 
-        $router->addGet('/api/items', ['controller' => 'api', 'action' => 'index']);
-        $router->addGet('/api/items-fast', ['controller' => 'api', 'action' => 'indexFast']);
+        // Routing cost in the deep 'api' bucket with a constant handler and no
+        // ORM: the only endpoint whose measured time is route matching.
+        $router->addGet('/api/routing/([0-9]+)', ['controller' => 'bench', 'action' => 'routing', 'id' => 1]);
+        $router->addGet('/api/items', ['controller' => 'api', 'action' => 'index']);        $router->addGet('/api/items-fast', ['controller' => 'api', 'action' => 'indexFast']);
         $router->addGet('/api/items/([0-9]+)', ['controller' => 'api', 'action' => 'show', 'id' => 1]);
         $router->addPost('/api/items', ['controller' => 'api', 'action' => 'create']);
 

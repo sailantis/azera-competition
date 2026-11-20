@@ -159,7 +159,7 @@ function parseRequestsArg(?string $raw): array
             // handler, so the measured time is route matching alone. `/echo` is
             // static, so an indexed router can answer it without walking
             // candidates — it measures throughput, not routing.
-            'GET /routing/1',
+            'GET /api/routing/1',
             'GET /items',
             // GET /items with row hydration off: the single-variable control for
             // /items. Must stay in step with run.php's list, which is the same set

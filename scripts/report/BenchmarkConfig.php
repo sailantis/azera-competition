@@ -24,7 +24,7 @@ final class BenchmarkConfig
         return [
             'GET /'                        => 'routing',
             'GET /echo'                    => 'throughput',
-            'GET /routing/1'               => 'routing',
+            'GET /api/routing/1'               => 'routing',
             'GET /items'                   => 'orm',
             'GET /items-fast'              => 'orm',
             'GET /items/1'                 => 'orm',
@@ -191,7 +191,7 @@ final class BenchmarkConfig
         return [
             'GET /'                        => 'no DB — routing + template only',
             'GET /echo'                    => 'no DB — static route, constant body (throughput floor)',
-            'GET /routing/1'               => 'no DB — typed route + constant body (routing only)',
+            'GET /api/routing/1'               => 'no DB — typed route + constant body (routing only)',
             'GET /items'                   => '20 of 1000 items (page 1, + COUNT)',
             'GET /items-fast'              => '20 of 1000 items (page 1, + COUNT), hydrated rows not built',
             'GET /items/1'                 => '1 item by id',

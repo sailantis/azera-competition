@@ -40,7 +40,7 @@ $adapterClasses = [
 // Keep in sync with verify.php.
 $expect = [
     'GET /echo'                    => 'bench',
-    'GET /routing/1'               => 'routing',
+    'GET /api/routing/1'               => 'routing',
     'GET /'                        => 'Welcome',
     'GET /items'                   => '<table>',
     'GET /items-fast'              => '<table>',

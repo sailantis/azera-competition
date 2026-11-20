@@ -13,9 +13,6 @@ use App\Laravel\Http\Controllers\FeatureController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/echo', [BenchController::class, 'echo']);
-// Routing cost with a typed parameter and no ORM: the only endpoint whose
-// measured time is route matching. See BenchController::routing().
-Route::get('/routing/{id}', [BenchController::class, 'routing'])->whereNumber('id');
 Route::get('/', [BenchController::class, 'index']);
 
 // --- ORM endpoints ---------------------------------------------------------

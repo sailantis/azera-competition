@@ -136,10 +136,8 @@ final class AppRoutesBootloader extends RoutesBootloader
             ->action(BenchController::class, 'echo')
             ->methods('GET');
 
-        // Routing cost with a typed parameter and no ORM: the only endpoint
-        // whose measured time is route matching. See BenchController::routing().
-        $routes->add('routing', '/routing/<id:\d+>')
-            ->action(BenchController::class, 'routing')
+        $routes->add('home', '/')
+            ->action(BenchController::class, 'index')
             ->methods('GET');
 
         $routes->add('home', '/')
@@ -174,6 +172,13 @@ final class AppRoutesBootloader extends RoutesBootloader
             ->methods('POST');
 
         // --- REST API ----------------------------------------------------
+        // Routing cost in the deep 'api' bucket with a constant handler and no
+        // ORM: the only endpoint whose measured time is route matching.
+        // Declared before api:items:show so the literal segment is matched
+        // before the <id:\d+> placeholder. See BenchController::routing().
+        $routes->add('api:routing', '/api/routing/<id:\d+>')
+            ->action(BenchController::class, 'routing')
+            ->methods('GET');
         $routes->add('api:items:index', '/api/items')
             ->action(ApiController::class, 'index')
             ->methods('GET');

@@ -60,6 +60,29 @@ final class EndpointParityTest extends TestCase
     }
 
     /**
+     * Every file an app declares routes in.
+     *
+     * Laravel splits web and API routes across two files with different
+     * prefixes, and Symfony imports a filler resource from a PHP file. A check
+     * that reads only the first file reports a route as missing when it simply
+     * lives in the other half — which is exactly what happened when the routing
+     * endpoint moved under `/api`.
+     *
+     * @return list<string>
+     */
+    private static function routeFilesFor(string $app): array
+    {
+        $root = self::repoRoot();
+        $files = [self::routeFiles()[$app]];
+
+        if ($app === 'laravel') {
+            $files[] = $root . '/apps/laravel/routes/api.php';
+        }
+
+        return array_values(array_filter($files, is_file(...)));
+    }
+
+    /**
      * Every app registers both new routes.
      *
      * Asserted per app rather than once over the union, so a failure names the
@@ -70,19 +93,36 @@ final class EndpointParityTest extends TestCase
      */
     public function testEveryAppRegistersBothNewRoutes(string $app): void
     {
-        $file   = self::routeFiles()[$app];
-        $source = (string) file_get_contents($file);
+        // Concatenate every route file the app declares routes in. Laravel and
+        // Symfony split them (web.php + api.php, routes.yaml + a resource
+        // import), so a single-file lookup reports a route as missing when it
+        // simply lives in the other half.
+        $source = '';
+        $names  = [];
+        foreach (self::routeFilesFor($app) as $file) {
+            $source .= (string) file_get_contents($file) . "\n";
+            $names[] = basename($file);
+        }
 
         // Symfony and Cake declare routes in YAML / with a builder, so the
         // literal appears either as `path: /echo` or as `'/echo'`. Matching the
         // bare path is what all six forms have in common. `$r->get('/echo')`
         // is not matched by requiring the literal `'/echo'`, so the check only
         // requires the path text and the app's own quote style supplies the rest.
+        //
+        // `/api/routing` is matched by the needle `/routing`: Laravel's api.php
+        // declares it without the `api` prefix (its group supplies that), and
+        // every other app spells the full path. The needle carries the leading
+        // slash on purpose — a bare `routing` also appears in the comment
+        // explaining the route and in `'action' => 'routing'`, so it would pass
+        // even with the route declaration removed. That was the first version of
+        // this check, and mutating the route away did not fail it.
         foreach (['/echo', '/items-fast', '/routing'] as $path) {
+            // '/api/routing' contains 'routing', so one needle covers both.
             self::assertMatchesRegularExpression(
                 '~[\'"]?' . preg_quote($path, '~') . '[\'"]?~',
                 $source,
-                "{$app} does not register {$path} (looked in " . basename($file) . ')'
+                "{$app} does not register {$path} (looked in " . implode(', ', $names) . ')'
             );
         }
     }
@@ -174,9 +214,9 @@ final class EndpointParityTest extends TestCase
             'run.php does not request GET /echo'
         );
         self::assertStringContainsString(
-            "'GET /routing/1'",
+            "'GET /api/routing/1'",
             $run,
-            'run.php does not request GET /routing/1 — the routing endpoint would measure nothing'
+            'run.php does not request GET /api/routing/1 — the routing endpoint would measure nothing'
         );
         self::assertStringContainsString(
             "'GET /items-fast'",
@@ -250,7 +290,7 @@ final class EndpointParityTest extends TestCase
 
         // The two new routes specifically, since they are the ones this change
         // introduced and the ones a future edit is most likely to half-add.
-        foreach (['GET /echo', 'GET /items-fast', 'GET /routing/1'] as $request) {
+        foreach (['GET /echo', 'GET /items-fast', 'GET /api/routing/1'] as $request) {
             self::assertContains($request, $order, "{$request} is missing from featureMap()");
             self::assertNotSame(
                 '',

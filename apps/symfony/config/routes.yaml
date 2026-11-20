@@ -59,6 +59,17 @@ items_qb_create:
     methods: POST
 
 # --- REST API ---------------------------------------------------------------
+# Routing cost in the deep 'api' bucket with a constant handler and no ORM: the
+# only endpoint whose measured time is route matching. Declared before
+# api_items_show so the literal segment is not swallowed by the {id} requirement.
+# See BenchController::routing().
+api_routing:
+    path: /api/routing/{id}
+    controller: App\Symfony\Controller\BenchController::routing
+    methods: GET
+    requirements:
+        id: \d+
+
 api_items_index:
     path: /api/items
     controller: App\Symfony\Controller\ApiController::index

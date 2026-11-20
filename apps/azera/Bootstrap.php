@@ -152,9 +152,6 @@ class Bootstrap
             $router->controller(BenchController::class, function (\Azera\Core\Router $r) {
                 // The framework floor: routed and dispatched, no work after that.
                 $r->get('/echo', '::echoAction');
-                // Routing cost with a typed parameter and no ORM: the only
-                // endpoint whose measured time is route matching.
-                $r->get('/routing/{id:int}', '::routingAction');
                 $r->get('/', '::indexAction');
                 // ORM endpoints (model hydration)
                 $r->get('/items', '::listAction');
@@ -276,6 +273,11 @@ class Bootstrap
         $router->cached(__FILE__, function (\Azera\Core\Router $router): void {
             $router->controller(\App\Azera\Controllers\ApiController::class, function (\Azera\Core\Router $r) {
                 $r->get('/api/items', '::indexAction');
+                // Routing cost in the DEEP 'api' bucket, with a constant handler and
+                // no database access: the only endpoint whose measured time is route
+                // matching. Declared BEFORE /api/items/{id:int} so the literal
+                // segment is not swallowed, exactly as /api/items-fast is.
+                $r->get('/api/routing/{id:int}', '::routingAction');
                 // /api/items with hydration switched off: the single-variable
                 // control for /api/items (see indexFastAction). Declared before
                 // the {id:int} placeholder so the literal segment wins.

@@ -32,21 +32,6 @@ class BenchController extends Controller
     }
 
     /**
-     * GET /routing/{id:int} — routing cost with nothing after it.
-     *
-     * `/echo` is static, so a router that indexes literals can answer it without
-     * ever walking candidates; the endpoint measures throughput, not routing.
-     * This one carries a typed parameter, which is the path a compiled index
-     * actually changes, and it lives in a bucket deep enough that walking the
-     * candidates is real work. The handler is constant on purpose: the value is
-     * ignored, so the measured time is matching and dispatch and nothing else.
-     */
-    public function routingAction(int $id): Response
-    {
-        return Response::text('routing');
-    }
-
-    /**
      * GET / — welcome page via Clarity template (no DB, just routing + middleware + template render).
      */
     public function indexAction(): Response

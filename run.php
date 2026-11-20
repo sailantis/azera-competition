@@ -136,7 +136,7 @@ $requests  = isset($opts['requests'])
         // — it measures throughput, not routing. Placed here rather than at the
         // end because the resident-heap probe walks this list once per endpoint
         // and BenchmarkConfig's requestOrder() mirrors it.
-        'GET /routing/1',
+        'GET /api/routing/1',
         'GET /items',
         // GET /items with hydration off and nothing else changed — the
         // single-variable control for /items (see each app's listFast action).

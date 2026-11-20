@@ -44,6 +44,21 @@ class ApiController extends Controller
     }
 
     /**
+     * GET /api/routing/{id} — routing cost with nothing after it.
+     *
+     * The endpoint the `routing` race is drawn from. `/echo` is static, so a
+     * router that indexes literals can answer it without walking candidates and
+     * the number says nothing about routing; this route carries a typed
+     * parameter and lives in the deep `api` bucket, which is where a compiled
+     * index actually saves work. The handler is constant on purpose — the id is
+     * ignored — so the measured time is matching and dispatch and nothing else.
+     */
+    public function routingAction(int $id): Response
+    {
+        return Response::text('routing');
+    }
+
+    /**
      * GET /api/items-fast — the same JSON as {@see indexAction()}, without
      * hydration.
      *

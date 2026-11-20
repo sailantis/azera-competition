@@ -30,7 +30,7 @@ $adapterClasses = [
 // Expected substring per endpoint (loose — we check that key content appears).
 $expect = [
     'GET /echo'                    => 'bench',
-    'GET /routing/1'               => 'routing',
+    'GET /api/routing/1'               => 'routing',
     'GET /'                        => 'Welcome',
     'GET /items'                   => '<table>',
     'GET /items-fast'              => '<table>',

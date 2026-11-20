@@ -70,12 +70,6 @@ final class Application extends BaseApplication
             // --- Core benchmark endpoints ---
             $builder->connect('/echo', ['controller' => 'Bench', 'action' => 'echo'])
                 ->setMethods(['GET']);
-            // Routing cost with a typed parameter and no ORM: the only endpoint
-            // whose measured time is route matching. See BenchController::routing().
-            $builder->connect('/routing/{id}', ['controller' => 'Bench', 'action' => 'routing'])
-                ->setMethods(['GET'])
-                ->setPatterns(['id' => '\d+'])
-                ->setPass(['id']);
             $builder->connect('/', ['controller' => 'Bench', 'action' => 'index'])
                 ->setMethods(['GET']);
             $builder->connect('/items', ['controller' => 'Bench', 'action' => 'list'])
@@ -103,6 +97,14 @@ final class Application extends BaseApplication
                 ->setMethods(['POST']);
 
             // --- REST API ---
+            // Routing cost in the deep 'api' bucket with a constant handler and
+            // no ORM: the only endpoint whose measured time is route matching.
+            // Declared before /api/items/{id} so the literal segment is matched
+            // before the placeholder. See BenchController::routing().
+            $builder->connect('/api/routing/{id}', ['controller' => 'Bench', 'action' => 'routing'])
+                ->setMethods(['GET'])
+                ->setPatterns(['id' => '\d+'])
+                ->setPass(['id']);
             $builder->connect('/api/items', ['controller' => 'Api', 'action' => 'index'])
                 ->setMethods(['GET']);
             // Declared before /api/items/{id} so the literal segment is matched

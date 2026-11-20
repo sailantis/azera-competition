@@ -16,9 +16,6 @@ use CodeIgniter\Router\RouteCollection;
 
 // --- Core benchmark endpoints -------------------------------------------
 $routes->get('/echo', 'Bench::echo');
-// Routing cost with a typed parameter and no ORM: the only endpoint whose
-// measured time is route matching. See Bench::routing().
-$routes->get('/routing/(:num)', 'Bench::routing/$1');
 $routes->get('/', 'Bench::index');
 $routes->get('/items', 'Bench::list');
 // GET /items with the row shape reduced to plain arrays: the single-variable
@@ -34,6 +31,10 @@ $routes->get('/items-qb/(:num)', 'Bench::showQb/$1');
 $routes->post('/items-qb', 'Bench::createQb');
 
 // --- REST API ------------------------------------------------------------
+// Routing cost in the deep 'api' bucket with a constant handler and no ORM:
+// the only endpoint whose measured time is route matching. Declared before
+// /api/items/(:num) so the literal segment is matched first.
+$routes->get('/api/routing/(:num)', 'Bench::routing/$1');
 $routes->get('/api/items', 'Api::index');
 // Declared before /api/items/(:num): CI4 matches top-down, so a literal
 // segment placed after the (:num) placeholder would be swallowed by it.
