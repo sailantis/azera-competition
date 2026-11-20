@@ -28,7 +28,7 @@ $root = dirname(__DIR__) . DIRECTORY_SEPARATOR;
 
 // PSR-4 autoloader for the benchmark app namespace. `App\` belongs to the azera
 // app in the shared competition layout, so this one is `App\Phalcon\`.
-spl_autoload_register(function (string $class): void {
+spl_autoload_register(function (string $class) use ($root): void {
     $prefix = 'App\\Phalcon\\';
     if (!str_starts_with($class, $prefix)) {
         return;
