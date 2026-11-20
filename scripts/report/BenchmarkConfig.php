@@ -22,9 +22,14 @@ final class BenchmarkConfig
     public static function featureMap(): array
     {
         return [
+            // `routing` is anchored on the typed route, not on `/`: `/` renders a
+            // template, so it measures rendering and cannot separate route
+            // matching. featurePrimaryRequest() returns the FIRST mapping for a
+            // feature, so this entry is what the routing chart and its heading
+            // sentence are drawn on.
+            'GET /api/routing/1'           => 'routing',
             'GET /'                        => 'routing',
             'GET /echo'                    => 'throughput',
-            'GET /api/routing/1'               => 'routing',
             'GET /items'                   => 'orm',
             'GET /items-fast'              => 'orm',
             'GET /items/1'                 => 'orm',
@@ -60,18 +65,18 @@ final class BenchmarkConfig
     public static function adapterFeatures(): array
     {
         return [
-            'azera'       => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'laravel'     => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'symfony'     => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'spiral'      => ['routing', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'codeigniter' => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'cakephp'     => ['routing', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'azera'       => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'laravel'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'symfony'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'spiral'      => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'codeigniter' => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'cakephp'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
             // Phalcon 6 has no AOP layer, and its /features/* routes are not
             // implemented by this entrant, so it takes part in the data,
             // query-builder and REST races only. An adapter that lacks a feature
             // is excluded from that feature's comparison rather than shown as a
             // failure.
-            'phalcon'     => ['routing', 'orm', 'query-builder', 'rest-api'],
+            'phalcon'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api'],
         ];
     }
 
@@ -239,10 +244,12 @@ final class BenchmarkConfig
     public static function featureDescription(): array
     {
         return [
-            'routing'        => 'dispatches a request through the router and returns a rendered '
-                . 'template — no database access. The `/echo` band runs the same path with a '
-                . 'constant handler instead, so what the template render costs can be read '
-                . 'off directly rather than inferred.',
+            'routing'        => 'matches a typed route and dispatches it to a constant handler — no '
+                . 'template and no database access — so the band measures route matching and '
+                . 'dispatch and nothing else. The endpoint sits in a deep bucket of the route '
+                . 'table, which is where a compiled index actually saves work. `/echo` is drawn '
+                . 'beside it: the same constant handler behind a STATIC route, i.e. the floor '
+                . 'that route matching is measured against.',
             'orm'            => 'loads one page of the 1,000 seeded rows through each framework\'s '
                 . 'ORM / Active Record layer: 20 items plus a COUNT for the pagination total. '
                 . 'The `-fast` band repeats that page with hydration switched off, so the cost '

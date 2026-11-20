@@ -61,7 +61,7 @@ final class FeatureDescriptionTest extends TestCase
      * @var array<string,string>
      */
     private const ANCHOR = [
-        'routing'        => 'GET /',
+        'routing'        => 'GET /api/routing/1',
         'orm'            => 'GET /items',
         'query-builder'  => 'GET /items-qb',
         'rest-api'       => 'GET /api/items',
