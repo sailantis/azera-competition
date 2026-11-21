@@ -21,7 +21,7 @@ final class EntryScriptBootProbeTest extends TestCase
     /** @return array<string,array{0:string}> */
     public static function entryScriptProvider(): array
     {
-        $apps = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'];
+        $apps = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'];
         $out  = [];
         foreach ($apps as $app) {
             $out[$app] = [$app];
@@ -93,6 +93,7 @@ final class EntryScriptBootProbeTest extends TestCase
             'spiral'      => '$c->get(RouterInterface::class)->handle($request)',
             'codeigniter' => 'exit(Boot::bootWeb($paths))',
             'cakephp'     => '$response = $server->run()',
+            'phalcon'     => '$body = $app->handle(',
         ];
         $this->assertArrayHasKey($app, $handlers);
         $handle = strpos($src, $handlers[$app]);
