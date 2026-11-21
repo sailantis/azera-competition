@@ -9,7 +9,7 @@ use Phalcon\Di\Di;
 use Phalcon\Html\Escaper;
 use Phalcon\Http\Request;
 use Phalcon\Mvc\Model\Manager as ModelsManager;
-use Phalcon\Mvc\Model\Metadata\Memory as MetadataMemory;
+use Phalcon\Mvc\Model\MetaData\Memory as MetadataMemory;
 use Phalcon\Mvc\Router;
 use Phalcon\Mvc\Url;
 use Phalcon\Mvc\View\Engine\Volt;
@@ -62,7 +62,7 @@ final class Bootstrap
             'dbname' => $dbPath,
         ]));
 
-        // Metadata memory, not the default filesystem adapter: introspection of
+        // MetaData memory, not the default filesystem adapter: introspection of
         // the `items` table would otherwise hit the disk on every model call.
         // Every other app caches its mapping in-process too.
         $di->setShared('modelsMetadata', fn(): MetadataMemory => new MetadataMemory());
