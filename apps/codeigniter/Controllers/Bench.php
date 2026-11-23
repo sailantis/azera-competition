@@ -169,7 +169,7 @@ final class Bench extends BaseController
     public function create(): \CodeIgniter\HTTP\ResponseInterface|string
     {
         $model = new Item();
-        $now   = date('Y-m-d H:i:s');
+        $now = \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
 
         $existing = $model->find(self::SENTINEL_ORM_ID);
         $existed  = $existing !== null;
@@ -251,7 +251,7 @@ final class Bench extends BaseController
      */
     public function createQb(): \CodeIgniter\HTTP\ResponseInterface|string
     {
-        $title = 'Created Item ' . date('Y-m-d H:i:s');
+        $title = 'Created Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999);
 
         $existed = $this->db()->table('items')
             ->where('id', self::SENTINEL_QB_ID)

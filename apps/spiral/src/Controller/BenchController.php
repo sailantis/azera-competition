@@ -170,7 +170,7 @@ class BenchController
      */
     public function create(): Response
     {
-        $now  = \date('Y-m-d H:i:s');
+        $now = \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
         $repo = $this->orm->getRepository(Item::class);
 
         $item    = $repo->findByPK(self::SENTINEL_ORM_ID);
@@ -257,7 +257,7 @@ class BenchController
      */
     public function createQb(): Response
     {
-        $now = \date('Y-m-d H:i:s');
+        $now = \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
 
         $existed = $this->db->select()
             ->from('items')

@@ -77,7 +77,7 @@ class ApiController
      */
     public function create(): JsonResponse
     {
-        $now = \date('Y-m-d H:i:s');
+        $now = \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
 
         $item = Item::find(self::SENTINEL_API_ID);
         if ($item === null) {

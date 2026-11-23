@@ -85,7 +85,7 @@ final class Api extends BaseController
      */
     public function create(): \CodeIgniter\HTTP\ResponseInterface|string
     {
-        $now   = date('Y-m-d H:i:s');
+        $now = \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
         $model = new Item();
 
         $existing = $model->find(self::SENTINEL_API_ID);

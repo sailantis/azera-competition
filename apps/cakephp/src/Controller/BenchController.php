@@ -154,7 +154,7 @@ final class BenchController extends AppController
      */
     public function create(): \Cake\Http\Response
     {
-        $now      = date('Y-m-d H:i:s');
+        $now = \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
         $table    = $this->items();
         $sentinel = Benchmark::SENTINEL_ORM_ID;
 
@@ -257,7 +257,7 @@ final class BenchController extends AppController
      */
     public function createQb(): \Cake\Http\Response
     {
-        $now = date('Y-m-d H:i:s');
+        $now = \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
 
         $existing = Db::connection()
             ->selectQuery(['id'], 'items')
