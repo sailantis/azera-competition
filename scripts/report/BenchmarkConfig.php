@@ -277,7 +277,14 @@ final class BenchmarkConfig
                 . 'dispatch and nothing else. The endpoint sits in a deep bucket of the route '
                 . 'table, which is where a compiled index actually saves work. `/echo` is drawn '
                 . 'beside it: the same constant handler behind a STATIC route, i.e. the floor '
-                . 'that route matching is measured against.',
+                . 'that route matching is measured against — and, like any floor, it is mostly '
+                . 'the SERVER rather than the framework. Measured 2026-11-24 with '
+                . '`temp/echo-ab.php` on the bench VM, the entire framework layer on `/echo` '
+                . 'costs single-digit microseconds, inside rows that print two to three orders '
+                . 'of magnitude more. A difference of a few microseconds there is below the '
+                . 'run-to-run spread, so read `/echo` as the common floor and NOT as a '
+                . 'comparison between entrants; the charts that separate frameworks are the '
+                . 'ones with real work in them.',
             'orm'            => 'loads one page of the 1,000 seeded rows through each framework\'s '
                 . 'ORM / Active Record layer: 20 items plus a COUNT for the pagination total. '
                 . 'The `-fast` band repeats that page with hydration switched off, so the cost '

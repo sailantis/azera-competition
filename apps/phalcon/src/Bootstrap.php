@@ -58,6 +58,26 @@ final class Bootstrap
     private static ?Application $application = null;
 
     /**
+     * Benchmark instrumentation, NOT part of the app: a closure the A/B probe
+     * sets to observe (or replace) the dispatch step from inside a real request.
+     * Null on every measured path.
+     *
+     * @var null|callable(Di, string, array<string,string>): void
+     */
+    private static $dispatchHook = null;
+
+    /**
+     * Install the dispatch hook (see {@see self::$dispatchHook}). Pass null to
+     * remove it. Only the probe calls this.
+     *
+     * @param null|callable(Di, string, array<string,string>): void $hook
+     */
+    public static function setDispatchHook(?callable $hook): void
+    {
+        self::$dispatchHook = $hook;
+    }
+
+    /**
      * Status of the last handle() — see {@see handle()} and
      * `WebAppAdapter::lastStatus()`.
      */
@@ -431,6 +451,14 @@ final class Bootstrap
         // eventually pop a buffer it does not own. Unwinding anything this request
         // added keeps the two balanced without touching the caller's buffers.
         $level = ob_get_level();
+
+        // Bench instrumentation hook, closed unless a probe opens it: the point
+        // of the A/B is to compare `Mvc\Application::handle()` against the
+        // pre-2026-11-23 `router->handle()` + instantiate + call, from inside a
+        // real request. Null on every measured path, so it costs one comparison.
+        if (self::$dispatchHook !== null) {
+            (self::$dispatchHook)($di, $path, $query);
+        }
 
         $response = $this->application()->handle($path);
 
