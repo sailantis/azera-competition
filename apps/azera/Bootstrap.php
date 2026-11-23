@@ -410,8 +410,39 @@ class Bootstrap
 
         // --- AOP Interceptors ---
         // Enable proxy generation for #[Advised] classes.
+        //
         // AOP cache dir for file-based proxy generation.
-        $ctx->setAopCacheDir(__DIR__ . '/../../data/aop');
+        //
+        // Same rule as the route cache above, and for the same reason:
+        // ProxyFactory::assertSafeCacheDir() refuses to `require` generated code
+        // out of a group/world-writable directory (mode & 0o022), because a file
+        // another user can replace is a file another user can make us execute. So
+        // the APP owns the directory and creates it 0700, rather than pointing at
+        // a path the harness's own `mkdir(0777)` had already made 0775.
+        //
+        // This bit exactly once and only on the VM: data/aop had been created 0775
+        // by an earlier run, before the framework grew the check, so every
+        // /features/aop and /features/aop-direct request turned into
+        // "RuntimeException: AOP proxy cache directory is group/world writable"
+        // -> a 500 -> an aborted benchmark. Locally the directory either did not
+        // exist (ProxyFactory created it 0700) or Windows has no mode bits to
+        // inspect, so nothing failed until a stale Linux directory was reused.
+        //
+        // Tighten an existing directory as well: a checkout that already has a
+        // 0775 data/aop keeps failing otherwise, and `chmod` on our own directory
+        // is harmless when it is already 0700.
+        $aopCacheDir = __DIR__ . '/../../data/aop';
+        if (!is_dir($aopCacheDir) && !@mkdir($aopCacheDir, 0700, true) && !is_dir($aopCacheDir)) {
+            // Let ProxyFactory report the failure with its own message; it stats
+            // the directory before loading anything and names the path.
+        } elseif (\DIRECTORY_SEPARATOR !== '\\') {
+            $perms = @fileperms($aopCacheDir);
+            if ($perms !== false && ($perms & 0x0022) !== 0) {
+                @chmod($aopCacheDir, 0700);
+            }
+        }
+
+        $ctx->setAopCacheDir($aopCacheDir);
 
         // Interceptors as FACTORIES: built once, on the first advised-class
         // construction (proxy build), not at boot. The eager versions pulled
