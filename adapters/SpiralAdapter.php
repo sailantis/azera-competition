@@ -74,7 +74,7 @@ class SpiralAdapter implements WebAppAdapter
      * route dies with
      *
      *     Spiral\Files\Exception\FileNotFoundException:
-     *     File 'C:/Users/.../azera-competition/apps/spiral/views/layouts/app.dark.php' not found
+     *     File '<another checkout>/apps/spiral/views/layouts/app.dark.php' not found
      *
      * even though the file exists right here. `runtime/` is gitignored, so this
      * only ever bites an existing working copy — which is exactly when it is least
