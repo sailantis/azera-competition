@@ -31,7 +31,7 @@ Total time to serve one pass over every benchmarked endpoint — each framework'
 One race per framework feature, each run as a real request against a real database. Each feature states the request it measures under its own heading. Every figure — the winner of each race and the margin over the runner-up — is in that feature's own chart below, which anchors each endpoint at its fastest framework.
 
 ### Routing
- `GET /` — dispatches a request through the router and returns a rendered template — no database access. The `/echo` band runs the same path with a constant handler instead, so what the template render costs can be read off directly rather than inferred.
+ `GET /api/routing/1` — matches a typed route and dispatches it to a constant handler — no template and no database access — so the band measures route matching and dispatch and nothing else. The endpoint sits in a deep bucket of the route table, which is where a compiled index actually saves work. `/echo` is drawn beside it: the same constant handler behind a STATIC route, i.e. the floor that route matching is measured against.
 
 ![Routing](svg/cold-start/feature-routing.svg)
 
@@ -51,22 +51,39 @@ One race per framework feature, each run as a real request against a real databa
 ![REST API (JSON)](svg/cold-start/feature-rest-api.svg)
 
 ### AOP (Aspect-Oriented)
- `GET /features/aop` — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.
+ `GET /features/aop` — runs a request through interceptor machinery — logging, retry and transaction advice wrapped around the handler. The entrants split into two styles, and this row means different work on each side. TRANSPARENT interception — advice declared on the method and applied by generated code, handler body untouched — is what Azera does (`#[Advised]`, `#[Transactional]`, `#[Cache]`, `#[Log]`, `#[Retry]`). DIRECT interception — the pipeline written out in the code — is what everyone else does: Laravel composes an Illuminate Pipeline and Symfony chains invokable interceptor classes, both documenting that they have no proxy-based AOP; Spiral builds a `PipelineBuilder` pipeline; CodeIgniter, CakePHP and Phalcon have no interceptor layer at all and write the transactional insert by hand. Do NOT read the ranking across styles as a speed verdict: the two sides pay for different machinery, and the same caution applies to `cache`, `log` and `retry`, which on Azera also route through generated proxies while every other entrant implements them plainly. `GET /features/aop-direct` is the control: the identical insert with the transaction written by hand, served by every entrant, so the pair prices the abstraction on the same work. Phalcon sits the aop race out; it competes in logging, retry and pipeline.
+
+*Read this row in two styles.* **transparent** (advice declared on the method, applied by generated code): Azera. **direct** (the pipeline is written out in the code): Laravel, Symfony, Spiral, CodeIgniter, CakePHP. The two styles pay for different machinery, and the cross-style ranking is not a speed verdict. `GET /features/aop-direct` is the control — the identical insert with the transaction written by hand — so the gap between that row and this one is what interception actually costs.
 
 ![AOP (Aspect-Oriented)](svg/cold-start/feature-aop.svg)
 
+### Logging
+ `GET /features/log` — logs a method entry and exit through the framework's own logger — PSR-3 everywhere. On Azera the call goes through a generated `#[Log]` proxy, so this row includes interception cost the other entrants do not pay here.
+
+![Logging](svg/cold-start/feature-logging.svg)
+
+### Retry
+ `GET /features/retry` — runs a deliberately flaky operation through a retry policy of up to three attempts — an explicit loop or interceptor everywhere, and on Azera a generated `#[Retry]` proxy, so this row includes interception cost the others do not pay here.
+
+![Retry](svg/cold-start/feature-retry.svg)
+
+### Pipeline (explicit)
+ `GET /features/pipeline` — composes the handler with explicit interceptor steps — no proxy generation, so this row separates "the pipeline mechanism" from "the advice declaration mechanism".
+
+![Pipeline (explicit)](svg/cold-start/feature-pipeline.svg)
+
 ### Cache
- `GET /features/cache` — reads a COUNT(*) over the 1,000 rows through the framework's cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.
+ `GET /features/cache` — reads a COUNT(*) over the 1,000 rows through the framework's cache with a 10-second TTL, so a hit costs no database work and a miss runs the query. On Azera the read goes through a generated `#[Cache]` proxy, so this row includes interception cost the other entrants do not pay here.
 
 ![Cache](svg/cold-start/feature-cache.svg)
 
 ### Database Events
- `GET /features/db-events` — inserts one event row per request and lets the framework's database events fire around that write.
+ `GET /features/db-events` — inserts one event row per request and lets the framework's database events fire around that write. On Azera the insert goes through a generated `#[Transactional]` proxy, so this row includes interception cost the other entrants do not pay here.
 
 ![Database Events](svg/cold-start/feature-db-events.svg)
 
 ### Event Dispatcher
- `GET /features/events` — dispatches an in-process event to registered listeners.
+ `GET /features/events` — dispatches an in-process event to registered listeners. On Azera the item it writes goes through a generated `#[Transactional]` proxy, so this row includes interception cost the other entrants do not pay here.
 
 ![Event Dispatcher](svg/cold-start/feature-events.svg)
 
@@ -86,7 +103,7 @@ One race per framework feature, each run as a real request against a real databa
 ![Request-Scoped Services](svg/cold-start/feature-request-scoped.svg)
 
 ### Rate Limiter
- `GET /features/rate-limit` — checks a cache-backed rate limiter.
+ `GET /features/rate-limit` — checks a cache-backed rate limiter, which has long since denied the caller.
 
 ![Rate Limiter](svg/cold-start/feature-rate-limiter.svg)
 
@@ -100,8 +117,9 @@ This dataset times cold requests END-TO-END: every iteration pays a fresh framew
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP |
 |---|---|---:|---:|---:|---:|---:|---:|
+| `GET /api/routing/1` | no DB — typed route + constant body (routing only) | — | — | — | — | — | — |
 | `GET /` | no DB — routing + template only | **2.23 <sub>0.06+2.17+0.00</sub>** | 6.56 <sub>4.16+2.40+0.00</sub> | 3.83 <sub>1.63+2.20+0.00</sub> | 8.40 <sub>4.66+3.72+0.02</sub> | 3.13 <sub>0.02+3.09+0.02</sub> | 3.23 <sub>0.38+2.85+0.00</sub> |
-| `GET /echo` | no DB — routing + dispatch only | — | — | — | — | — | — |
+| `GET /echo` | no DB — static route, constant body (throughput floor) | — | — | — | — | — | — |
 | `GET /items` | 20 of 1000 items (page 1, + COUNT) | **3.52 <sub>0.06+3.45+0.01</sub>** | 8.08 <sub>4.07+4.01+0.00</sub> | 6.36 <sub>1.64+4.72+0.00</sub> | 9.78 <sub>4.50+5.25+0.03</sub> | 4.38 <sub>0.03+4.33+0.02</sub> | 6.02 <sub>0.40+5.62+0.00</sub> |
 | `GET /items-fast` | 20 of 1000 items (page 1, + COUNT), hydrated rows not built | — | — | — | — | — | — |
 | `GET /items/1` | 1 item by id | **3.22 <sub>0.05+3.16+0.01</sub>** | 7.82 <sub>4.10+3.72+0.00</sub> | 5.40 <sub>1.60+3.80+0.00</sub> | 9.47 <sub>4.45+5.00+0.02</sub> | 4.53 <sub>0.03+4.48+0.02</sub> | 5.78 <sub>0.40+5.38+0.00</sub> |
@@ -113,12 +131,13 @@ This dataset times cold requests END-TO-END: every iteration pays a fresh framew
 | `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | — | — | — | — | — | — |
 | `GET /api/items/1` | 1 item by id as JSON | **3.17 <sub>0.06+3.10+0.01</sub>** | 9.25 <sub>4.12+5.13+0.00</sub> | 5.42 <sub>1.63+3.79+0.00</sub> | 8.95 <sub>4.50+4.43+0.02</sub> | 4.52 <sub>0.03+4.47+0.02</sub> | 5.95 <sub>0.42+5.53+0.00</sub> |
 | `POST /api/items` | 1 row upserted (sentinel #999998) | **3.27 <sub>0.06+3.20+0.01</sub>** | 7.97 <sub>4.10+3.87+0.00</sub> | 7.01 <sub>1.65+5.35+0.01</sub> | 9.01 <sub>4.46+4.53+0.02</sub> | 4.68 <sub>0.03+4.63+0.02</sub> | 6.01 <sub>0.41+5.60+0.00</sub> |
-| `GET /features/aop` | no DB — interceptor pipeline | **5.40 <sub>0.06+5.34+0.00</sub>** | 9.32 <sub>4.19+5.13+0.00</sub> | 6.41 <sub>1.62+4.78+0.01</sub> | 11.2 <sub>4.5+6.7+0.0</sub> | — | — |
+| `GET /features/aop` | 1 row upserted (sentinel #888800) | **5.40 <sub>0.06+5.34+0.00</sub>** | 9.32 <sub>4.19+5.13+0.00</sub> | 6.41 <sub>1.62+4.78+0.01</sub> | 11.2 <sub>4.5+6.7+0.0</sub> | 6.11 <sub>0.03+6.06+0.02</sub> | 5.89 <sub>0.41+5.48+0.00</sub> |
+| `GET /features/aop-direct` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — |
 | `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **3.75 <sub>0.05+3.70+0.00</sub>** | 8.19 <sub>4.16+4.03+0.00</sub> | 5.73 <sub>1.60+4.13+0.00</sub> | 9.61 <sub>4.50+5.09+0.02</sub> | 4.29 <sub>0.03+4.24+0.02</sub> | 5.04 <sub>0.39+4.65+0.00</sub> |
-| `GET /features/log` | no DB — buffered log handlers | **3.10 <sub>0.05+3.05+0.00</sub>** | 7.03 <sub>4.10+2.93+0.00</sub> | 4.10 <sub>1.64+2.46+0.00</sub> | 8.69 <sub>4.48+4.19+0.02</sub> | — | — |
-| `GET /features/retry` | no DB — retry policy | **3.07 <sub>0.06+3.01+0.00</sub>** | 7.05 <sub>4.09+2.96+0.00</sub> | 4.13 <sub>1.61+2.52+0.00</sub> | 8.65 <sub>4.45+4.18+0.02</sub> | — | — |
-| `GET /features/pipeline` | no DB — middleware pipeline | **2.40 <sub>0.06+2.34+0.00</sub>** | 7.08 <sub>4.09+2.99+0.00</sub> | 4.09 <sub>1.61+2.48+0.00</sub> | 8.64 <sub>4.44+4.18+0.02</sub> | — | — |
-| `GET /features/db-events` | 1 event row INSERTed per request | **3.82 <sub>0.05+3.77+0.00</sub>** | 8.11 <sub>4.12+3.99+0.00</sub> | 6.09 <sub>1.62+4.46+0.01</sub> | 9.72 <sub>4.47+5.23+0.02</sub> | 4.63 <sub>0.03+4.58+0.02</sub> | 5.40 <sub>0.41+4.99+0.00</sub> |
+| `GET /features/log` | no DB — buffered log handlers | **3.10 <sub>0.05+3.05+0.00</sub>** | 7.03 <sub>4.10+2.93+0.00</sub> | 4.10 <sub>1.64+2.46+0.00</sub> | 8.69 <sub>4.48+4.19+0.02</sub> | 3.41 <sub>0.03+3.36+0.02</sub> | 3.37 <sub>0.39+2.98+0.00</sub> |
+| `GET /features/retry` | no DB — retry policy | **3.07 <sub>0.06+3.01+0.00</sub>** | 7.05 <sub>4.09+2.96+0.00</sub> | 4.13 <sub>1.61+2.52+0.00</sub> | 8.65 <sub>4.45+4.18+0.02</sub> | 3.36 <sub>0.03+3.31+0.02</sub> | 3.33 <sub>0.39+2.94+0.00</sub> |
+| `GET /features/pipeline` | no DB — middleware pipeline | **2.40 <sub>0.06+2.34+0.00</sub>** | 7.08 <sub>4.09+2.99+0.00</sub> | 4.09 <sub>1.61+2.48+0.00</sub> | 8.64 <sub>4.44+4.18+0.02</sub> | 3.38 <sub>0.03+3.33+0.02</sub> | 3.37 <sub>0.40+2.97+0.00</sub> |
+| `GET /features/db-events` | 1 row upserted (sentinel #888800) + COUNT(*), events collected | **3.82 <sub>0.05+3.77+0.00</sub>** | 8.11 <sub>4.12+3.99+0.00</sub> | 6.09 <sub>1.62+4.46+0.01</sub> | 9.72 <sub>4.47+5.23+0.02</sub> | 4.63 <sub>0.03+4.58+0.02</sub> | 5.40 <sub>0.41+4.99+0.00</sub> |
 | `GET /features/events` | no DB — in-process listeners | **3.77 <sub>0.06+3.71+0.00</sub>** | 7.74 <sub>4.11+3.63+0.00</sub> | 4.92 <sub>1.61+3.31+0.00</sub> | 9.38 <sub>4.46+4.90+0.02</sub> | 4.49 <sub>0.03+4.44+0.02</sub> | 4.23 <sub>0.40+3.83+0.00</sub> |
 | `GET /features/validation` | no DB — validator run | **3.01 <sub>0.06+2.95+0.00</sub>** | 8.65 <sub>4.14+4.51+0.00</sub> | 4.80 <sub>1.61+3.19+0.00</sub> | 8.85 <sub>4.46+4.37+0.02</sub> | 4.70 <sub>0.03+4.65+0.02</sub> | 4.56 <sub>0.40+4.16+0.00</sub> |
 | `GET /features/config` | no DB — config lookup | **2.27 <sub>0.06+2.21+0.00</sub>** | 7.19 <sub>4.17+3.02+0.00</sub> | 4.12 <sub>1.61+2.51+0.00</sub> | 8.62 <sub>4.44+4.16+0.02</sub> | 3.46 <sub>0.03+3.41+0.02</sub> | 3.42 <sub>0.40+3.02+0.00</sub> |

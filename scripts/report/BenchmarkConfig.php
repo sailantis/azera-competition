@@ -303,10 +303,9 @@ final class BenchmarkConfig
                 . 'to `cache`, `log` and `retry`, which on Azera also route through generated '
                 . 'proxies while every other entrant implements them plainly. `GET '
                 . '/features/aop-direct` is the control: the identical insert with the transaction '
-                . 'written by hand, served by every entrant. On 2026-11-22 it measured Azera at '
-                . '+0.026 ms (+1.1%) over its advised twin, inside the ±2% band the other six also '
-                . 'sit in — so transparent interception costs ~1% of a 2.3 ms request. Phalcon sits '
-                . 'the aop race out; it competes in logging, retry and pipeline.',
+                . 'written by hand, served by every entrant, so the pair prices the abstraction on '
+                . 'the same work. Phalcon sits the aop race out; it competes in logging, retry '
+                . 'and pipeline.',
             'logging'        => 'logs a method entry and exit through the framework\'s own logger — '
                 . 'PSR-3 everywhere. On Azera the call goes through a generated `#[Log]` proxy, so '
                 . 'this row includes interception cost the other entrants do not pay here.',

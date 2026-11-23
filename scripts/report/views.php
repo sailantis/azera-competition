@@ -55,19 +55,18 @@ return [
             'file'  => $root . '/results/real-deployments.json',
         ],
 
-        // The 0.5.0 release run: nginx/PHP-FPM and Volucer `attach`, all six
-        // frameworks, one budget (1000x10), on the same VM as the file above.
+        // The 0.5.0 release run, kept for the record. It is NO LONGER READ BY ANY
+        // VIEW: it was introduced because a run that measured two modes could not
+        // be spliced into `real-deployments` without `merge-modes.php` stamping
+        // "Azera v0.5.0" over rows measured on v0.4.1-5-gf9b2de0 — a provenance
+        // stamp naming a build the row was not measured on, which is the one error
+        // the stamp exists to prevent.
         //
-        // WHY THIS IS A SECOND DATASET RATHER THAN A SPLICE INTO THE ONE ABOVE.
-        // The run behind it measured TWO modes, and `real-deployments` carries
-        // four. merge-modes.php splices per mode correctly, but it also replaces
-        // env.frameworks for the WHOLE file - so the RoadRunner and volucer-cgi
-        // views would then state "Azera v0.5.0" over numbers measured on
-        // v0.4.1-5-gf9b2de0. A provenance stamp that names a build the row was
-        // not measured on is the one error the version stamp exists to prevent,
-        // so the refreshed modes get their own file and the views that read them
-        // are pointed at it explicitly. Every remaining view keeps the stamp of
-        // the run its numbers actually came from.
+        // The 2026-11-23 run measures ALL FOUR modes on one build
+        // (azera-framework v0.5.1-3-g978135e), so that reason is gone and every
+        // view reads `real-deployments` again. The file stays as a committed
+        // historical dataset: `tests/ModeModelTest.php` checks that a view reads a
+        // DECLARED, REQUIRED dataset, and this key must keep resolving.
         'real-0.5.0' => [
             'label' => 'Real deployments (0.5.0) - nginx/FPM + Volucer attach on the benchmark VM (HTTP over loopback)',
             'file'  => $root . '/results/real-0.5.0.json',
@@ -94,7 +93,7 @@ return [
             'baseline'  => 'azera',
             'mode'      => 'warm',
             'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
             'charts'    => ['hero', 'speedup', 'features', 'memory'],
         ],
 
@@ -110,7 +109,7 @@ return [
             'baseline'  => 'azera',
             'mode'      => 'php-fpm',
             'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
             // No 'memory' chart here, for two reasons that outlive the
             // original one:
             //
@@ -155,7 +154,7 @@ return [
             'baseline'  => 'azera',
             'mode'      => 'roadrunner',
             'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
             // 'resident-memory' rather than 'memory': these rows DO carry the
             // probe (mem_boot_heap/mem_heap), and a worker's retained heap is
             // the memory question this deployment model actually raises.
@@ -174,11 +173,11 @@ return [
         'real-fpm' => [
             'title'     => 'Framework Competition — Real PHP-FPM',
             'subtitle'  => 'Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool\'s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.',
-            'dataset'   => 'real-0.5.0',
+            'dataset'   => 'real-deployments',
             'baseline'  => 'azera',
             'mode'      => 'php-fpm',
             'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
             // 'resident-memory' here too, for the same reason as the RR view.
             // This used to be FPM's distinguishing feature: the pool is
             // pm=static/max_children=1/max_requests=0, so its ONE worker is
@@ -204,7 +203,7 @@ return [
         'real-volucer-attach' => [
             'title'     => 'Framework Competition — Volucer (attach)',
             'subtitle'  => 'Volucer\'s `attach` backend: the framework boots ONCE, in a supervisor the deployment owns, and every request is served from that already-built state. `deploy/volucer/attach.php` listens on a unix relay and forks a child per connection; volucer dials it. End-to-end HTTP over loopback — includes the constant webserver overhead; framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker\'s boot depends on the pool\'s max_jobs, which the dataset records.',
-            'dataset'   => 'real-0.5.0',
+            'dataset'   => 'real-deployments',
             'baseline'  => 'azera',
             'mode'      => 'volucer-attach',
             'log_scale' => false,
@@ -279,7 +278,7 @@ return [
             'baseline'  => 'azera',
             'mode'      => 'roadrunner',
             'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
             // 'features' is the CHART (it draws the feature races); 'feature_keys'
             // narrows which races it draws. Routing leads the list: it is the
             // lightest workload in the suite and the one the dropped startup
@@ -300,11 +299,11 @@ return [
         'summary-fpm' => [
             'title'     => 'Framework Competition — PHP-FPM Summary',
             'subtitle'  => 'The headline numbers from the measured nginx + PHP-FPM deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and what one request costs in memory. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-http/floor-php in the dataset). The worker-recycling setting of the pool is stated with the server floor below, because it changes what each row contains.',
-            'dataset'   => 'real-0.5.0',
+            'dataset'   => 'real-deployments',
             'baseline'  => 'azera',
             'mode'      => 'php-fpm',
             'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
             // The plain routing race first (the endpoint the dropped startup
             // chart measured), then the two data-access races.
             'charts'       => ['speedup', 'features', 'resident-memory'],
@@ -334,11 +333,11 @@ return [
         'summary-volucer' => [
             'title'     => 'Framework Competition — Volucer Summary',
             'subtitle'  => 'The headline numbers from the measured Volucer deployment. Volucer runs the app as a resident worker under a supervisor the deployment owns: the framework boots ONCE, before the supervisor forks, and every request is served from that already-built state. End-to-end HTTP over loopback, so the constant webserver overhead is included.',
-            'dataset'   => 'real-0.5.0',
+            'dataset'   => 'real-deployments',
             'baseline'  => 'azera',
             'mode'      => 'volucer-attach',
             'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
             // Same narrowing as the other summaries, so the pages are read the
             // same way.
             'charts'       => ['speedup', 'features', 'resident-memory'],

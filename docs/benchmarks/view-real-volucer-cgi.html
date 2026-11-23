@@ -77,7 +77,7 @@ main{padding-bottom:10px}
 <section class="figures">
 <figure>
   <figcaption>Routing</figcaption>
-  <p class="workload"><code>GET /</code> — dispatches a request through the router and returns a rendered template — no database access. The `/echo` band runs the same path with a constant handler instead, so what the template render costs can be read off directly rather than inferred.</p>
+  <p class="workload"><code>GET /api/routing/1</code> — matches a typed route and dispatches it to a constant handler — no template and no database access — so the band measures route matching and dispatch and nothing else. The endpoint sits in a deep bucket of the route table, which is where a compiled index actually saves work. `/echo` is drawn beside it: the same constant handler behind a STATIC route, i.e. the floor that route matching is measured against.</p>
   <img src="svg/real-volucer-cgi/feature-routing.svg" alt="Routing" loading="lazy">
 </figure>
 <figure>
@@ -97,22 +97,38 @@ main{padding-bottom:10px}
 </figure>
 <figure>
   <figcaption>AOP (Aspect-Oriented)</figcaption>
-  <p class="workload"><code>GET /features/aop</code> — runs a request through an interceptor pipeline — logging, retry and middleware aspects wrapped around the handler. Only frameworks with an AOP layer take part.</p>
+  <p class="workload"><code>GET /features/aop</code> — runs a request through interceptor machinery — logging, retry and transaction advice wrapped around the handler. The entrants split into two styles, and this row means different work on each side. TRANSPARENT interception — advice declared on the method and applied by generated code, handler body untouched — is what Azera does (`#[Advised]`, `#[Transactional]`, `#[Cache]`, `#[Log]`, `#[Retry]`). DIRECT interception — the pipeline written out in the code — is what everyone else does: Laravel composes an Illuminate Pipeline and Symfony chains invokable interceptor classes, both documenting that they have no proxy-based AOP; Spiral builds a `PipelineBuilder` pipeline; CodeIgniter, CakePHP and Phalcon have no interceptor layer at all and write the transactional insert by hand. Do NOT read the ranking across styles as a speed verdict: the two sides pay for different machinery, and the same caution applies to `cache`, `log` and `retry`, which on Azera also route through generated proxies while every other entrant implements them plainly. `GET /features/aop-direct` is the control: the identical insert with the transaction written by hand, served by every entrant, so the pair prices the abstraction on the same work. Phalcon sits the aop race out; it competes in logging, retry and pipeline.</p>
+  <p class="workload">Read this row in two styles — transparent: Azera; direct: Laravel, Symfony, Spiral, CodeIgniter, CakePHP. The cross-style ranking is not a speed verdict. <code>GET /features/aop-direct</code> is the control: the identical insert with the transaction written by hand, so the gap between that row and this one is what interception actually costs.</p>
   <img src="svg/real-volucer-cgi/feature-aop.svg" alt="AOP (Aspect-Oriented)" loading="lazy">
 </figure>
 <figure>
+  <figcaption>Logging</figcaption>
+  <p class="workload"><code>GET /features/log</code> — logs a method entry and exit through the framework&#039;s own logger — PSR-3 everywhere. On Azera the call goes through a generated `#[Log]` proxy, so this row includes interception cost the other entrants do not pay here.</p>
+  <img src="svg/real-volucer-cgi/feature-logging.svg" alt="Logging" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Retry</figcaption>
+  <p class="workload"><code>GET /features/retry</code> — runs a deliberately flaky operation through a retry policy of up to three attempts — an explicit loop or interceptor everywhere, and on Azera a generated `#[Retry]` proxy, so this row includes interception cost the others do not pay here.</p>
+  <img src="svg/real-volucer-cgi/feature-retry.svg" alt="Retry" loading="lazy">
+</figure>
+<figure>
+  <figcaption>Pipeline (explicit)</figcaption>
+  <p class="workload"><code>GET /features/pipeline</code> — composes the handler with explicit interceptor steps — no proxy generation, so this row separates &quot;the pipeline mechanism&quot; from &quot;the advice declaration mechanism&quot;.</p>
+  <img src="svg/real-volucer-cgi/feature-pipeline.svg" alt="Pipeline (explicit)" loading="lazy">
+</figure>
+<figure>
   <figcaption>Cache</figcaption>
-  <p class="workload"><code>GET /features/cache</code> — reads a COUNT(*) over the 1,000 rows through the framework&#039;s cache with a 10-second TTL, so a hit costs no database work and a miss runs the query.</p>
+  <p class="workload"><code>GET /features/cache</code> — reads a COUNT(*) over the 1,000 rows through the framework&#039;s cache with a 10-second TTL, so a hit costs no database work and a miss runs the query. On Azera the read goes through a generated `#[Cache]` proxy, so this row includes interception cost the other entrants do not pay here.</p>
   <img src="svg/real-volucer-cgi/feature-cache.svg" alt="Cache" loading="lazy">
 </figure>
 <figure>
   <figcaption>Database Events</figcaption>
-  <p class="workload"><code>GET /features/db-events</code> — inserts one event row per request and lets the framework&#039;s database events fire around that write.</p>
+  <p class="workload"><code>GET /features/db-events</code> — inserts one event row per request and lets the framework&#039;s database events fire around that write. On Azera the insert goes through a generated `#[Transactional]` proxy, so this row includes interception cost the other entrants do not pay here.</p>
   <img src="svg/real-volucer-cgi/feature-db-events.svg" alt="Database Events" loading="lazy">
 </figure>
 <figure>
   <figcaption>Event Dispatcher</figcaption>
-  <p class="workload"><code>GET /features/events</code> — dispatches an in-process event to registered listeners.</p>
+  <p class="workload"><code>GET /features/events</code> — dispatches an in-process event to registered listeners. On Azera the item it writes goes through a generated `#[Transactional]` proxy, so this row includes interception cost the other entrants do not pay here.</p>
   <img src="svg/real-volucer-cgi/feature-events.svg" alt="Event Dispatcher" loading="lazy">
 </figure>
 <figure>
@@ -132,38 +148,40 @@ main{padding-bottom:10px}
 </figure>
 <figure>
   <figcaption>Rate Limiter</figcaption>
-  <p class="workload"><code>GET /features/rate-limit</code> — checks a cache-backed rate limiter.</p>
+  <p class="workload"><code>GET /features/rate-limit</code> — checks a cache-backed rate limiter, which has long since denied the caller.</p>
   <img src="svg/real-volucer-cgi/feature-rate-limiter.svg" alt="Rate Limiter" loading="lazy">
 </figure>
 </section>
   <h2>Latency by endpoint <span class="unit">(ms, trimmed mean — lower is better)</span></h2>
 <table class="matrix">
-<thead><tr><th>Request</th><th>Workload</th><th><span class="chip" style="--c:#3459e6">Azera</span></th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th><th><span class="chip" style="--c:#0ca678">Spiral</span></th><th><span class="chip" style="--c:#e8590c">CodeIgniter</span></th><th><span class="chip" style="--c:#d6409f">CakePHP</span></th></tr></thead>
+<thead><tr><th>Request</th><th>Workload</th><th><span class="chip" style="--c:#3459e6">Azera</span></th><th><span class="chip" style="--c:#e5484d">Laravel</span></th><th><span class="chip" style="--c:#7048e8">Symfony</span></th><th><span class="chip" style="--c:#0ca678">Spiral</span></th><th><span class="chip" style="--c:#e8590c">CodeIgniter</span></th><th><span class="chip" style="--c:#d6409f">CakePHP</span></th><th><span class="chip" style="--c:#8b5a2b">Phalcon 6 (RC)</span></th></tr></thead>
 <tbody>
-<tr><td><code>GET /</code></td><td class="muted">no DB — routing + template only</td><td class="win">0.649</td><td class="">3.69</td><td class="">1.89</td><td class="">6.68</td><td class="">1.81</td><td class="">1.38</td></tr>
-<tr><td><code>GET /echo</code></td><td class="muted">no DB — routing + dispatch only</td><td class="win">0.552</td><td class="">3.58</td><td class="">1.67</td><td class="">6.60</td><td class="">1.66</td><td class="">1.25</td></tr>
-<tr><td><code>GET /items</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">1.41</td><td class="">4.79</td><td class="">3.45</td><td class="">7.72</td><td class="">2.62</td><td class="">2.69</td></tr>
-<tr><td><code>GET /items-fast</code></td><td class="muted">20 of 1000 items (page 1, + COUNT), hydrated rows not built</td><td class="win">1.32</td><td class="">4.52</td><td class="">3.38</td><td class="">7.56</td><td class="">2.51</td><td class="">2.66</td></tr>
-<tr><td><code>GET /items/1</code></td><td class="muted">1 item by id</td><td class="win">1.28</td><td class="">4.52</td><td class="">2.81</td><td class="">7.51</td><td class="">2.42</td><td class="">2.51</td></tr>
-<tr><td><code>POST /items</code></td><td class="muted">1 row upserted (sentinel #999999)</td><td class="win">1.47</td><td class="">4.56</td><td class="">3.82</td><td class="">7.61</td><td class="">2.60</td><td class="">2.68</td></tr>
-<tr><td><code>GET /items-qb</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">1.27</td><td class="">4.35</td><td class="">2.50</td><td class="">7.26</td><td class="">2.47</td><td class="">2.18</td></tr>
-<tr><td><code>GET /items-qb/1</code></td><td class="muted">1 item by id</td><td class="win">1.20</td><td class="">4.23</td><td class="">2.44</td><td class="">7.16</td><td class="">2.39</td><td class="">2.07</td></tr>
-<tr><td><code>POST /items-qb</code></td><td class="muted">1 row upserted (sentinel #999997)</td><td class="win">1.31</td><td class="">4.33</td><td class="">3.38</td><td class="">7.29</td><td class="">2.62</td><td class="">2.20</td></tr>
-<tr><td><code>GET /api/items</code></td><td class="muted">20 of 1000 items as JSON</td><td class="win">1.27</td><td class="">4.68</td><td class="">2.79</td><td class="">6.84</td><td class="">2.46</td><td class="">2.41</td></tr>
-<tr><td><code>GET /api/items-fast</code></td><td class="muted">20 of 1000 items as JSON, rows not hydrated</td><td class="win">1.18</td><td class="">4.27</td><td class="">2.74</td><td class="">6.69</td><td class="">2.36</td><td class="">2.36</td></tr>
-<tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="win">1.20</td><td class="">4.52</td><td class="">2.60</td><td class="">6.73</td><td class="">2.37</td><td class="">2.42</td></tr>
-<tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="win">1.27</td><td class="">4.41</td><td class="">3.61</td><td class="">6.81</td><td class="">2.47</td><td class="">2.56</td></tr>
-<tr><td><code>GET /features/aop</code></td><td class="muted">no DB — interceptor pipeline</td><td class="win">2.44</td><td class="">5.19</td><td class="">3.21</td><td class="">8.16</td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/cache</code></td><td class="muted">COUNT(*) of 1000 rows, cached 10s (miss = query)</td><td class="win">1.48</td><td class="">4.46</td><td class="">2.80</td><td class="">7.38</td><td class="">2.32</td><td class="">2.30</td></tr>
-<tr><td><code>GET /features/log</code></td><td class="muted">no DB — buffered log handlers</td><td class="win">1.07</td><td class="">3.64</td><td class="">1.80</td><td class="">6.78</td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/retry</code></td><td class="muted">no DB — retry policy</td><td class="win">1.05</td><td class="">3.65</td><td class="">1.81</td><td class="">6.89</td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/pipeline</code></td><td class="muted">no DB — middleware pipeline</td><td class="win">0.606</td><td class="">3.64</td><td class="">1.78</td><td class="">7.03</td><td class="muted">—</td><td class="muted">—</td></tr>
-<tr><td><code>GET /features/db-events</code></td><td class="muted">1 event row INSERTed per request</td><td class="win">1.56</td><td class="">4.41</td><td class="">2.96</td><td class="">7.81</td><td class="">2.58</td><td class="">2.50</td></tr>
-<tr><td><code>GET /features/events</code></td><td class="muted">no DB — in-process listeners</td><td class="win">1.52</td><td class="">4.12</td><td class="">2.29</td><td class="">7.45</td><td class="">2.49</td><td class="">1.87</td></tr>
-<tr><td><code>GET /features/validation</code></td><td class="muted">no DB — validator run</td><td class="win">0.597</td><td class="">4.57</td><td class="">2.13</td><td class="">6.93</td><td class="">2.11</td><td class="">1.70</td></tr>
-<tr><td><code>GET /features/config</code></td><td class="muted">no DB — config lookup</td><td class="win">0.548</td><td class="">3.62</td><td class="">1.80</td><td class="">6.81</td><td class="">1.78</td><td class="">1.29</td></tr>
-<tr><td><code>GET /features/request-scoped</code></td><td class="muted">no DB — scoped service resolve</td><td class="win">0.570</td><td class="">3.61</td><td class="">1.79</td><td class="">6.81</td><td class="">1.76</td><td class="">1.28</td></tr>
-<tr><td><code>GET /features/rate-limit</code></td><td class="muted">no DB — cache-backed limiter</td><td class="win">0.558</td><td class="">3.76</td><td class="">1.82</td><td class="">6.89</td><td class="">1.77</td><td class="">1.40</td></tr>
+<tr><td><code>GET /api/routing/1</code></td><td class="muted">no DB — typed route + constant body (routing only)</td><td class="win">0.584</td><td class="">3.69</td><td class="">2.19</td><td class="">7.55</td><td class="">1.70</td><td class="">1.34</td><td class="">0.766</td></tr>
+<tr><td><code>GET /</code></td><td class="muted">no DB — routing + template only</td><td class="win">0.692</td><td class="">3.75</td><td class="">2.33</td><td class="">7.57</td><td class="">1.83</td><td class="">1.43</td><td class="">0.916</td></tr>
+<tr><td><code>GET /echo</code></td><td class="muted">no DB — static route, constant body (throughput floor)</td><td class="win">0.511</td><td class="">3.64</td><td class="">2.07</td><td class="">7.53</td><td class="">1.68</td><td class="">1.31</td><td class="">0.785</td></tr>
+<tr><td><code>GET /items</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">1.47</td><td class="">5.29</td><td class="">3.60</td><td class="">8.37</td><td class="">2.64</td><td class="">2.81</td><td class="">2.06</td></tr>
+<tr><td><code>GET /items-fast</code></td><td class="muted">20 of 1000 items (page 1, + COUNT), hydrated rows not built</td><td class="win">1.35</td><td class="">5.01</td><td class="">3.53</td><td class="">8.12</td><td class="">2.55</td><td class="">2.74</td><td class="">2.02</td></tr>
+<tr><td><code>GET /items/1</code></td><td class="muted">1 item by id</td><td class="win">1.34</td><td class="">4.92</td><td class="">2.94</td><td class="">8.08</td><td class="">2.49</td><td class="">2.61</td><td class="">1.77</td></tr>
+<tr><td><code>POST /items</code></td><td class="muted">1 row upserted (sentinel #999999)</td><td class="win">2.45</td><td class="">6.23</td><td class="">4.02</td><td class="">9.37</td><td class="">3.65</td><td class="">3.71</td><td class="">2.85</td></tr>
+<tr><td><code>GET /items-qb</code></td><td class="muted">20 of 1000 items (page 1, + COUNT)</td><td class="win">1.27</td><td class="">4.80</td><td class="">2.61</td><td class="">7.77</td><td class="">2.55</td><td class="">2.23</td><td class="">1.44</td></tr>
+<tr><td><code>GET /items-qb/1</code></td><td class="muted">1 item by id</td><td class="win">1.22</td><td class="">4.59</td><td class="">2.56</td><td class="">7.72</td><td class="">2.45</td><td class="">2.15</td><td class="">1.33</td></tr>
+<tr><td><code>POST /items-qb</code></td><td class="muted">1 row upserted (sentinel #999997)</td><td class="win">2.26</td><td class="">5.67</td><td class="">3.53</td><td class="">8.85</td><td class="">3.62</td><td class="">3.21</td><td class="">2.35</td></tr>
+<tr><td><code>GET /api/items</code></td><td class="muted">20 of 1000 items as JSON</td><td class="win">1.26</td><td class="">4.71</td><td class="">2.95</td><td class="">7.35</td><td class="">2.47</td><td class="">2.47</td><td class="">1.73</td></tr>
+<tr><td><code>GET /api/items-fast</code></td><td class="muted">20 of 1000 items as JSON, rows not hydrated</td><td class="win">1.17</td><td class="">4.32</td><td class="">2.85</td><td class="">7.20</td><td class="">2.39</td><td class="">2.44</td><td class="">1.74</td></tr>
+<tr><td><code>GET /api/items/1</code></td><td class="muted">1 item by id as JSON</td><td class="win">1.22</td><td class="">4.54</td><td class="">2.69</td><td class="">7.28</td><td class="">2.40</td><td class="">2.47</td><td class="">1.66</td></tr>
+<tr><td><code>POST /api/items</code></td><td class="muted">1 row upserted (sentinel #999998)</td><td class="win">2.22</td><td class="">5.64</td><td class="">3.72</td><td class="">8.56</td><td class="">3.42</td><td class="">3.57</td><td class="">2.75</td></tr>
+<tr><td><code>GET /features/aop</code></td><td class="muted">1 row upserted (sentinel #888800)</td><td class="win">2.18</td><td class="">5.17</td><td class="">3.34</td><td class="">8.87</td><td class="">3.51</td><td class="">2.85</td><td class="muted">—</td></tr>
+<tr><td><code>GET /features/aop-direct</code></td><td class="muted">1 row upserted (sentinel #888800)</td><td class="win">2.17</td><td class="">5.18</td><td class="">3.33</td><td class="">8.85</td><td class="">3.51</td><td class="">2.86</td><td class="muted">—</td></tr>
+<tr><td><code>GET /features/cache</code></td><td class="muted">COUNT(*) of 1000 rows, cached 10s (miss = query)</td><td class="win">1.16</td><td class="">4.47</td><td class="">2.90</td><td class="">7.91</td><td class="">2.36</td><td class="">2.37</td><td class="">1.32</td></tr>
+<tr><td><code>GET /features/log</code></td><td class="muted">no DB — buffered log handlers</td><td class="win">0.707</td><td class="">3.68</td><td class="">2.22</td><td class="">7.60</td><td class="">1.78</td><td class="">1.35</td><td class="">0.855</td></tr>
+<tr><td><code>GET /features/retry</code></td><td class="muted">no DB — retry policy</td><td class="win">0.748</td><td class="">3.69</td><td class="">2.23</td><td class="">7.62</td><td class="">1.79</td><td class="">1.32</td><td class="">0.759</td></tr>
+<tr><td><code>GET /features/pipeline</code></td><td class="muted">no DB — middleware pipeline</td><td class="win">0.584</td><td class="">3.67</td><td class="">2.23</td><td class="">7.65</td><td class="">1.79</td><td class="">1.32</td><td class="">0.868</td></tr>
+<tr><td><code>GET /features/db-events</code></td><td class="muted">1 row upserted (sentinel #888800) + COUNT(*), events collected</td><td class="win">2.22</td><td class="">5.52</td><td class="">4.06</td><td class="">9.23</td><td class="">3.61</td><td class="">3.50</td><td class="">2.29</td></tr>
+<tr><td><code>GET /features/events</code></td><td class="muted">no DB — in-process listeners</td><td class="">2.20</td><td class="">5.21</td><td class="">3.33</td><td class="">8.98</td><td class="">3.53</td><td class="">2.82</td><td class="win">2.20</td></tr>
+<tr><td><code>GET /features/validation</code></td><td class="muted">no DB — validator run</td><td class="win">0.586</td><td class="">4.63</td><td class="">2.55</td><td class="">7.85</td><td class="">2.15</td><td class="">1.76</td><td class="">0.927</td></tr>
+<tr><td><code>GET /features/config</code></td><td class="muted">no DB — config lookup</td><td class="win">0.542</td><td class="">3.66</td><td class="">2.21</td><td class="">7.64</td><td class="">1.82</td><td class="">1.32</td><td class="">0.804</td></tr>
+<tr><td><code>GET /features/request-scoped</code></td><td class="muted">no DB — scoped service resolve</td><td class="win">0.537</td><td class="">3.67</td><td class="">2.21</td><td class="">7.62</td><td class="">1.81</td><td class="">1.33</td><td class="">0.786</td></tr>
+<tr><td><code>GET /features/rate-limit</code></td><td class="muted">no DB — cache-backed limiter</td><td class="win">0.535</td><td class="">3.82</td><td class="">2.25</td><td class="">7.71</td><td class="">1.84</td><td class="">1.44</td><td class="">0.835</td></tr>
 </tbody>
 </table>
   <p class="floor"><strong>Server floor</strong> — real nginx + PHP-FPM with <code>pm.max_requests=0</code>: the pool never recycles its worker, so no process is spawned per request — what remains is the FastCGI handshake plus a minimal script. A hello-world endpoint that boots nothing but PHP (<code>floor-php</code>) and a static file through nginx (<code>floor-http</code>) measure exactly that cost — the floor every row stands on. Subtracting that floor leaves the framework's own per-request boot, which FPM still pays for every request even though its worker survives.</p>
