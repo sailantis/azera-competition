@@ -185,6 +185,7 @@ $adapterClasses = [
     'spiral'      => 'SpiralAdapter',
     'codeigniter' => 'CodeIgniterAdapter',
     'cakephp'     => 'CakePhpAdapter',
+    'phalcon'     => 'PhalconAdapter',
 ];
 
 if (!isset($adapterClasses[$appKey])) {

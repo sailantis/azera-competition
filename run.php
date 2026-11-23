@@ -225,6 +225,13 @@ $adapterClasses = [
     'spiral'      => 'SpiralAdapter',
     'codeigniter' => 'CodeIgniterAdapter',
     'cakephp'     => 'CakePhpAdapter',
+    // Phalcon 6 is a first-class entrant: it is in the framework list, the
+    // feature map, the report's app order and run-http.php's default app set.
+    // Leaving it out of THIS map meant `--apps=phalcon` died with "Unknown
+    // adapter" before measuring anything, which is the same class of omission
+    // as the 14-of-25-route bug: a framework silently missing from a comparison
+    // it is supposed to be in.
+    'phalcon'     => 'PhalconAdapter',
 ];
 
 // --- Helpers ---------------------------------------------------------------
