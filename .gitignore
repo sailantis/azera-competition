@@ -57,6 +57,14 @@ results/smoke-*
 results/*.pre-*.json
 results/cold-refresh.json
 
+# Rendered reports of a fetched run. `run-remote.ps1 -Fetch` writes the dataset
+# AND a `results/<name>-report/` tree beside it (scripts/report.php --out), which
+# is the rendered form of a file that is itself on disk: one run produced 528
+# such files, all reproducible with one command, and none of them a dataset.
+# Without this rule they sat untracked after every fetch and were one
+# `git add -A` away from being committed as if they were measurements.
+results/*-report/
+
 # OS / IDE
 .idea/
 .vscode/
