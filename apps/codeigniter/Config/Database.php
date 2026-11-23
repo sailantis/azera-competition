@@ -47,7 +47,20 @@ class Database extends DbConfig
         'numberNative' => true,
         'foreignKeys'  => true,
         'busyTimeout'  => 5000,
-        'synchronous'  => null,
+        // SQLite's FULL default makes every WAL commit fsync, so an
+        // autocheckpoint turns one commit in a few hundred into a multi-millisecond
+        // stall. NORMAL(1) matches every other entrant; see
+        // tests/SqlitePragmaParityTest.php. (Was null, which left the driver on
+        // SQLite's default of FULL.) CI4 requires the INTEGER flag here, not the
+        // name: Connection::initialize() validates `int` 0-3 and emits
+        // `PRAGMA synchronous = <n>`, so the string 'NORMAL' would be ignored.
+        //
+        // NOTE ON journal_mode: CI4's SQLite3 connection exposes no option for it
+        // (initialize() applies only foreign_keys, busyTimeout and synchronous),
+        // so WAL comes from seed.php having put the shared FILE into WAL mode.
+        // That is a persistent property of the database file, so it holds for every
+        // entrant; CI4 simply cannot state it in config.
+        'synchronous'  => 1,
         'dateFormat'   => [
             'date'     => 'Y-m-d',
             'datetime' => 'Y-m-d H:i:s',

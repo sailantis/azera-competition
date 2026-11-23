@@ -39,6 +39,31 @@ final class AppBootloader extends Bootloader
 
     public function init(Container $container, FinalizerInterface $finalizer): void
     {
+        // SQLite pragma parity. Cycle's SQLite driver exposes no `synchronous`
+        // option and pdo_sqlite has no PDO attribute for it, so the flag goes
+        // through a PRAGMA on the live connection.
+        //
+        // MUST BE raw PDO, not $database->execute(). Cycle's execute() leaves a
+        // statement registered on the driver, and the next transaction then dies
+        // with "cannot commit transaction - SQL statements in progress" or "no such
+        // savepoint: SVP0" (verified A/B: raw PDO exec is clean, execute() breaks the
+        // first transaction in the process). getPDO() is protected, hence reflection
+        // — this is bootstrap code that runs once per process, not a hot path.
+        //
+        // WHY NORMAL: SQLite defaults to synchronous=FULL, which fsyncs the WAL on
+        // every commit; when autocheckpoint fires, one commit in a few hundred pays
+        // milliseconds instead of microseconds. Every entrant is pinned to NORMAL so
+        // the pack measures frameworks, not two storage configurations. See
+        // tests/SqlitePragmaParityTest.php.
+        $driver = $container->get(\Cycle\Database\DatabaseManager::class)
+            ->database('default')
+            ->getDriver();
+
+        $pdo = (new \ReflectionMethod($driver, 'getPDO'))->invoke($driver);
+        $pdo->exec('PRAGMA journal_mode = WAL');
+        $pdo->exec('PRAGMA synchronous = NORMAL');
+        $pdo->exec('PRAGMA busy_timeout = 5000');
+
         // PSR-14 listener for ItemCreated is registered declaratively in
         // config/events.php (picked up by EventsBootloader's ConfigProcessor);
         // patching the `events` config at runtime is fragile because the

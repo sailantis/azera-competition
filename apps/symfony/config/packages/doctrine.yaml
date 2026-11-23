@@ -4,6 +4,15 @@ doctrine:
         driver: 'pdo_sqlite'
         # WAL + busy timeout so concurrent CLI harness runs don't trip over
         # database locks (mirrors the other benchmark apps).
+        #
+        # `synchronous = NORMAL` cannot be expressed here: DBAL's SQLite drivers
+        # have no journal_mode/synchronous/busy_timeout connection options and no
+        # post-connect hook, so declaring them raises
+        # "Unrecognized options ... under doctrine.dbal". The pragma is applied in
+        # App\Symfony\Kernel::boot() instead; see tests/SqlitePragmaParityTest.php.
+        # Why it matters: SQLite defaults to synchronous=FULL, which fsyncs the WAL
+        # on every commit, so an autocheckpoint turns one commit in a few hundred
+        # into a multi-millisecond stall.
         options:
             'busy_timeout': 5000
         profiling_collect_backtrace: false

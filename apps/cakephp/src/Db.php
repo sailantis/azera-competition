@@ -38,8 +38,14 @@ final class Db
             'database'  => $dbPath,
             // Cake 5's Sqlite driver has no journalMode/busyTimeout keys —
             // PRAGMAs go through `init` (executed right after connect).
+            //
+            // `synchronous = NORMAL` matches every other entrant: SQLite's FULL
+            // default makes each WAL commit fsync, so an autocheckpoint turns one
+            // commit in a few hundred into a multi-millisecond stall. See
+            // tests/SqlitePragmaParityTest.php.
             'init' => [
                 'PRAGMA journal_mode = wal',
+                'PRAGMA synchronous = NORMAL',
                 'PRAGMA busy_timeout = 5000',
                 'PRAGMA foreign_keys = ON',
             ],
