@@ -95,14 +95,150 @@ Run `php run.php --help` for all options.
 4. Add the adapter key to `run.php`'s adapter map.
 5. Run `php verify.php` to confirm your adapter produces the expected output for all benchmark endpoints.
 
+**All 25 measured endpoints are mandatory, including the 11 `GET /features/*` demos.**
+An adapter may *lack* a feature, but it may not *omit* the route:
+the harness requests every endpoint from every app, so a missing route is a row that
+cannot exist. It fails in the worst possible way — the framework silently vanishes
+from that endpoint's comparison, which looks like a framework that did not compete.
+This is not hypothetical: Phalcon 6 shipped with 14 of the 25 routes and the first
+real run aborted on `GET /features/aop`.
+`tests/FeatureRouteParityTest.php` now checks the route tables, and
+`tests/EndpointParityTest.php` keeps the three request lists in step.
+
+**A feature exclusion means "this framework has no such facility", not "we did not
+write the endpoint".** `BenchmarkConfig::adapterFeatures()` is what removes an app
+from a feature's winners table and chart, so listing a feature there *is* the claim
+that the app competes in it. Phalcon is the only current example, and sits out
+exactly one: AOP (`GET /features/aop`), because Phalcon 6 has no interceptor layer —
+comparing generated proxies against hand-written calls would measure the machinery,
+not the speed. Its other features run on native Phalcon subsystems, so it competes.
+Note that `logging`, `retry` and `pipeline` are **separate features**, not part of the
+AOP race: they used to map to `aop`, which meant the AOP exclusion also hid three
+measurable rows from every entrant that lacks proxy AOP. `tests/AdapterFeaturesTest.php`
+pins all of this.
+
+**Interception comes in two styles, and the AOP row ranks both.** `aopStyle()` records
+the distinction, verified per entrant: **transparent** means the advice is declared on
+the method and applied by generated code (only Azera: `#[Advised]`, `#[Transactional]`,
+`#[Cache]`, `#[Log]`, `#[Retry]` — no other app contains an advice attribute);
+**direct** means the pipeline is written out in the code (Laravel's Illuminate Pipeline
+and Symfony's invokable interceptors, both documenting that they have no proxy-based
+AOP; Spiral's `PipelineBuilder`; and hand-written `begin`/`commit` on CodeIgniter,
+CakePHP and Phalcon). Both pages state the split beside the chart.
+
+**`GET /features/aop-direct` prices the abstraction.** It is the same-work control:
+identical upsert, identical sentinel and identical event dispatch, with the transaction
+written by hand instead of applied by the proxy. Every entrant serves both rows, so the
+gap is what interception costs rather than the difference between two demonstrations.
+Measured 2026-11-22 (php-fpm): Azera `aop` **2.3693 ms** vs `aop-direct` **2.3435 ms** —
+**+0.0259 ms, +1.1%**, and the other six land inside ±2% too, which is the noise floor.
+So transparent interception is not what makes those rows slow. Anyone tempted to read
+"Azera is 2× slower at AOP than Phalcon" off the cross-entrant table should look at this
+pair first.
+
+The per-query event machinery is likewise negligible — `new QueryExecuted` 0.18 µs,
+`dispatch()` with listener resolution 1.26 µs, `DbEventLog::record()` 0.25 µs, so ~1.7 µs
+per query and ~5 µs (0.2%) of a 2.37 ms request. **Removing logging or events would not
+move these numbers.**
+
+What these rows *do* measure is the write, and both the journal mode and the synchronous
+level change it dramatically. 800 sequential upserts on the VM through one bare PDO handle
+— the storage engine isolated from any framework:
+
+| journal / synchronous | p50 | p99 | max |
+|---|---|---|---|
+| **WAL / NORMAL** | **0.013 ms** | **0.035** | ~0.75 |
+| delete / NORMAL | 0.466 | 0.662 | 1.75 |
+| delete / FULL | ~3.3 | 3.8 | 5.5 |
+
+**Those are storage-engine numbers, not benchmark numbers — do not quote the ratio as a
+result.** Under WAL a NORMAL commit is an append to the `-wal` file with no fsync; in
+rollback-journal mode SQLite fsyncs on every commit even at `NORMAL`, and `FULL` issues
+several syncs per commit (measured: 3–5 `fdatasync` calls). The main database file does
+not grow under WAL at all (measured: 0 bytes of main-db growth across 200 writes, 4 KB of
+WAL).
+
+Through a real framework endpoint the difference is diluted to nothing for the slower
+entrants, because their own DB layer costs hundreds of microseconds and the commit is lost
+inside it. Removing WAL and converting the file to rollback-journal, measured through each
+app's real `/features/aop-direct` endpoint, moved CakePHP by 2% and Laravel by 4%, and
+moved Azera far more — which is precisely why WAL stays on: it is not paid equally.
+
+> **Correction.** An earlier revision of this section claimed "WAL is worth 55×" and that
+> dropping it "would make the benchmark 55× slower on every write endpoint". Both came from
+> the standalone commit micro-benchmark above. The direction held; the magnitude did not
+> survive being measured through the applications.
+
+The 14× outlier spread between entrants before the pragma alignment was the difference
+between `WAL/NORMAL` and `WAL/FULL`, not anything about the frameworks. All seven now run
+`WAL/NORMAL`, which is both the fastest and the correct pairing: WAL + NORMAL is the
+standard configuration, and each is wrong without the other.
+
+**Do we need WAL at all?** Yes: WAL is what makes the write cheap, and `NORMAL` only
+becomes safe-and-fast *because* WAL is on. It also stays because turning it off is not a
+fair trade — see above.
+
+Phalcon's p50 being 22× faster than Azera's is **not** the write. It is per-request cold
+boot: resolving the `#[Advised]` service forces `AppContext::build()` to reflect, collect
+advised methods and instantiate a proxy — paid on every request under FPM. In a warm
+process the same service resolves in ~3 µs. **That is the real Azera-specific cost, and
+the actionable one.**
+
+**A sentinel-row upsert must write something that actually differs.** Every write endpoint
+upserts a *fixed* id, so the title is the only column that can change between requests, and
+`created_at` only has one-second resolution. If the title is built from a timestamp alone,
+consecutive requests inside the same second propose byte-identical rows and SQLite skips the
+commit rather than forcing a no-op page through the journal. Measured in rollback-journal
+mode, where a real commit costs ~0.5 ms: 40 identical upserts produced **4** `fdatasync`
+calls, 40 unique ones produced **160**.
+
+This was silently distorting a published comparison. Phalcon was the only entrant whose
+`/features/aop` and `/features/aop-direct` wrote a date-only title, and it was the only one
+that appeared to commit for free: 0.021 ms versus 0.486 ms for the same endpoint once it
+wrote a unique title — 23×, and equal to Azera's 0.515 ms. The "0.021 ms write" was a read.
+Every sentinel title now carries a per-request `#<random>` suffix, enforced by
+`tests/WriteTitleUniquenessTest.php`.
+
+**Note on the ordinary POST rows.** `POST /items`, `POST /items-qb` and `POST /api/items`
+upsert fixed ids (`999999`, `999997`, `999998`) with date-only titles in *all seven* apps.
+That is symmetric, so it does not distort the comparison between entrants — but it does mean
+those three rows under-report the cost of a real insert for every framework equally. See
+"Known limitations".
+
+**Return an error as a status-shaped body.** The adapters hand the transport a body
+string, so the only way to signal failure is the body itself: `Not Found`,
+`404 Not Found`, or `500 Error: …`. One rule in `response-guard.php` classifies them
+and every guard site and transport uses it, so a 4xx body can never be published as a
+200. Do not re-derive the check with `str_starts_with()` — a guard that only knows one
+framework's spelling of "not found" is how a run once reported "250201 requests,
+0 failed" while 11 of its endpoints were 404s.
+
+**Escape every template output.** Six of the seven engines escape by default (Twig's
+`autoescape: html`, Blade's `{{ }}`, Stempler's `DEFAULT_FILTER`, the Clarity engine's
+output cast, and CakePHP's `h()` / CodeIgniter's `esc()`), so a template author there
+does not choose. Volt does not: `|e` exists but autoescape defaults to **off** on
+Phalcon 6, so `{{ x }}` emits `x` verbatim. Phalcon's templates therefore wrote `|e`
+on some values and nothing on others, which is both an escaping difference and a
+rendering-cost difference — six entrants paid an `htmlspecialchars()` per
+interpolation and Phalcon did not. Every interpolation now carries `|e`, and
+`tests/PhalconTemplateEscapingTest.php` fails if one does not, or if `|raw` appears.
+If you add an entrant whose engine defaults to no escaping, the same rule applies:
+either escape explicitly at every output or turn autoescape on.
+
 ## Fairness caveats
 
 - **Idiomatic usage** — each framework uses its own ORM and template engine (not raw PDO / plain PHP), so results reflect real-world usage. Switching all to raw PDO would reduce this to the routing+template case already covered by the `benchmarks/view-engine/` harness in this repository.
+- **Teardown must not throw away what the server would keep.** `cleanup()` runs between requests in the resident arms, and whatever it discards is re-paid on the next request. Phalcon's used to drop `modelsMetadata`, a cache of the table mapping that costs ~0.45 ms to re-derive by introspecting the schema; every other entrant keeps the equivalent warm, so the reset made Phalcon pay a teardown the other six do not (0.319 → 0.200 ms per `GET /items` in one booted worker, interleaved A/B). It is kept now; the identity map, which is genuinely request-scoped, is still cleared. Nothing about this changes the php-fpm arm, where every request is a fresh process and the cache is cold regardless.
 - **Template caching** — compiled templates (Twig, Blade, Stempler) use a persistent cache dir so warm runs reflect cached compiled templates. Use `--clear-cache` to measure cold-from-scratch compilation.
 - **In-process dispatch** — no real HTTP socket; we measure framework kernel overhead, not web server / FPM / Swoole cost.
+- **Every entrant runs its own front controller.** Symfony and Laravel call `HttpKernel::handle(`, CakePHP calls `Server::run(`, CodeIgniter calls `CodeIgniter::run(`, Phalcon calls `Mvc\Application::handle(`, Spiral calls `Spiral\Http\Http::handle(`, and Azera calls `Azera\Core\Kernel::handle(` — each from the in-process adapter and from its FPM entry script. This was not always true: Phalcon's app used to route by hand (`$router->handle()` then `new $class(...)` then `$action()`), Azera called `router()->match()` plus `dispatcher()->dispatch()` and skipped its own `Kernel`, and Spiral went straight to `RouterInterface::handle()`. All three were measured as a saving to that entrant — Phalcon's `Application` path costs ~7 µs, Azera's `Kernel` is level with the manual pair, Spiral's `Http` core ~40–48 µs — so the shortcuts were small, but they made those rows incomparable with the four that ran a real front controller, and it meant none of their own error pages was ever exercised. The Phalcon controllers are now `Phalcon\Mvc\Controller` subclasses with `...Action()` methods, which is what the dispatcher requires; the hand-rolled version could not have been loaded by it at all.
+- **Every entrant lets its framework handle errors.** A missing route or a wrong method is answered by the framework, not by the adapter: CakePHP's `ErrorHandlerMiddleware`, Symfony's `error_controller`, CI4's 404 override, Spiral's `ErrorHandlerMiddleware`, Phalcon's `$router->notFound()` target, Azera's `Kernel` and Laravel's exception handler. Two details are worth stating because they are runtime-mode artefacts rather than framework behaviour. Cake's `ExceptionTrap` picks `ConsoleExceptionRenderer` when `PHP_SAPI === 'cli'`, and Symfony's `error_renderer` does the same via `kernel.runtime_mode.web`; a web app inside a resident worker is still a CLI process, so both are pinned to their web renderer (`exceptionRenderer` on the middleware, `APP_RUNTIME_MODE=web=1` before boot — the same thing Symfony's own `WebTestCase` does). Under php-fpm both are already web, so the pinning only fixes the resident arm. Phalcon's `Mvc\Router` has no 405 facility at all, so `PUT /echo` answers 404 there — that is the framework's own answer, not a gap in the app.
+- **Statuses are reported by the framework, not inferred from the body.** `WebAppAdapter::lastStatus()` carries the status the framework actually set; `benchStatus()` in `response-guard.php` prefers it and falls back to the old body-text rule only for the FPM entry scripts, which have nothing else to report. Before this, the harness classified a response by its first line, which worked for adapters that hand-wrote status-shaped bodies and mislabelled every framework that rendered a real error page — Cake's 404 arrived as `500 Cake\Routing\Exception\MissingRouteException: …` because the body carried no status and nothing else did either.
+- **Phalcon renders through `Mvc\View`, like a normal Phalcon app.** The app is `views/<controller>/<action>.volt` plus `views/layouts/main.volt` and `views/partials/`, the layout is composed by the view layer (the action fragment is rendered first, then the layout around it through `content()`), and HTML actions set view vars and return nothing. `useImplicitView(true)` is on, so `Application` copies `$view->getContent()` into the response. JSON and error actions return a string instead, and `ApiController` disables the view in `initialize()` — the documented way to say a controller has no templates. This replaced a hand-rolled `View\Simple` render (`useImplicitView(false)`, every action returning a pre-rendered string), which meant Phalcon's HTML rows measured manual composition where the other six measured their template engine.
 - **SQLite** — a single-file embedded database keeps the DB cost comparable across frameworks and avoids external server variance. It favours frameworks with thin DB abstraction layers.
-- **Closure handlers** — where a framework allows, routes use closure/anonymous handlers to isolate routing+render+model cost from userland controller-class instantiation. Documented per adapter.
+- **Closure handlers** — where a framework allows, routes use closure/anonymous handlers to isolate routing+render+model cost from userland controller-class instantiation. Documented per adapter. This caveat no longer applies to Phalcon: its routes resolve to controller classes through the dispatcher, like every other entrant's.
 - **OPcache** — always run with `opcache.enable_cli=1` for fair bytecode-cache parity.
+- **A fixed-id upsert only costs a write if the row content actually changes** — `POST /items`, `POST /items-qb` and `POST /api/items` all upsert a fixed id (`999999`, `999997`, `999998`) with a title of `'Created Item ' . date('Y-m-d H:i:s')`, in **all seven** apps. `created_at` has one-second resolution and the id never changes, so two requests inside the same second propose identical rows and SQLite skips the commit instead of dirtying a page. Measured in rollback-journal mode: 40 identical upserts produced 4 `fdatasync` calls, 40 unique ones produced 160. Because every entrant does this identically, it does not distort the ranking — but it means those three rows under-report the cost of a real insert for everyone, and they measure "upsert an unchanged row" more often than "write". The feature-demo write endpoints (`/features/aop`, `/features/aop-direct`, `/features/events`, `/features/db-events`) must **not** do this, because there the write is the thing being measured; `tests/WriteTitleUniquenessTest.php` enforces a per-request suffix there. Phalcon was violating it alone, which made one entrant look 23× faster at a write it was not performing.
 - **Resident-worker memory is our instrumentation, not the framework's** — every adapter records one entry per executed query into a `DbEventLog`. In a process that stays alive (the warm/RoadRunner modes) that store must be wiped per request, or the harness's own bookkeeping grows without bound and the memory chart reports _it_ instead of the framework. Azera and CodeIgniter always did this; Laravel, Symfony and Spiral did not until the `Benchmark apps: wipe the DB event log per request` commit, which had inflated their published warm peak by up to 5× (Symfony 42 MB → 6 MB, Laravel 40 MB → 8 MB). If you add an adapter, make your log request-scoped.
 - **CakePHP's resident-worker growth is root-caused, fixed and re-measured** — the resident-memory chart draws each framework as a _range_ because a worker has three different moments worth showing: the left cap is the boot footprint, the dot the heap after the last endpoint, and the right cap the worst endpoint. CakePHP is _not_ the heaviest to boot — it has the **lightest** resident footprint of all six (0.92 MB) — yet its 2026-09-15 run reached 40.6 MB at the worst endpoint against 1.7–9.0 MB for the other five. That was an accumulation of ~186 bytes per request, and the cause was _not_ the framework's own state: `ServerRequestFactory::fromGlobals()` — the documented way to build a request — constructs a fresh `Cake\Http\Session` on every call, and `Session::__construct()` ends with `session_register_shutdown()`, which appends to a process-level handler list that PHP only frees at exit. Nothing in userland can see or collect it (it is unreachable from every class static, static local, `$GLOBALS` entry and closure, and `gc_collect_cycles()` does not touch it), which is why it survived the earlier logger/DB/registry investigation. The adapter now builds requests through `App\Cake\Support\WorkerRequestFactory`, which reuses one Session per worker and clears `$_SESSION` between requests.
   **Re-measured on the bench VM (2026-09-18, same `1000x10` budget):** CakePHP now reads **0.923 → 5.96 MB** end state with an 8.14 MB worst endpoint — growth **5.0 MB**, down from 39.7 MB and inside the 0.7–1.5 MB band the others occupy. The shape is the stronger evidence: pre-fix the series rose monotonically (+~2.4 MB per endpoint, never released); post-fix it oscillates and returns to baseline, so each endpoint's state is released rather than retained. CakePHP is the only entrant affected: Symfony's `NativeSessionStorage` calls the same function but is only constructed when a session is _started_, which the bench app never does, and the other frameworks' request factories have no session at all. See `tests/CakeWorkerSessionLeakTest.php`.
