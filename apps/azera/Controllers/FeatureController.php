@@ -81,6 +81,33 @@ class FeatureController extends Controller
     }
 
     /**
+     * GET /features/aop-direct — the SAME insert as /features/aop, but with the
+     * transaction written by hand instead of applied by the `#[Transactional]`
+     * proxy.
+     *
+     * This is the control for the AOP race. `/features/aop` answers "what does
+     * this request cost with transparent interception"; this answers "…and with
+     * the interception written out". The difference between them is the price of
+     * the abstraction, measured on identical work — the only such pair in the
+     * suite, because every other entrant's equivalent endpoint does different
+     * work (see BenchmarkConfig::adviceRoutedEndpoints()).
+     */
+    public function aopDirectAction(FeatureService $service): Response
+    {
+        $title = 'AOP Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999);
+        $id    = $service->createItemDirect($title);
+
+        return Response::json([
+            'feature'     => 'AOP #[Transactional] — direct twin',
+            'description' => 'Identical insert and event dispatch to /features/aop, but the transaction is an explicit begin/commit rather than a #[Transactional] interceptor. The difference between the two rows is the cost of transparent interception.',
+            'new_id'      => $id,
+            'title'       => $title,
+            'proxy_class' => $service::class,
+            'is_proxied'  => $service::class !== FeatureService::class,
+        ]);
+    }
+
+    /**
      * GET /features/cache — demonstrate #[Cache] AOP caching.
      */
     public function cacheAction(FeatureService $service): Response
@@ -109,7 +136,7 @@ class FeatureController extends Controller
      */
     public function eventsAction(FeatureService $service): Response
     {
-        $title = 'Event Item ' . date('Y-m-d H:i:s');
+        $title = 'Event Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999);
         $id    = $service->createItemTransactional($title);
 
         // The listener already ran during dispatch inside createItemTransactional.
@@ -256,7 +283,7 @@ class FeatureController extends Controller
         // The count deliberately bypasses the #[Cache] demo (countItems()):
         // a cached hit fires no Db events, so this row must use the plain
         // query path.
-        $service->createItemTransactional('DbEvent Item ' . date('Y-m-d H:i:s'));
+        $service->createItemTransactional('DbEvent Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999));
         $service->countItemsQuery();
 
         return Response::json([

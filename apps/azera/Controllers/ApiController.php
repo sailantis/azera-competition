@@ -97,7 +97,7 @@ class ApiController extends Controller
     {
         $item = Item::upsert([
             'id'         => 999998,
-            'title'      => 'API Item ' . date('Y-m-d H:i:s'),
+            'title'      => 'API Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999),
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 

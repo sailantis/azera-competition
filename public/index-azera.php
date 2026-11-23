@@ -60,17 +60,12 @@ boot_probe_record(bench_probe_kind(), 'azera');
 // write is gated on a header the timed loop never sends).
 mem_probe_arm('azera');
 
-$path   = $ctx->request()->path();
-$method = $ctx->request()->method();
-
-$route = $ctx->router()->match($path, $method);
-
-if ($route === null) {
-    http_response_code(404);
-    echo "<h1>404 Not Found</h1>";
-    echo "<p>No route matched: {$method} {$path}</p>";
-    echo '<p><a href="/">Go home</a></p>';
-    exit;
-}
-
-$ctx->dispatcher()->dispatch($route)->send();
+// The framework's own front controller. It owns the 404/405 bodies, the error
+// boundary and the queued-cookie flush, so this entry point does not hand-roll
+// them — the same call the in-process adapter makes, which is what keeps the FPM
+// arm and the resident arms on one code path.
+//
+// `send()` is the one thing that belongs to the SAPI rather than to the
+// application: a worker reads the response through the getters (see
+// deploy/rr/worker.php), only this file writes it out.
+$ctx->kernel()->handle($ctx->request())->send();

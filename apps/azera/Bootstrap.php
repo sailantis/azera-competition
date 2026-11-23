@@ -80,9 +80,19 @@ class Bootstrap
         // Use a factory so we can configure PRAGMAs right after connecting.
         $ctx->dbManager()->set('default', function () use ($dbPath) {
             $db = new Database('sqlite:' . $dbPath);
-            // WAL mode + busy timeout so POST (write) iterations don't lock
+            // WAL + busy timeout so POST (write) iterations don't lock.
             $db->query('PRAGMA journal_mode = WAL');
             $db->query('PRAGMA busy_timeout = 5000');
+            // synchronous=NORMAL, not SQLite's FULL default. Under WAL, FULL makes
+            // every commit fsync the WAL, and when autocheckpoint fires the commit
+            // pays milliseconds instead of microseconds. Measured on the bench VM on
+            // 600 write requests: FULL gave p99 1.2 ms and 8 outliers over 1 ms;
+            // NORMAL removes the stall without changing durability semantics that
+            // matter for a benchmark DB (a crash can lose the last commits, which
+            // this workload never observes). Laravel's entrant already configured
+            // NORMAL, so leaving the others on FULL had the pack measuring two
+            // different storage configurations. See tests/SqlitePragmaParityTest.php.
+            $db->query('PRAGMA synchronous = NORMAL');
             return $db;
         });
 
@@ -152,14 +162,23 @@ class Bootstrap
             $router->controller(BenchController::class, function (\Azera\Core\Router $r) {
                 // The framework floor: routed and dispatched, no work after that.
                 $r->get('/echo', '::echoAction');
-                $r->get('/', '::indexAction');
                 // ORM endpoints (model hydration)
-                $r->get('/items', '::listAction');
                 // GET /items with the identity map removed and nothing else changed:
                 // the single-variable control for /items (see listFastAction).
                 $r->get('/items-fast', '::listFastAction');
-                $r->get('/items/{id:int}', '::showAction');
                 $r->post('/items', '::createAction');
+
+                // HTML routes: these render `layouts/app.clarity.html`, the only
+                // consumer of the `locale` / `platform` view vars, so only they
+                // need the 'web' middleware group (see the group's definition for
+                // why it is no longer global).
+                $r->middleware('web', function () use ($r) {
+                    $r->get('/', '::indexAction');
+                    $r->get('/items', '::listAction');
+                    $r->get('/items/{id:int}', '::showAction');
+                });
+
+
 
                 // New ORM stack endpoints (Model facade over the EM pipeline)
                 // Deactivated (2026-09-05) — the listOrmAction/showOrmAction/
@@ -188,19 +207,47 @@ class Bootstrap
             self::registerFillerRoutes($router, 100);
         });
 
-        // --- Dispatcher + Global Middleware ---
+        // --- Dispatcher + Route-Scoped Middleware ---
         $dispatcher = $ctx->dispatcher();
         $dispatcher->setBaseNamespace('\App\Azera\Controllers');
 
-        // Global middleware pipeline (runs on every dispatched request):
-        //   1. SecurityHeadersMiddleware — sets common security headers
-        //      on the response (X-Frame-Options, X-Content-Type-Options, etc.)
-        //   2. RequestContextMiddleware — reads Accept-Language + User-Agent
-        //      from request headers, picks a locale, stamps view vars
-        // This mirrors typical real-app middleware stacks and adds realistic
-        // per-request overhead that all full-stack frameworks pay.
-        $dispatcher->addMiddleware(new \App\Azera\Middleware\SecurityHeadersMiddleware());
-        $dispatcher->addMiddleware(new \App\Azera\Middleware\RequestContextMiddleware());
+        // These used to be GLOBAL, so every request paid for both:
+        //   SecurityHeadersMiddleware — sets X-Frame-Options, X-Content-Type-Options, ...
+        //   RequestContextMiddleware  — parses Accept-Language + User-Agent, stamps view vars
+        //
+        // GLOBAL WAS NOT A FAIR COMPARISON. The comment that used to sit here
+        // claimed this "adds realistic per-request overhead that all full-stack
+        // frameworks pay". Measured 2026-11-23: they do not. No other entrant sets
+        // a security header at all, and none parses Accept-Language/User-Agent on
+        // a benchmark route — Laravel stamps a constant `locale` at boot via
+        // `View::share('locale', 'en_US')`, which is not the same work.
+        //
+        // The cost was real and landed on the no-DB routes hardest, because it is
+        // a fixed ~1.5-1.7 us on top of a ~1-2 us handler. On the bench VM the two
+        // chained cost 1.52 us, against a whole `/echo` of 4.70 us for Azera and
+        // 1.22 us for Phalcon. `/features/config` measured 6.5 us vs Phalcon's
+        // 5.4 us while Azera's OWN config work was 4.5x cheaper (0.61 us vs
+        // 2.79 us) — the gap was entirely this pipeline.
+        //
+        // They are scoped to the routes that actually consume them rather than
+        // removed, so the demo is intact and the benchmark routes measure the
+        // same work as the other six entrants:
+        //   RequestContextMiddleware — only HTML routes that render
+        //     `layouts/app.clarity.html`, which is the sole consumer of the
+        //     `locale` / `platform` view vars. The JSON routes (every /api and
+        //     /features demo endpoint) never render a template, so paying header
+        //     parsing for them measured nothing.
+        //   SecurityHeadersMiddleware — HTML routes again. No entrant compares
+        //     headers, and applying them to a JSON response no browser renders is
+        //     work that exists only to slow the row down.
+        //
+        // Same shape as the pre-existing `session` group below, which was scoped
+        // to `/features/security` for exactly this reason.
+        $dispatcher->defineMiddlewareGroup('web', [
+            new \App\Azera\Middleware\SecurityHeadersMiddleware(),
+            new \App\Azera\Middleware\RequestContextMiddleware(),
+        ]);
+
 
         // --- Enterprise Infrastructure (PSR-3/14/16 + AOP) ---
         self::registerEnterpriseServices($ctx);
@@ -244,8 +291,14 @@ class Bootstrap
         // cached() blocks.
         $router->cached(__FILE__, function (\Azera\Core\Router $router): void {
             $router->controller(\App\Azera\Controllers\FeatureController::class, function (\Azera\Core\Router $r) {
-                $r->get('/features', '::indexAction');
+                // The one HTML page in this group: renders the layout, so it needs
+                // the 'web' group. Every route below it returns JSON.
+                $r->middleware('web', function () use ($r) {
+                    $r->get('/features', '::indexAction');
+                });
+
                 $r->get('/features/aop', '::aopAction');
+                $r->get('/features/aop-direct', '::aopDirectAction');
                 $r->get('/features/cache', '::cacheAction');
                 $r->get('/features/log', '::logAction');
                 $r->get('/features/retry', '::retryAction');
@@ -268,7 +321,7 @@ class Bootstrap
 
         // --- REST API Routes ---
         // A dedicated JSON API category.  Every framework implements the
-        // same /api/* endpoints so routing + controller + JSON
+        // same /api endpoints so routing + controller + JSON
         // serialization overhead is compared apples-to-apples.
         $router->cached(__FILE__, function (\Azera\Core\Router $router): void {
             $router->controller(\App\Azera\Controllers\ApiController::class, function (\Azera\Core\Router $r) {

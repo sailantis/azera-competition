@@ -156,9 +156,14 @@ class BenchController extends Controller
     {
         $existed = Item::exists(['id' => 999999]);
 
+        // Per-request unique title, so the upsert actually changes the row: a
+        // date-only title repeats within the same second, SQLite sees identical
+        // content and skips the commit, and the row would measure a no-op.
+        $title = 'Created Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999);
+
         $item = Item::upsert([
             'id'         => 999999,
-            'title'      => 'Created Item ' . date('Y-m-d H:i:s'),
+            'title'      => $title,
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 
@@ -344,7 +349,7 @@ class BenchController extends Controller
      */
     public function createQbAction(): Response
     {
-        $title      = 'Created Item ' . date('Y-m-d H:i:s');
+        $title      = 'Created Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999);
         $created_at = date('Y-m-d H:i:s');
 
         $existed = Query::raw()->table('items')->where('id', 999997)->exists();
