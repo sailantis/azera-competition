@@ -29,18 +29,4 @@ class Item extends Model
         // Phalcon must not try to maintain its own.
         $this->skipAttributesOnCreate(['id']);
     }
-
-    /**
-     * Fill from a raw row, so the query-builder endpoints and the ORM endpoints
-     * produce the same object shape for the templates.
-     */
-    public static function fromRow(array $row): self
-    {
-        $item = new self();
-        $item->id         = (int) $row['id'];
-        $item->title      = (string) $row['title'];
-        $item->created_at = (string) $row['created_at'];
-
-        return $item;
-    }
 }

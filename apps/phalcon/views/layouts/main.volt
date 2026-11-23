@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= htmlspecialchars((string) $title, ENT_QUOTES) ?> — Azera Competition</title>
+    <title>{% block title %}{{ title|e }}{% endblock %} — Azera Competition</title>
     <style>
         body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
 
@@ -57,7 +57,7 @@
     </nav>
     <hr>
     <div class="content">
-        <?= $content ?>
+        {{ content() }}
     </div>
     <footer class="meta">
         Rendered with Phalcon Volt — Azera Competition Benchmark

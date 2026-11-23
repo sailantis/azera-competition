@@ -4,16 +4,30 @@ declare(strict_types=1);
 
 namespace App\Phalcon;
 
+use App\Phalcon\Support\DbEventLog;
+use App\Phalcon\Support\MemoryLoggerAdapter;
+use App\Phalcon\Support\RequestCounter;
+use Phalcon\Cache\Adapter\Memory as CacheMemory;
+use Phalcon\Cache\Cache;
+use Phalcon\Cache\CacheInterface;
+use Phalcon\Config\Config;
+use Phalcon\DataMapper\Pdo\Connection;
+use Phalcon\DataMapper\Query\QueryFactory;
 use Phalcon\Db\Adapter\Pdo\Sqlite;
 use Phalcon\Di\Di;
+use Phalcon\Events\Manager as EventsManager;
 use Phalcon\Html\Escaper;
 use Phalcon\Http\Request;
+use Phalcon\Logger\Logger;
+use Phalcon\Mvc\Application;
+use Phalcon\Mvc\Dispatcher;
 use Phalcon\Mvc\Model\Manager as ModelsManager;
 use Phalcon\Mvc\Model\MetaData\Memory as MetadataMemory;
 use Phalcon\Mvc\Router;
 use Phalcon\Mvc\Url;
+use Phalcon\Mvc\View;
 use Phalcon\Mvc\View\Engine\Volt;
-use Phalcon\Mvc\View\Simple as SimpleView;
+use Phalcon\Storage\SerializerFactory;
 
 /**
  * Boots the Phalcon 6 benchmark app.
@@ -34,9 +48,20 @@ final class Bootstrap
     public const SENTINEL_ORM_ID = 999999;
     public const SENTINEL_QB_ID = 999997;
 
+    /** Namespace the dispatcher resolves controller classes in. */
+    public const CONTROLLER_NAMESPACE = 'App\\Phalcon\\Controller';
+
     private static ?Di $di = null;
 
     private static ?self $instance = null;
+
+    private static ?Application $application = null;
+
+    /**
+     * Status of the last handle() — see {@see handle()} and
+     * `WebAppAdapter::lastStatus()`.
+     */
+    private int $lastStatus = 200;
 
     public function __construct(private readonly string $dbPath) {}
 
@@ -58,23 +83,137 @@ final class Bootstrap
         // `$this` inside is the Di, not this class. Captured values therefore
         // come in through `use`, and a static closure is a deprecation here
         // (fatal in PHP 9).
-        $di->setShared('db', fn(): Sqlite => new Sqlite([
-            'dbname' => $dbPath,
-        ]));
+        $di->setShared('db', function () use ($di, $dbPath): Sqlite {
+            $db = new Sqlite([
+                'dbname' => $dbPath,
+            ]);
+
+            // SQLite pragma parity with every other entrant. SQLite defaults to
+            // synchronous=FULL, which fsyncs the WAL on every commit; when
+            // autocheckpoint fires, one commit in a few hundred pays milliseconds
+            // instead of microseconds. NORMAL removes that stall. Phalcon has no
+            // option key for it, so it is a PRAGMA on the adapter.
+            // See tests/SqlitePragmaParityTest.php.
+            $db->execute('PRAGMA journal_mode = WAL');
+            $db->execute('PRAGMA synchronous = NORMAL');
+            $db->execute('PRAGMA busy_timeout = 5000');
+
+            // The adapter fires db:beforeQuery / db:afterQuery /
+            // db:beginTransaction / db:commitTransaction, which is what the
+            // /features/db-events demo shows. Attached here (once, on the shared
+            // adapter) because Phalcon gives no per-request way to remove it —
+            // see App\Phalcon\Support\DbEventLog for the measured cost.
+            $events = $di->getShared('eventsManager');
+            $events->attach('db', $di->getShared('dbEventLog'));
+            $db->setEventsManager($events);
+
+            return $db;
+        });
+
+        // The query-builder arm's connection. `/items-qb` exists to measure SQL
+        // construction without the ORM, so it needs a builder that is not the
+        // model layer: `Phalcon\DataMapper\Query` is Phalcon 6's raw builder
+        // (Select/Insert/Update/Delete -> SQL + bound values).
+        //
+        // WHY A SECOND CONNECTION. `QueryFactory::newSelect()` type-hints the
+        // concrete `DataMapper\Pdo\Connection`, so the `Decorated` wrapper —
+        // the class that exists to adopt an existing PDO handle — cannot be
+        // handed to it, and the Db adapter exposes no way to publish its handle
+        // as that type. The alternatives were a subclass that injects
+        // `$adapter->getInternalHandler()` through a protected property, or a
+        // second connection. This is the second connection: it is the wiring
+        // the DataMapper docs describe, and it carries the SAME pragmas so the
+        // two handles see one storage configuration. WAL is a property of the
+        // FILE, so both handles are in WAL mode and each sees the other's
+        // commits — which is what makes the write endpoints comparable.
+        //
+        // Kept as the documented constructor (DSN + connection-time queries)
+        // rather than a subclass because the queries run at connect time, once
+        // per process, which is exactly how the adapter applies its own.
+        $di->setShared('dbBuilder', function () use ($dbPath): Connection {
+            return new Connection(
+                'sqlite:' . $dbPath,
+                null,
+                null,
+                [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION],
+                [
+                    'PRAGMA journal_mode = WAL',
+                    'PRAGMA synchronous = NORMAL',
+                    'PRAGMA busy_timeout = 5000',
+                ]
+            );
+        });
+
+        $di->setShared('dbQueryFactory', fn(): QueryFactory => new QueryFactory());
 
         // MetaData memory, not the default filesystem adapter: introspection of
-        // the `items` table would otherwise hit the disk on every model call.
-        // Every other app caches its mapping in-process too.
+        // the `items` table would otherwise hit the disk on first use. It is a
+        // shared service and survives cleanup() — see the note there for why
+        // throwing it away per request made resident workers re-derive it.
         $di->setShared('modelsMetadata', fn(): MetadataMemory => new MetadataMemory());
 
         $di->setShared('modelsManager', fn(): ModelsManager => new ModelsManager());
 
+        // The /features/ demos are built on the primitives Phalcon actually
+        // ships (see Controller\FeatureController for the mapping). They are
+        // shared services because that is what a resident worker holds: the
+        // cache must survive between requests for the cache demo to show a hit,
+        // and the events manager must be the SAME one the db adapter fires on.
+        $di->setShared('cache', fn(): CacheInterface => new Cache(
+            new CacheMemory(new SerializerFactory())
+        ));
+
+        $di->setShared('eventsManager', fn(): EventsManager => new EventsManager());
+
+        // The logger writes into an in-memory adapter, so the log demo can show
+        // what it logged without measuring disk I/O (see MemoryLoggerAdapter).
+        $di->setShared('benchLoggerAdapter', fn(): MemoryLoggerAdapter => new MemoryLoggerAdapter('bench'));
+        $di->setShared('benchLogger', fn(): Logger => new Logger('bench', [
+            'memory' => $di->getShared('benchLoggerAdapter'),
+        ]));
+
+        $di->setShared('benchConfig', fn(): Config => new Config([
+            'app' => [
+                'name'      => 'Azera Competition',
+                'page_size' => self::PAGE_SIZE,
+            ],
+            'db' => [
+                'dsn' => 'sqlite:data/bench.sqlite',
+            ],
+        ]));
+
+        $di->setShared('requestCounter', fn(): RequestCounter => new RequestCounter());
+
+        // The db-events demos read this log, and the adapter's events manager
+        // fires into it. Attached HERE, once per process, for the reason spelled
+        // out in DbEventLog: setEventsManager() rejects null and detachAll()
+        // leaves the manager attached, so there is no per-request way to remove
+        // the hook. Measured cost of an idle manager is ~0.17 us/query.
+        $di->setShared('dbEventLog', fn(): DbEventLog => new DbEventLog());
+
         // Volt's `|e` filter escapes through this service.
         $di->setShared('escaper', fn(): Escaper => new Escaper());
 
-        $view = new SimpleView();
+        // The framework's own view layer, in its conventional shape.
+        //
+        // This used to be `View\Simple`, which is the stand-alone renderer: it has
+        // no layouts, no controller/action resolution, and `Application` cannot
+        // auto-render through it (Simple implements `ViewBaseInterface`, not
+        // `ViewInterface`, so `useImplicitView(true)` would have thrown). Actions
+        // therefore called `render()` by hand and returned the string.
+        //
+        // `Mvc\View` is what a normal Phalcon app uses: the dispatcher's
+        // controller/action names select `<controller>/<action>.volt`, the layout
+        // comes from `layouts/`, and `Application::handle()` copies
+        // `$view->getContent()` into the response after the action returns. One
+        // consequence worth stating: the controller/action path is derived from the
+        // DISPATCHER (`bench` + `listAction`), not from this directory structure, so
+        // `bench/` below is the controller name, not the layout name.
+        $view = new View();
         $view->setDI($di);
-        $view->setViewsDir(dirname(__DIR__) . '/views/bench/');
+        $view->setViewsDir(dirname(__DIR__) . '/views/');
+        $view->setLayoutsDir('layouts/');
+        $view->setLayout('main');
 
         $volt = new Volt($view, $di);
         $volt->setOptions([
@@ -86,7 +225,27 @@ final class Bootstrap
         ]);
         $view->registerEngines(['.volt' => $volt]);
 
-        $di->setShared('view', fn(): SimpleView => $view);
+        $di->setShared('view', fn(): View => $view);
+
+        // The HTTP response the dispatcher's controllers write into, and the
+        // one Application::handle() returns. Registered as a factory, not a
+        // shared instance: a resident worker must hand each request its own
+        // response, or one page's body would be appended to the previous one.
+        $di->setShared('response', fn(): \Phalcon\Http\Response => new \Phalcon\Http\Response());
+
+        // The dispatcher is the framework's own dispatch path. It resolves a
+        // controller from this container by class name and calls the action
+        // itself, which is why the controllers are `Phalcon\Mvc\Controller`
+        // subclasses with `...Action()` methods: that is what a normal Phalcon
+        // app looks like, and it keeps this entrant comparable with the six
+        // that run their framework's front controller.
+        $dispatcher = new Dispatcher();
+        $dispatcher->setDI($di);
+        // Route targets carry a fully-qualified namespace, so the dispatcher
+        // must not rewrite the controller name through its camelizer: with a
+        // namespace set it takes the handler name verbatim.
+        $dispatcher->setDefaultNamespace(self::CONTROLLER_NAMESPACE);
+        $di->setShared('dispatcher', fn(): Dispatcher => $dispatcher);
 
         // Router: the same 8 benchmark endpoints + 100 filler routes every other
         // app declares, so the route table sizes stay comparable.
@@ -96,30 +255,69 @@ final class Bootstrap
         // needs the container AND a request inside it before handle() works.
         $router->setDI($di);
 
-        $router->addGet('/echo', ['controller' => 'bench', 'action' => 'echo']);
-        $router->addGet('/', ['controller' => 'bench', 'action' => 'index']);
+        // Every route target names its controller class the way a Phalcon app
+        // does: a short name plus the dispatcher's `Controller` suffix inside
+        // the namespace the dispatcher already holds. `_TARGET` also carries the
+        // action's public name (`index`, not `indexAction`); the suffix belongs
+        // to the dispatch layer, exactly as `Phalcon\Mvc\Router` documents.
+        $router->addGet('/echo', self::target('bench', 'echo'));
+        $router->addGet('/', self::target('bench', 'index'));
 
-        $router->addGet('/items', ['controller' => 'bench', 'action' => 'list']);
-        $router->addGet('/items-fast', ['controller' => 'bench', 'action' => 'listFast']);
-        $router->addGet('/items/([0-9]+)', ['controller' => 'bench', 'action' => 'show', 'id' => 1]);
-        $router->addPost('/items', ['controller' => 'bench', 'action' => 'create']);
+        $router->addGet('/items', self::target('bench', 'list'));
+        $router->addGet('/items-fast', self::target('bench', 'listFast'));
+        $router->addGet('/items/([0-9]+)', self::target('bench', 'show', 1));
+        $router->addPost('/items', self::target('bench', 'create'));
 
-        $router->addGet('/items-qb', ['controller' => 'bench', 'action' => 'listQb']);
-        $router->addGet('/items-qb/([0-9]+)', ['controller' => 'bench', 'action' => 'showQb', 'id' => 1]);
-        $router->addPost('/items-qb', ['controller' => 'bench', 'action' => 'createQb']);
+        $router->addGet('/items-qb', self::target('bench', 'listQb'));
+        $router->addGet('/items-qb/([0-9]+)', self::target('bench', 'showQb', 1));
+        $router->addPost('/items-qb', self::target('bench', 'createQb'));
 
         // Routing cost in the deep 'api' bucket with a constant handler and no
         // ORM: the only endpoint whose measured time is route matching.
-        $router->addGet('/api/routing/([0-9]+)', ['controller' => 'bench', 'action' => 'routing', 'id' => 1]);
-        $router->addGet('/api/items', ['controller' => 'api', 'action' => 'index']);        $router->addGet('/api/items-fast', ['controller' => 'api', 'action' => 'indexFast']);
-        $router->addGet('/api/items/([0-9]+)', ['controller' => 'api', 'action' => 'show', 'id' => 1]);
-        $router->addPost('/api/items', ['controller' => 'api', 'action' => 'create']);
+        $router->addGet('/api/routing/([0-9]+)', self::target('bench', 'routing', 1));
+        $router->addGet('/api/items', self::target('api', 'index'));
+        $router->addGet('/api/items-fast', self::target('api', 'indexFast'));
+        $router->addGet('/api/items/([0-9]+)', self::target('api', 'show', 1));
+        $router->addPost('/api/items', self::target('api', 'create'));
+
+        // The /features/ endpoints are what the harness measures on every
+        // entrant and this app shipped without any of them, so a real run
+        // aborted on the first one:
+        //   2026-11-21: "[ABORT] fpm/phalcon GET /features/aop: HTTP status 404"
+        $router->addGet('/features', self::target('feature', 'index'));
+        $router->addGet('/features/aop', self::target('feature', 'aop'));
+        $router->addGet('/features/aop-direct', self::target('feature', 'aopDirect'));
+        $router->addGet('/features/cache', self::target('feature', 'cache'));
+        $router->addGet('/features/log', self::target('feature', 'log'));
+        $router->addGet('/features/retry', self::target('feature', 'retry'));
+        $router->addGet('/features/pipeline', self::target('feature', 'pipeline'));
+        $router->addGet('/features/db-events', self::target('feature', 'dbEvents'));
+        $router->addGet('/features/events', self::target('feature', 'events'));
+        $router->addGet('/features/validation', self::target('feature', 'validation'));
+        $router->addGet('/features/config', self::target('feature', 'config'));
+        $router->addGet('/features/request-scoped', self::target('feature', 'requestScoped'));
+        $router->addGet('/features/rate-limit', self::target('feature', 'rateLimit'));
 
         // 100 filler routes — never dispatched, they exist so the table size
         // matches the other six apps.
         for ($i = 1; $i <= 100; $i++) {
-            $router->addGet("/filler/{$i}", ['controller' => 'bench', 'action' => 'filler']);
+            $router->addGet("/filler/{$i}", self::target('bench', 'filler'));
         }
+
+        // What every normal Phalcon app does: give the router a target for a
+        // path that matches nothing. Without it the dispatcher's default
+        // controller is `IndexController`, which does not exist here, so every
+        // 404 would surface as a thrown dispatch exception instead of the
+        // application's own not-found page.
+        //
+        // `paths` marks this as an internal target so the dispatcher does not
+        // re-prefix `controller` with the namespace again (it is already
+        // absolute).
+        $router->notFound([
+            'namespace'  => self::CONTROLLER_NAMESPACE,
+            'controller' => self::target('bench', 'notFound')['controller'],
+            'action'     => 'notFound',
+        ]);
 
         $di->setShared('router', fn(): Router => $router);
 
@@ -158,81 +356,217 @@ final class Bootstrap
     }
 
     /**
-     * Handle one request, returning the rendered body.
+     * Handle one request by driving Phalcon's own front controller.
      *
-     * Deliberately does NOT use Phalcon\Mvc\Application: that class builds a
-     * second view layer and a full dispatcher graph per call. The benchmark
-     * measures routing + dispatch + query + render, and every other adapter
-     * reaches its framework's equivalent primitives directly for the same
-     * reason (Symfony's HttpKernel, Spiral's RouterInterface, Cake's Application
-     * is the exception — it *is* the primitive there).
+     * This used to route and dispatch by hand — `$router->handle()`, then
+     * `new $class($di, $query, $params)`, then `$instance->{$action}()` — on the
+     * argument that `Phalcon\Mvc\Application` "builds a second view layer and a
+     * full dispatcher graph per call". That argument does not hold:
+     *
+     *   - It is not a second view layer. `Application` uses whatever `view`
+     *     service the container already holds; `useImplicitView(false)` simply
+     *     suppresses its auto-render step, which a JSON app does not want. The
+     *     controllers keep rendering through the same Volt-configured
+     *     `View\Simple` they always used.
+     *   - The "dispatcher graph" is the framework's dispatch path, and the other
+     *     six entrants all run theirs: Symfony and Laravel through
+     *     `HttpKernel::handle()`, CakePHP through `Server::run()`. Measuring
+     *     Phalcon by calling its router and instantiating its controllers by hand
+     *     compared a hand-rolled front controller against six real ones.
+     *
+     * So this is the normal Phalcon request lifecycle: `Application::handle()` →
+     * router → dispatcher → controller action → response. The controllers are
+     * `Phalcon\Mvc\Controller` subclasses with `...Action()` methods, which is
+     * what makes the dispatcher able to resolve them at all.
+     *
+     * What still has to be supplied here is the SAPI state a real web request
+     * would provide, because the harness dispatches synthetic requests:
+     *   - `Phalcon\Http\Request::getMethod()` reads `$_SERVER['REQUEST_METHOD']`
+     *     directly and there is no setter, so the superglobal is set per request.
+     *     Without it every request routes as GET and POST answers 404.
+     *   - The page number comes from `$this->request->getQuery('page')`, which
+     *     reads `$_GET`, so the parsed query string is published there.
+     *
+     * `getContent()` (not `getBody()`): `Phalcon\Http\Response` names its body
+     * accessor `getContent()`. The status travels separately, but the benchmark's
+     * transports take a body string, so a 404 is returned as the status-shaped
+     * body `response-guard.php` classifies (see `BenchController::notFoundAction`).
      */
     public function handle(string $method, string $uri): string
     {
         $di = self::di();
 
+        // Reset first: a throw below must not publish the previous request's
+        // status (see WebAppAdapter::lastStatus()).
+        $this->lastStatus = 200;
+
         $path = parse_url($uri, PHP_URL_PATH) ?: '/';
         $query = [];
         parse_str((string) (parse_url($uri, PHP_URL_QUERY) ?? ''), $query);
 
-        /** @var Router $router */
-        $router = $di->getShared('router');
-
-        // The router filters candidates by the method the REQUEST reports, and
-        // Phalcon\Http\Request::getMethod() reads $_SERVER['REQUEST_METHOD']
-        // directly — there is no setter. Without this every dispatch routes as
-        // GET and POST answers 404.
+        // The SAPI state a real request would carry (see the docblock).
         $_SERVER['REQUEST_METHOD'] = $method;
+        $_SERVER['REQUEST_URI']    = $uri;
+        $_GET                      = $query;
 
-        $router->handle($path);
+        // A fresh response per request: it is mutable and would otherwise carry
+        // the previous request's body into this one.
+        $di->removeShared('response');
 
-        $matched = $router->getMatchedRoute();
+        // The view is a SHARED service, and a JSON controller disables it in
+        // initialize() (the documented way to say "this controller has no
+        // templates"). Without this reset the disable would leak out of the
+        // ApiController and into the next request's BenchController, which would
+        // then serve an empty body for every HTML route. `enable()` is the
+        // inverse of `disable()` and changes nothing else — `reset()` is NOT used
+        // because it also clears the registered engines.
+        $di->getShared('view')->enable();
 
-        if ($matched === null) {
-            return '404 Not Found';
+        // `Application::handle()` calls `$view->start()` (an `ob_start()`) and then
+        // `$view->finish()` (`ob_end_clean()`) only when it took the rendering
+        // branch. An action that RETURNS A STRING short-circuits that branch, so
+        // `finish()` never runs and the buffer it opened stays on the stack. In a
+        // resident worker that is one leaked buffer per string-returning request —
+        // every JSON and error endpoint — and `finish()`'s `ob_end_clean()` would
+        // eventually pop a buffer it does not own. Unwinding anything this request
+        // added keeps the two balanced without touching the caller's buffers.
+        $level = ob_get_level();
+
+        $response = $this->application()->handle($path);
+
+        while (ob_get_level() > $level) {
+            ob_end_clean();
         }
 
-        // Phalcon's router does not enforce HTTP methods on handle(); it records
-        // the method each route accepts. Check it so a POST to a GET route is a
-        // 404 rather than a silent success.
-        $allowed = $router->getMatchedRoute()->getHttpMethods();
-        if ($allowed !== null && !in_array($method, (array) $allowed, true)) {
-            return '404 Not Found';
+        if (!is_object($response)) {
+            // A false return means an event handler vetoed the request; nothing
+            // answered, which the transport must not time as a 200.
+            return '500 Application::handle() returned ' . var_export($response, true);
         }
 
-        // Controller/action come from the matched route's PATHS, not from
-        // getParams(): Phalcon treats the keys it recognises as dispatcher
-        // targets (`controller`, `action`, `namespace`, ...) as path defaults
-        // and keeps only the captures in getParams().
-        $paths = $matched->getPaths();
+        $body = (string) $response->getContent();
 
-        $controller = strtolower((string) ($paths['controller'] ?? 'bench'));
-        $action     = (string) ($paths['action'] ?? 'index');
-        $params     = $router->getParams();
+        // Keep the status the application set. The benchmark's transports read a
+        // body string, so the not-found action returns the status-shaped body; but
+        // a controller that sets a status without such a body (or the error
+        // handler) must not be published as a 200.
+        //
+        // `getStatusCode()` returns NULL when nothing set one — casting that to int
+        // yields 0, which is not a status at all. An unset status means "the
+        // framework was happy with the default", i.e. 200.
+        $status = (int) ($response->getStatusCode() ?? 200);
+        if ($status >= 400 && preg_match('/^[1-5]\d{2} /', $body) !== 1) {
+            $body = $status . ' ' . $body;
+        }
 
-        $class = $controller === 'api'
-            ? \App\Phalcon\Controller\ApiController::class
-            : \App\Phalcon\Controller\BenchController::class;
+        $this->lastStatus = $status;
 
-        $instance = new $class($di, $query, $params);
+        return $body;
+    }
 
-        return $instance->{$action}();
+    /**
+     * The status {@see handle()} produced for the request it last served.
+     *
+     * Reported alongside the body through `WebAppAdapter::lastStatus()`, so the
+     * transport does not have to re-derive a status from the body text.
+     */
+    public function lastStatus(): int
+    {
+        return $this->lastStatus;
+    }
+
+    /**
+     * The framework's front controller, built once and reused.
+     *
+     * `useImplicitView(false)` because every action here returns its own body;
+     * the auto-render step would buffer output and try to render a `.volt` file
+     * named after the action for each JSON route. The two `send*` switches are off
+     * because the harness owns the transport — `header()` from inside a worker
+     * would write to the wrong layer.
+     */
+    private function application(): Application
+    {
+        return self::$application ??= (static function (): Application {
+            $application = new Application(self::di());
+            $application
+                // A normal Phalcon app lets the view render. Each HTML action sets
+                // its vars and returns nothing, so Application calls
+                // `$view->render(controller, action)` and copies
+                // `$view->getContent()` into the response — the same division of
+                // labour Twig/Blade/Stempler have in the other six apps. JSON and
+                // error actions return a string instead, and Application treats
+                // that verbatim as the body without touching the view.
+                ->useImplicitView(true)
+                ->sendHeadersOnHandleRequest(false)
+                ->sendCookiesOnHandleRequest(false);
+
+            return $application;
+        })();
+    }
+
+    /**
+     * Build a route target in the shape `Phalcon\Mvc\Router` expects.
+     *
+     * `controller` is a SHORT name and the dispatcher appends `Controller`; the
+     * namespace is stated so the name is not camelized. `action` is the public
+     * action name and the dispatcher appends `Action`. `'id' => 1` names the first
+     * capture: the router replaces that position with the matched value and leaves
+     * it in `getParams()`, which is what makes `$this->dispatcher->getParam('id')`
+     * work in the controller.
+     *
+     * @return array<string,string|int>
+     */
+    private static function target(string $controller, string $action, ?int $firstParam = null): array
+    {
+        $target = [
+            'namespace'  => self::CONTROLLER_NAMESPACE,
+            'controller' => $controller,
+            'action'     => $action,
+        ];
+
+        if ($firstParam !== null) {
+            $target['id'] = $firstParam;
+        }
+
+        return $target;
     }
 
     /**
      * Per-request teardown, mirroring what a resident worker does between
-     * requests: drop the models manager's identity map and the view's state so
-     * nothing accumulates across the run.
+     * requests: drop the models manager's identity map so nothing accumulates
+     * across the run.
+     *
+     * `modelsMetadata` is deliberately NOT reset. It is a CACHE of the table
+     * mapping (column names, types, primary key) that `MetadataMemory` derives
+     * by introspecting the schema. Deriving it costs ~0.45 ms, so throwing it
+     * away per request makes a resident worker re-pay that on every request:
+     * measured on this VM with an interleaved A/B in one booted worker, keeping
+     * it is 0.200 ms/request against 0.319 ms when reset — ~0.12 ms, 37%, of a
+     * `GET /items` row.
+     *
+     * On php-fpm this changes nothing: every request is a fresh process, so the
+     * cache is cold there whether or not `cleanup()` clears it. The saving is
+     * the resident arms' alone. (An earlier revision of this comment claimed a
+     * 0.504 ms php-fpm win; that figure came from a harness that built a fresh
+     * DI per iteration, which models neither server, and it was wrong.)
+     *
+     * Every other entrant keeps model/schema knowledge warm between requests, so
+     * resetting it here also made the `items` rows measure a teardown the other
+     * six do not perform: azera clears request scope, Symfony terminates the
+     * kernel, Spiral finalizes, CakePHP clears the session, Laravel and
+     * CodeIgniter reset request state. Azera's equivalent — generated AOP proxies
+     * in `data/aop/` — is likewise memoised across requests.
+     *
+     * The identity map DOES still go: it holds hydrated entities and is
+     * request-scoped state, which is what this method exists to clear. It costs
+     * ~0.03 ms to rebuild.
      */
     public function cleanup(): void
     {
-        foreach (['modelsManager', 'modelsMetadata'] as $service) {
-            if (self::di()->has($service)) {
-                self::di()->remove($service);
-            }
+        if (self::di()->has('modelsManager')) {
+            self::di()->remove('modelsManager');
         }
 
         self::di()->setShared('modelsManager', fn(): ModelsManager => new ModelsManager());
-        self::di()->setShared('modelsMetadata', fn(): MetadataMemory => new MetadataMemory());
     }
 }

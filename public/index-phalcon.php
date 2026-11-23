@@ -20,6 +20,7 @@
  */
 
 require_once __DIR__ . '/../boot-probe.php';
+require_once __DIR__ . '/../response-guard.php';
 boot_probe_start();
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -65,9 +66,12 @@ try {
     );
 
     // Every endpoint in this app is HTML or JSON by construction; the body is
-    // the response, and the transport sets the type.
-    if (str_starts_with($body, '404 ')) {
-        http_response_code(404);
+    // the response, and the transport sets the type. The status comes from the
+    // shared rule so the FPM arm, the volucer arm and the RR arm agree on what
+    // an error body is (see response-guard.php).
+    $status = benchStatusFromBody($body);
+    if ($status !== 200) {
+        http_response_code($status);
     }
 
     header('Content-Type: text/html; charset=utf-8');
