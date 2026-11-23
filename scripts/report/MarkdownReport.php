@@ -1390,8 +1390,46 @@ final class MarkdownReport
                 $anchor = $cats[0];
             }
 
+            // Say WHO is missing, WHY, and — for the AOP race — which STYLE each
+            // participant implements. `supports()` silently drops an app, so
+            // without this a reader sees one chart with seven series and another
+            // with six and no explanation; and the AOP row silently ranks
+            // transparent interception (generated proxies, handler untouched)
+            // against hand-written pipelines, which are different work.
+            $absent = [];
+            foreach ($apps as $app) {
+                if (!$this->store->supports($app, $feature)) {
+                    $absent[] = BenchmarkConfig::appLabel($app);
+                }
+            }
+            $notCompeting = $absent === []
+                ? ''
+                : "\n\n*Not measured here:* " . implode(', ', $absent)
+                    . ' — ' . BenchmarkConfig::exclusionReason($feature, $absent);
+
+            if ($feature === 'aop') {
+                $styles = BenchmarkConfig::aopStylesInRace();
+                $parts  = [];
+                if ($styles['transparent'] !== []) {
+                    $parts[] = '**transparent** (advice declared on the method, applied by generated '
+                        . 'code): ' . implode(', ', $styles['transparent']);
+                }
+                if ($styles['direct'] !== []) {
+                    $parts[] = '**direct** (the pipeline is written out in the code): '
+                        . implode(', ', $styles['direct']);
+                }
+                if ($parts !== []) {
+                    $notCompeting .= "\n\n*Read this row in two styles.* " . implode('. ', $parts)
+                        . '. The two styles pay for different machinery, and the cross-style ranking '
+                        . 'is not a speed verdict. `GET /features/aop-direct` is the control — the '
+                        . 'identical insert with the transaction written by hand — so the gap between '
+                        . 'that row and this one is what interception actually costs.';
+                }
+            }
+
             $charts[] = "### {$title}\n `" . $anchor . '` — '
                 . ($what !== '' ? $what : 'runs the feature\'s request against every framework that supports it.')
+                . $notCompeting
                 . "\n\n![{$title}](" . $rel . '/' . $file . ')';
         }
 

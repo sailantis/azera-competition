@@ -87,10 +87,10 @@ final class EntryScriptBootProbeTest extends TestCase
 
         // The marker that starts serving the request in each entry script.
         $handlers = [
-            'azera'       => '$ctx->dispatcher()->dispatch($route)->send()',
+            'azera'       => '$ctx->kernel()->handle(',
             'laravel'     => '$response = $kernel->handle($request)',
             'symfony'     => '$response = $kernel->handle($request)',
-            'spiral'      => '$c->get(RouterInterface::class)->handle($request)',
+            'spiral'      => '$c->get(\Spiral\Http\Http::class)->handle($request)',
             'codeigniter' => 'exit(Boot::bootWeb($paths))',
             'cakephp'     => '$response = $server->run()',
             'phalcon'     => '$body = $app->handle(',

@@ -60,6 +60,10 @@ function frameworkVersions(string $root): array
         'spiral'      => 'spiral/framework',
         'codeigniter' => 'codeigniter4/framework',
         'cakephp'     => 'cakephp/cakephp',
+        // The extension, not phalcon/volt or phalcon/phql: those are the view
+        // and ORM layers, which version independently of the framework the
+        // entry is measured as.
+        'phalcon' => 'phalcon/phalcon',
     ];
 
     $installed = installedVersions($root);

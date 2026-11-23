@@ -331,6 +331,28 @@ function Sync-Source {
     if (Test-Path $tarFile) { Remove-Item $tarFile -Force }
     Assert-NoHostPathsLeaked
 
+    # Clear the compiled caches that are EXCLUDED from the sync.
+    #
+    # Every `--exclude` above is a cache the VM must build itself (they hold
+    # absolute host paths). The cost is that the VM's copy NEVER gets refreshed,
+    # so adding a route or a service and syncing leaves the old compiled artefact
+    # in place and the new endpoint 404s against a source tree that plainly
+    # declares it. That happened on 2026-11-22: adding `GET /features/aop-direct`
+    # shipped the route in `config/routes.yaml`, but Symfony kept serving its
+    # cached `url_matching_routes.php` from 03:37 and returned 404, which the run
+    # correctly aborted on.
+    #
+    # Deleting them after the extract is the only ordering that works: a cache
+    # removed BEFORE the extract would simply be absent (fine), but one created by
+    # a boot probe during the extract would then be stale again.
+    #
+    # Boot cost is unaffected - `run-http.php` re-seeds and boots each server once
+    # per block and those first requests are not the ones timed.
+    ssh $SshTarget ("cd $RemoteDir && rm -rf " +
+        'apps/symfony/var/cache writable bootstrap/cache runtime ' + `
+        'apps/phalcon/cache storage/framework/views 2>/dev/null; echo cache-cleared')
+    if ($LASTEXITCODE -ne 0) { throw 'could not clear the VM compile caches' }
+
     # Remove any .git that an OLD sync left on the VM.
     #
     # `.git` is (correctly) excluded from every sync, so a checkout that was ever

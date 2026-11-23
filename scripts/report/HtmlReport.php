@@ -253,6 +253,31 @@ HTML;
                 ? "\n  <p class=\"workload\"><code>" . self::esc(BenchmarkConfig::featurePrimaryRequest($feature))
                     . '</code> — ' . self::esc($what) . "</p>"
                 : '';
+
+            // The AOP row ranks TRANSPARENT interception (advice declared on the
+            // method, applied by generated code) against DIRECT interception (the
+            // pipeline written out by hand). Both are legitimate; they are not the
+            // same work. The HTML page must say so as well, or it contradicts the
+            // Markdown page for the same dataset.
+            if ($feature === 'aop') {
+                $styles = BenchmarkConfig::aopStylesInRace();
+                $parts  = [];
+                if ($styles['transparent'] !== []) {
+                    $parts[] = 'transparent: ' . implode(', ', $styles['transparent']);
+                }
+                if ($styles['direct'] !== []) {
+                    $parts[] = 'direct: ' . implode(', ', $styles['direct']);
+                }
+                if ($parts !== []) {
+                    $note .= "\n  <p class=\"workload\">Read this row in two styles — "
+                        . self::esc(implode('; ', $parts))
+                        . '. The cross-style ranking is not a speed verdict. <code>GET '
+                        . '/features/aop-direct</code> is the control: the identical insert with the '
+                        . 'transaction written by hand, so the gap between that row and this one is '
+                        . 'what interception actually costs.</p>';
+                }
+            }
+
             $featureFigs .= sprintf(
                 "<figure>\n  <figcaption>%s</figcaption>%s\n  <img src=\"%s\" alt=\"%s\" loading=\"lazy\">\n</figure>\n",
                 self::esc($label),

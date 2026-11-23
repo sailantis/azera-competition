@@ -73,6 +73,7 @@ class BenchController
             ->get();
 
         return view('items', [
+            'title'      => 'Items',
             'baseUrl'    => '/items',
             'items'      => $items,
             'pagination' => self::pagination($page, $total),
@@ -108,6 +109,7 @@ class BenchController
             ->get();
 
         return view('items', [
+            'title'      => 'Items',
             'baseUrl'    => '/items-fast',
             'items'      => $items,
             'pagination' => self::pagination($page, $total),
@@ -178,6 +180,7 @@ class BenchController
             ->get();
 
         return view('items', [
+            'title'      => 'Items',
             'baseUrl'    => '/items-qb',
             'items'      => $rows,
             'pagination' => self::pagination($page, $total),

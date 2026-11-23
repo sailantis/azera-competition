@@ -181,6 +181,7 @@ final class VersionStampTest extends TestCase
             'spiral/framework'          => '3.17.2',
             'codeigniter4/framework'    => 'v4.7.4',
             'cakephp/cakephp'           => '5.4.0',
+            'phalcon/phalcon'           => 'v6.0.0RC4',
         ];
 
         $scratch = self::scratchTree([
@@ -203,7 +204,7 @@ final class VersionStampTest extends TestCase
             $versions = frameworkVersions($scratch);
 
             self::assertSame(
-                ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp'],
+                ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
                 array_keys($versions),
                 'every measured framework must be stamped, in a stable order'
             );

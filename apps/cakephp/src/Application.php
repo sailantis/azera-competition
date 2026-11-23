@@ -144,6 +144,8 @@ final class Application extends BaseApplication
                 ->setMethods(['GET']);
             $builder->connect('/features/aop', ['controller' => 'Feature', 'action' => 'aop'])
                 ->setMethods(['GET']);
+            $builder->connect('/features/aop-direct', ['controller' => 'Feature', 'action' => 'aopDirect'])
+                ->setMethods(['GET']);
             $builder->connect('/features/cache', ['controller' => 'Feature', 'action' => 'cache'])
                 ->setMethods(['GET']);
             $builder->connect('/features/log', ['controller' => 'Feature', 'action' => 'logDemo'])

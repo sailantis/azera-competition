@@ -91,6 +91,7 @@ class BenchController
             ->fetchAll();
 
         $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
+            'title'      => 'Items',
             'baseUrl'    => '/items',
             'items'      => $rows,
             'pagination' => self::pagination($page, $count),
@@ -127,6 +128,7 @@ class BenchController
         $items = \array_map(static fn(array $row): object => (object) $row, $rows);
 
         $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
+            'title'      => 'Items',
             'baseUrl'    => '/items-fast',
             'items'      => $items,
             'pagination' => self::pagination($page, $count),
@@ -218,6 +220,7 @@ class BenchController
         $items = \array_map(static fn(array $row): object => (object) $row, $rows);
 
         $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
+            'title'      => 'Items',
             'baseUrl'    => '/items-qb',
             'items'      => $items,
             'pagination' => self::pagination($page, $count),

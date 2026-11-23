@@ -41,11 +41,23 @@ final class BenchmarkConfig
             'GET /api/items-fast'          => 'rest-api',
             'GET /api/items/1'             => 'rest-api',
             'POST /api/items'              => 'rest-api',
+            // `GET /features/log`, `/features/retry` and `/features/pipeline` are
+            // NOT 'aop'. They demonstrate a logger, a retry loop and an explicit
+            // closure pipeline — facilities every entrant has, which is why
+            // CodeIgniter, CakePHP and Phalcon serve them with plain code.
+            // Grouping them under 'aop' hid them from three entrants on a
+            // technicality: the exclusion that keeps Phalcon out of the
+            // proxy-vs-handwritten comparison also removed its logger, its retry
+            // loop and its pipeline from the report, none of which are in doubt.
             'GET /features/aop'            => 'aop',
+            // Same work as /features/aop, transaction written by hand. Kept in
+            // the SAME feature so the pair is read together: the gap between the
+            // two rows is the cost of transparent interception.
+            'GET /features/aop-direct'     => 'aop',
             'GET /features/cache'          => 'cache',
-            'GET /features/log'            => 'aop',
-            'GET /features/retry'          => 'aop',
-            'GET /features/pipeline'       => 'aop',
+            'GET /features/log'            => 'logging',
+            'GET /features/retry'          => 'retry',
+            'GET /features/pipeline'       => 'pipeline',
             'GET /features/db-events'      => 'db-events',
             'GET /features/events'         => 'events',
             'GET /features/validation'     => 'validation',
@@ -65,18 +77,27 @@ final class BenchmarkConfig
     public static function adapterFeatures(): array
     {
         return [
-            'azera'       => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'laravel'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'symfony'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'spiral'      => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'codeigniter' => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            'cakephp'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            // Phalcon 6 has no AOP layer, and its /features/* routes are not
-            // implemented by this entrant, so it takes part in the data,
-            // query-builder and REST races only. An adapter that lacks a feature
-            // is excluded from that feature's comparison rather than shown as a
-            // failure.
-            'phalcon'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api'],
+            'azera'       => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'laravel'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'symfony'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'spiral'      => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'codeigniter' => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'cakephp'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            // Phalcon 6 has no AOP/interceptor layer, so it sits out exactly one
+            // race: `GET /features/aop`, which compares generated proxies against
+            // hand-written calls.
+            //
+            // `logging`, `retry` and `pipeline` are SEPARATE features, and Phalcon
+            // competes in all three — they are Phalcon's Logger, a retry loop and a
+            // closure pipeline. They used to be folded into 'aop' (featureMap() now
+            // keeps them apart) and that is what hid a logger and a retry loop from
+            // three entrants on a technicality.
+            //
+            // Everything else is a native Phalcon subsystem: Phalcon\Cache, its db
+            // adapter's events manager, Phalcon\Events\Manager,
+            // Phalcon\Filter\Validation, Phalcon\Config, an explicit request-scope
+            // reset, and a cache-backed rate limiter.
+            'phalcon'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
         ];
     }
 
@@ -103,6 +124,9 @@ final class BenchmarkConfig
             'query-builder',
             'rest-api',
             'aop',
+            'logging',
+            'retry',
+            'pipeline',
             'cache',
             'db-events',
             'events',
@@ -168,6 +192,9 @@ final class BenchmarkConfig
             'query-builder'  => 'Query Builder',
             'rest-api'       => 'REST API (JSON)',
             'aop'            => 'AOP (Aspect-Oriented)',
+            'logging'        => 'Logging',
+            'retry'          => 'Retry',
+            'pipeline'       => 'Pipeline (explicit)',
             'cache'          => 'Cache',
             'db-events'      => 'Database Events',
             'events'         => 'Event Dispatcher',
@@ -208,12 +235,13 @@ final class BenchmarkConfig
             'GET /api/items-fast'          => '20 of 1000 items as JSON, rows not hydrated',
             'GET /api/items/1'             => '1 item by id as JSON',
             'POST /api/items'              => '1 row upserted (sentinel #999998)',
-            'GET /features/aop'            => 'no DB — interceptor pipeline',
+            'GET /features/aop'            => '1 row upserted (sentinel #888800)',
+            'GET /features/aop-direct'     => '1 row upserted (sentinel #888800)',
             'GET /features/cache'          => 'COUNT(*) of 1000 rows, cached 10s (miss = query)',
             'GET /features/log'            => 'no DB — buffered log handlers',
             'GET /features/retry'          => 'no DB — retry policy',
             'GET /features/pipeline'       => 'no DB — middleware pipeline',
-            'GET /features/db-events'      => '1 event row INSERTed per request',
+            'GET /features/db-events'      => '1 row upserted (sentinel #888800) + COUNT(*), events collected',
             'GET /features/events'         => 'no DB — in-process listeners',
             'GET /features/validation'     => 'no DB — validator run',
             'GET /features/config'         => 'no DB — config lookup',
@@ -260,14 +288,46 @@ final class BenchmarkConfig
                 . 'which adds serialization to the ORM work. The `-fast` band repeats that response '
                 . 'with hydration switched off, so serialization cost and hydration cost can be '
                 . 'told apart.',
-            'aop'            => 'runs a request through an interceptor pipeline — logging, retry and '
-                . 'middleware aspects wrapped around the handler. Only frameworks with an AOP layer '
-                . 'take part.',
+            'aop'            => 'runs a request through interceptor machinery — logging, retry and '
+                . 'transaction advice wrapped around the handler. The entrants split into two '
+                . 'styles, and this row means different work on each side. TRANSPARENT '
+                . 'interception — advice declared on the method and applied by generated code, '
+                . 'handler body untouched — is what Azera does (`#[Advised]`, `#[Transactional]`, '
+                . '`#[Cache]`, `#[Log]`, `#[Retry]`). DIRECT interception — the pipeline written '
+                . 'out in the code — is what everyone else does: Laravel composes an Illuminate '
+                . 'Pipeline and Symfony chains invokable interceptor classes, both documenting '
+                . 'that they have no proxy-based AOP; Spiral builds a `PipelineBuilder` pipeline; '
+                . 'CodeIgniter, CakePHP and Phalcon have no interceptor layer at all and write the '
+                . 'transactional insert by hand. Do NOT read the ranking across styles as a speed '
+                . 'verdict: the two sides pay for different machinery, and the same caution applies '
+                . 'to `cache`, `log` and `retry`, which on Azera also route through generated '
+                . 'proxies while every other entrant implements them plainly. `GET '
+                . '/features/aop-direct` is the control: the identical insert with the transaction '
+                . 'written by hand, served by every entrant. On 2026-11-22 it measured Azera at '
+                . '+0.026 ms (+1.1%) over its advised twin, inside the ±2% band the other six also '
+                . 'sit in — so transparent interception costs ~1% of a 2.3 ms request. Phalcon sits '
+                . 'the aop race out; it competes in logging, retry and pipeline.',
+            'logging'        => 'logs a method entry and exit through the framework\'s own logger — '
+                . 'PSR-3 everywhere. On Azera the call goes through a generated `#[Log]` proxy, so '
+                . 'this row includes interception cost the other entrants do not pay here.',
+            'retry'          => 'runs a deliberately flaky operation through a retry policy of up to '
+                . 'three attempts — an explicit loop or interceptor everywhere, and on Azera a '
+                . 'generated `#[Retry]` proxy, so this row includes interception cost the others '
+                . 'do not pay here.',
+            'pipeline'       => 'composes the handler with explicit interceptor steps — no proxy '
+                . 'generation, so this row separates "the pipeline mechanism" from "the advice '
+                . 'declaration mechanism".',
             'cache'          => 'reads a COUNT(*) over the 1,000 rows through the framework\'s cache '
-                . 'with a 10-second TTL, so a hit costs no database work and a miss runs the query.',
+                . 'with a 10-second TTL, so a hit costs no database work and a miss runs the query. '
+                . 'On Azera the read goes through a generated `#[Cache]` proxy, so this row includes '
+                . 'interception cost the other entrants do not pay here.',
             'db-events'      => 'inserts one event row per request and lets the framework\'s database '
-                . 'events fire around that write.',
-            'events'         => 'dispatches an in-process event to registered listeners.',
+                . 'events fire around that write. On Azera the insert goes through a generated '
+                . '`#[Transactional]` proxy, so this row includes interception cost the other '
+                . 'entrants do not pay here.',
+            'events'         => 'dispatches an in-process event to registered listeners. On Azera the '
+                . 'item it writes goes through a generated `#[Transactional]` proxy, so this row '
+                . 'includes interception cost the other entrants do not pay here.',
             'validation'     => 'validates a payload with the framework\'s own validator.',
             'config'         => 'resolves a value from the framework\'s config repository.',
             'request-scoped' => 'resolves a service scoped to the request from the container.',
@@ -278,9 +338,273 @@ final class BenchmarkConfig
     /**
      * One-line description of a feature; '' when unmapped.
      */
+    /**
+     * How each entrant implements interception: TRANSPARENT or DIRECT.
+     *
+     * The distinction the AOP race turns on, verified per entrant rather than
+     * assumed:
+     *
+     *   transparent — the advice is DECLARED on the method and applied by
+     *     generated code, so the handler body contains no interception at all.
+     *     Only Azera does this: `#[Transactional]`/`#[Cache]`/`#[Log]`/`#[Retry]`
+     *     on `App\Azera\Services\FeatureService`, with `AppContext::build()`
+     *     generating the proxy. Grepping every other app for an advice
+     *     attribute (`#[Transactional]`, `#[Log]`, `#[Retry]`, `#[Cache]`,
+     *     `#[Advised]`) finds none.
+     *
+     *   direct — the interception is WRITTEN OUT in the code. Laravel composes
+     *     an Illuminate Pipeline (`AopService`, and its own comment says
+     *     "Laravel has no proxy-based AOP"), Symfony chains invokable
+     *     interceptor classes for the same stated reason, Spiral builds a
+     *     `PipelineBuilder` pipeline whose own comment admits the interceptor
+     *     does not manage its transaction, and CodeIgniter, CakePHP and Phalcon
+     *     have no interceptor layer at all so they hand-write the transactional
+     *     insert with an explicit begin/commit.
+     *
+     * Why it matters to a reader: an `aop` number from Azera buys "the handler
+     * is untouched and the advice is applied for you"; the same row from the
+     * other six measures "a pipeline someone wrote by hand". They are both
+     * legitimate and both interesting, but a chart that ranks them together
+     * without saying which is which invites the conclusion that transparent
+     * interception is simply slower, when the two sides are paying for different
+     * machinery.
+     *
+     * WHAT THIS DATASET NOW CAN ANSWER. `GET /features/aop-direct` is the
+     * control: the SAME insert, same sentinel, same event dispatch, with the
+     * transaction written by hand instead of applied by the generated proxy.
+     * Azera serves both, so the pair prices the abstraction on identical work.
+     *
+     * Measured 2026-11-22 (php-fpm): Azera `aop` 2.3693 ms vs `aop-direct`
+     * 2.3435 ms = **+0.0259 ms, +1.1%**, and every other entrant's two rows land
+     * inside +-2%, which is the run-to-run noise floor. Transparent interception
+     * is therefore NOT what makes those rows slow.
+     *
+     * WHERE THE REST OF THE TIME GOES — measured, not inferred. The per-query
+     * event machinery is negligible: `new QueryExecuted` 0.18 us, `dispatch()`
+     * including listener resolution 1.26 us, `DbEventLog::record()` 0.25 us, so
+     * ~1.7 us per query and ~5 us (0.2%) on a 2.37 ms request. Removing logging or
+     * events would change nothing.
+     *
+     * The write is the variable cost, and BOTH the journal mode and the
+     * synchronous level change it by orders of magnitude. 800 sequential upserts on
+     * the VM, one connection, no readers — the shape the harness runs:
+     *
+     *   WAL / NORMAL        p50 0.008 ms · p99 0.018 · max 0.074
+     *   WAL / FULL          p50 0.335 ms · p99 0.442 · max 0.925
+     *   delete / NORMAL     p50 0.447 ms · p99 0.561 · max 0.688
+     *   delete / FULL       p50 0.529 ms · p99 0.703 · max 0.827
+     *   truncate / NORMAL   p50 0.389 ms · p99 0.662 · max 1.573
+     *
+     * WAL is worth ~55x and is NOT optional: rollback-journal mode fsyncs the
+     * journal on every commit even at synchronous=NORMAL, while under WAL a NORMAL
+     * commit writes to the -wal file with no fsync (measured: the main database file
+     * grows 0 bytes across 200 writes). FULL under WAL still fsyncs, which is why it
+     * costs ~42x more than NORMAL. Each setting is wrong without the other, so the
+     * pair is pinned together — tests/SqlitePragmaParityTest.php.
+     *
+     * That pairing is also what the earlier 14x outlier spread between entrants
+     * measured: Laravel pinned NORMAL while the rest inherited FULL. It was never a
+     * framework difference. (An even earlier revision of this comment claimed the
+     * tail was "paid equally" — an assumption, and wrong.)
+     *
+     * Phalcon's p50 being 22x faster than Azera's is NOT the write and NOT cold
+     * boot. It IS the AOP proxy rebuild — established 2026-11-23 by `strace -c`
+     * on the live php-fpm worker under the real published workload, after three
+     * earlier explanations had been proposed and retracted.
+     *
+     * REFUTED: COLD BOOT. The php-fpm row is 1000 iterations x 10 runs with
+     * `fpm_max_requests = 0`, so a run pays for at most ONE cold request.
+     * Explaining a +1.8 ms/request delta that way needs ~1800 ms of one-off work
+     * per run, against a measured `boot_probe` of 0.2747 ms — ~6500x too small.
+     *
+     * REFUTED: A PER-REQUEST DB OR EVENT OVERHEAD. Measured on the VM with
+     * classes warm and a fresh container per request (the php-fpm shape):
+     *
+     *   connect (incl. PRAGMAs)                     0.124 ms
+     *   begin(true) + upsert + commit              0.019 ms
+     *   ItemCreated dispatch + listener            ~0 (inside noise)
+     *   proxy lookup + reflection + autowiring      <0.03 ms
+     *
+     * and the whole write controller costs 0.291 ms in-process against 0.026 ms
+     * for a no-DB route — a 0.265 ms delta, versus 1.80 ms published. Across the
+     * dataset Azera is also FASTER than Phalcon on 13 DB endpoints (median
+     * -0.133 ms) and 8 no-DB endpoints (-0.139 ms) alike, so there is no DB-side
+     * per-request tax at all.
+     *
+     * THE PROOF. `strace -c -f` on the bench-azera worker, 300 requests to
+     * `/features/aop-direct`, original code:
+     *
+     *   rename     300      chmod    300      unlink   600 (incl. 300 ENOENT)
+     *   ftruncate  900      flock    300      fdatasync 1200   total 76,220 calls
+     *
+     * Exactly one file rewrite per request. The file was
+     * `data/aop/Proxy_<md5(class)>.php`, rewritten because
+     * `ProxyFactory::writeAndLoadProxyFile()` named the class with
+     * `bin2hex(random_bytes(8))` and had no `file_exists()` reuse path — so the
+     * declared class name changed on every write, OPcache could never serve it,
+     * and every request recompiled and re-required the proxy.
+     *
+     * Measured A/B of the same 300-request workload on the VM, trimmed mean:
+     *
+     *   /echo                0.498 -> 0.538 ms   (unchanged, no proxy)
+     *   /features/config     0.511 -> 0.530 ms   (unchanged, no proxy)
+     *   /items/1             1.264 -> 1.265 ms   (unchanged, no proxy)
+     *   /features/aop-direct 2.412 -> 0.696 ms   (-1.72 ms, -71%)
+     *
+     * After the fix the same strace shows rename/chmod/unlink/ftruncate/flock
+     * absent entirely and total calls down from 76,220 to 35,321.
+     *
+     * CONSEQUENCE FOR THIS COMPARISON. `aop` and `aop-direct` were the two rows
+     * paying this rebuild, which is why they were the two where Azera lost
+     * biggest — not because of interception. `aop` vs `aop-direct` (+1.1%) is
+     * unaffected: both carried the same defect. See
+     * {@see self::adviceRoutedEndpoints()} for why those two rows differ at all.
+     *
+     * @return array<string,string> app => 'transparent'|'direct'
+     */
+    public static function aopStyle(): array
+    {
+        return [
+            'azera'       => 'transparent',
+            'laravel'     => 'direct',
+            'symfony'     => 'direct',
+            'spiral'      => 'direct',
+            'codeigniter' => 'direct',
+            'cakephp'     => 'direct',
+            'phalcon'     => 'direct',
+        ];
+    }
+
+    /**
+     * The `aop` participants grouped by style, for the page that has to say
+     * which is which. Derived from adapterFeatures() so an app absent from the
+     * race is not named.
+     *
+     * @return array{transparent:list<string>,direct:list<string>}
+     */
+    public static function aopStylesInRace(): array
+    {
+        $out = ['transparent' => [], 'direct' => []];
+
+        foreach (self::adapterFeatures() as $app => $features) {
+            if (!in_array('aop', $features, true)) {
+                continue;
+            }
+            $out[self::aopStyle()[$app] ?? 'direct'][] = self::appLabel($app);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Which endpoints route their work through an advised (generated-proxy)
+     * method, per entrant.
+     *
+     * This is narrower than {@see aopStyle()} and cuts across it. `aopStyle()`
+     * asks "does this entrant declare advice on methods at all?"; this asks "does
+     * THIS endpoint run through advice?" — and the two do not line up, which is
+     * exactly what makes the cross-entrant feature ranking misleading.
+     *
+     * Azera has four advised methods on `FeatureService` — `createItemTransactional`
+     * (`#[Transactional]`), `countItems` (`#[Cache]`), `logSomething` (`#[Log]`)
+     * and `flakyOperation` (`#[Retry]`) — and FIVE endpoints route through them:
+     * `aop`, `events`, `cache`, `log` and `retry`. (`events` calls
+     * `createItemTransactional()` too, which is why it belongs here even though
+     * its feature is the event dispatcher.) `db-events` also calls it, and
+     * `pipeline`, `validation`, `config`, `request-scoped` and `rate-limit` are
+     * plain code on both sides.
+     *
+     * The measured consequence, php-fpm arm of the 2026-11-22 run:
+     *
+     *   azera proxy-routed vs Phalcon's plain implementation
+     *     aop 0.50x · retry 0.68x · log 0.78x · cache 0.87x   (events/db-events 0.79x/0.83x)
+     *   azera plain vs Phalcon plain
+     *     pipeline 1.36x · validation 1.43x · config 1.34x · request-scoped 1.29x · rate-limit 1.41x
+     *
+     * Phalcon wins exactly the rows where Azera pays for a proxy and loses every
+     * row where neither does. The split is perfect in both directions, so the
+     * per-feature ranking is explained by interception cost, not by the cache,
+     * the logger or the rate limiter being faster in Phalcon — measured plainly,
+     * Azera wins those by 29–43%.
+     *
+     * Note this is NOT the same as saying the proxy "costs 29-43%": the two lists
+     * are different workloads, not the same work done with and without advice.
+     * Pricing the proxy needs the identical endpoint implemented both ways, which
+     * no entrant provides (see `aopStyle()`).
+     *
+     * @return array<string,array<string,bool>> app => endpoint => routed through advice
+     */
+    public static function adviceRoutedEndpoints(): array
+    {
+        $azera = [
+            'GET /features/aop'      => true,   // createItemTransactional #[Transactional]
+            'GET /features/events'   => true,   // createItemTransactional #[Transactional]
+            'GET /features/cache'    => true,   // countItems #[Cache]
+            'GET /features/log'      => true,   // logSomething #[Log]
+            'GET /features/retry'    => true,   // flakyOperation #[Retry]
+            'GET /features/db-events' => true,  // createItemTransactional #[Transactional]
+            'GET /features/pipeline' => false,
+            'GET /features/validation' => false,
+            'GET /features/config'   => false,
+            'GET /features/request-scoped' => false,
+            'GET /features/rate-limit' => false,
+        ];
+
+        $out = ['azera' => $azera];
+        foreach (array_keys(self::adapterFeatures()) as $app) {
+            if ($app === 'azera') {
+                continue;
+            }
+            // No other entrant declares advice on a method, so nothing it serves
+            // can be proxy-routed — it all hand-composes.
+            $out[$app] = array_map(static fn(): bool => false, $azera);
+        }
+
+        return $out;
+    }
+
     public static function featureDescriptionFor(string $feature): string
     {
         return self::featureDescription()[$feature] ?? '';
+    }
+
+    /**
+     * WHY an entrant sits out a feature, in one sentence, for the page that
+     * shows the absence.
+     *
+     * `adapterFeatures()` decides participation but says nothing to a reader, so
+     * the report prints this beside the chart. Kept here rather than in either
+     * renderer because both the Markdown page and the HTML figure caption print
+     * it, and two spellings of the same caveat is the drift this file exists to
+     * prevent.
+     *
+     * @param string       $feature the race being drawn
+     * @param list<string> $absent  display labels of the entrants not in it
+     */
+    public static function exclusionReason(string $feature, array $absent = []): string
+    {
+        $named = implode(' and ', $absent);
+
+        if ($feature === 'aop') {
+            // The AOP race is the only one where participation is uneven, so the
+            // sentence has to work for whichever apps are missing rather than
+            // assuming it is Phalcon. Phalcon is the one that stays out today;
+            // an earlier draft hard-coded "Phalcon 6 has no interceptor layer"
+            // and printed it beside a chart that listed Phalcon — because
+            // CodeIgniter and CakePHP had been dropped from the race by mistake
+            // and Phalcon was still in it.
+            return ($named !== '' ? $named : 'An entrant')
+                . ($absent === ['Phalcon 6 (RC)']
+                    ? ' has no interceptor layer (no attribute-declared, proxy-generated advice), '
+                        . 'so this race would compare its hand-written transaction against the other '
+                        . 'entrants\' generated proxies — the machinery, not the framework. It serves '
+                        . '`GET /features/aop` and the three advice demos, so a missing row is a '
+                        . 'deliberate exclusion, not an unimplemented endpoint.'
+                    : ' sits this race out; see `BenchmarkConfig::adapterFeatures()`.');
+        }
+
+        return ($named !== '' ? $named : 'This entrant')
+            . ' does not provide the facility this benchmark measures.';
     }
 
     /**

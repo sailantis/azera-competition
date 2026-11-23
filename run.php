@@ -159,6 +159,7 @@ $requests  = isset($opts['requests'])
         // Feature demo endpoints (each framework participates only if it
         // supports the underlying feature — see $adapterFeatures)
         'GET /features/aop',
+        'GET /features/aop-direct',
         'GET /features/cache',
         'GET /features/log',
         'GET /features/retry',

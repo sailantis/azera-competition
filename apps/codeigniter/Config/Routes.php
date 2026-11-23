@@ -61,6 +61,7 @@ $routes->post('/api/items', 'Api::create');
 // --- Feature demo endpoints ----------------------------------------------
 $routes->get('/features', 'Feature::index');
 $routes->get('/features/aop', 'Feature::aop');
+$routes->get('/features/aop-direct', 'Feature::aopDirect');
 $routes->get('/features/cache', 'Feature::cache');
 $routes->get('/features/log', 'Feature::log');
 $routes->get('/features/retry', 'Feature::retry');
