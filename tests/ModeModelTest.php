@@ -201,17 +201,33 @@ final class ModeModelTest extends TestCase
     }
 
     /**
-     * Volucer's views must read the CANONICAL dataset, not a private one.
+     * Volucer's views must read a CANONICAL dataset, not a private one.
      *
      * The two arms were first rendered from a separate partial-run file, because
-     * they were measured by their own invocation. That file is gone: the
-     * 2026-11-10 run measured all four servers in one pass, and keeping a second
-     * dataset carrying the same apps invites two pages that silently render
+     * they were measured by their own invocation. That file is gone, and keeping a
+     * second dataset carrying the same apps invites two pages that silently render
      * different numbers from each other — with no error, because both look fine.
      *
+     * WHAT "CANONICAL" MEANS HERE, and why this is not an equality assertion.
+     * There are two committed real-deployment datasets and both are canonical;
+     * which one a view names is a PROVENANCE decision, not a preference. A run
+     * that measured Azera v0.5.0 cannot be spliced into `real-deployments`,
+     * because that file's `env.frameworks` describes a different build:
+     * `merge-modes.php` would stamp "Azera v0.5.0" over rows measured on
+     * v0.4.1-5-gf9b2de0, which is the one error the version stamp exists to
+     * prevent. So `real-volucer-attach` reads `real-0.5.0` (it was part of that
+     * run) while `real-volucer-cgi` reads `real-deployments` (it was not).
+     *
+     * Pinning one exact key therefore breaks the moment a run is refreshed, which
+     * is what happened: this test still said `real-deployments` for both long
+     * after `711183f` moved the attach view to the 0.5.0 run for exactly the
+     * reason above. What must hold is the INVARIANT — the view reads a declared,
+     * required, committed dataset, and never a private file — so that is what is
+     * asserted.
+     *
      * This also replaces the earlier `optional` flag, which existed only to let
-     * those views skip when the partial file was absent. Pointing at the canonical
-     * file removes the need: if it is missing, the whole report is broken and
+     * those views skip when the partial file was absent. Reading a required
+     * dataset removes the need: if it is missing, the whole report is broken and
      * should say so.
      */
     public function testTheVolucerViewsReadTheCanonicalDataset(): void
@@ -220,11 +236,34 @@ final class ModeModelTest extends TestCase
 
         $manifest = require dirname(__DIR__) . '/scripts/report/views.php';
 
+        // The datasets that are allowed to back a published page. `real-0.5.0` is
+        // on this list for the provenance reason above, not as a loophole.
+        $canonical = ['free-for-all', 'deployments', 'real-deployments', 'real-0.5.0'];
+
         foreach (['real-volucer-attach', 'real-volucer-cgi'] as $key) {
-            self::assertSame(
-                'real-deployments',
-                $manifest['views'][$key]['dataset'] ?? null,
-                "{$key} must read the canonical dataset so its numbers match the pages beside it"
+            $dataset = $manifest['views'][$key]['dataset'] ?? null;
+
+            self::assertContains(
+                $dataset,
+                $canonical,
+                "{$key} must read a canonical dataset so its numbers match the pages beside it"
+            );
+
+            // A canonical dataset that a view reads must exist and be required:
+            // a view pointing at an undeclared key renders nothing and says
+            // nothing, which is the failure the `optional` flag used to hide.
+            self::assertArrayHasKey(
+                $dataset,
+                $manifest['datasets'],
+                "{$key} names dataset '{$dataset}', which is not declared"
+            );
+            self::assertFalse(
+                (bool) ($manifest['datasets'][$dataset]['optional'] ?? false),
+                "{$key} reads '{$dataset}', which must stay required"
+            );
+            self::assertFileExists(
+                $manifest['datasets'][$dataset]['file'],
+                "{$key} reads '{$dataset}', whose file must be committed"
             );
         }
 
@@ -234,7 +273,7 @@ final class ModeModelTest extends TestCase
 
         // The canonical datasets must never be optional: their absence is a real
         // problem, and silently rendering nothing would be worse than stopping.
-        foreach (['free-for-all', 'deployments', 'real-deployments'] as $key) {
+        foreach ($canonical as $key) {
             self::assertFalse(
                 (bool) ($manifest['datasets'][$key]['optional'] ?? false),
                 "{$key} is a canonical dataset and must stay required"
