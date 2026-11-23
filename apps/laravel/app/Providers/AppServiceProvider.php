@@ -10,6 +10,8 @@
 
 namespace App\Laravel\Providers;
 
+use App\Laravel\Events\ItemCreated;
+use App\Laravel\Listeners\StampListener;
 use App\Laravel\Service\DbEventLog;
 use App\Laravel\Service\RequestCounter;
 use App\Laravel\Service\ScopeState;
@@ -66,6 +68,22 @@ class AppServiceProvider extends ServiceProvider
         // values are the same deterministic defaults azera and Spiral render.
         View::share('locale', 'en_US');
         View::share('platform', 'desktop');
+
+        // ItemCreated fan-out for /features/events.
+        //
+        // Registered EXPLICITLY, not by discovery. bootstrap/app.php calls
+        // withEvents(discover: false) — event discovery costs a filesystem scan
+        // per process, and this app has exactly one listener — but nothing
+        // replaced discovery afterwards, so StampListener was never registered
+        // and /features/events returned "listener_log": []. The endpoint was
+        // timed while the listener did nothing, and verify-app.php only checks
+        // that the key EXISTS, so an empty array passed parity.
+        //
+        // Keep the registration here rather than re-enabling discovery: it needs
+        // no discoverEventsWithin() path, cannot be undone by a later
+        // withEvents() call, and states the wiring in the same place as the
+        // other listeners this app registers.
+        $events->listen(ItemCreated::class, StampListener::class);
 
         // Laravel 12 scoped flush: reset per-request state after each request.
         // forgetScopedInstances() alone is NOT sufficient in a long-running
