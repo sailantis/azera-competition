@@ -173,7 +173,15 @@ class FeatureController extends Controller
             'hits'        => $hits,
             'allowed'     => $allowed,
             'remaining'   => max(0, 5 - $hits),
-        ], $allowed ? 200 : 429);
+            // Always 200: the verdict is in `allowed`, not in the status. Every
+            // app's limiter cache is process-lifetime, so in BOTH arms the 5-hit
+            // budget is spent within the first few iterations and every remaining
+            // timed request is a DENIED one. Answering 429 there made the row
+            // measure "reject a request" instead of "check a limiter", and it
+            // aborted the run once the harness started refusing non-2xx bodies.
+            // CakePHP and CodeIgniter always answered 200; this makes all seven
+            // agree. See tests/RateLimitStatusTest.php.
+        ], 200);
     }
 
     /**

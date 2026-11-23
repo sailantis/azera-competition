@@ -331,7 +331,13 @@ final class BenchmarkConfig
             'validation'     => 'validates a payload with the framework\'s own validator.',
             'config'         => 'resolves a value from the framework\'s config repository.',
             'request-scoped' => 'resolves a service scoped to the request from the container.',
-            'rate-limiter'   => 'checks a cache-backed rate limiter.',
+            // "checks" not "enforces": every app's limiter cache is
+            // process-lifetime, so the 5-hit budget is spent within the first few
+            // iterations and nearly every timed request is a DENIED one. The
+            // endpoint therefore always answers 200 and reports the verdict in
+            // `allowed`/`remaining`; a 429 aborted the run and would have made the
+            // row measure "reject a request". See tests/RateLimitStatusTest.php.
+            'rate-limiter'   => 'checks a cache-backed rate limiter, which has long since denied the caller.',
         ];
     }
 
