@@ -17,6 +17,9 @@ class LaravelAdapter implements WebAppAdapter
     private ?\Illuminate\Foundation\Application $app = null;
     private ?HttpKernelContract $kernel = null;
 
+    /** Status of the most recent dispatch — see WebAppAdapter::lastStatus(). */
+    private int $status = 200;
+
     public function name(): string
     {
         return 'laravel';
@@ -102,16 +105,27 @@ class LaravelAdapter implements WebAppAdapter
         \assert($this->app !== null);
         \assert($this->kernel !== null);
 
+        $this->status = 200;
+
         try {
             $request = Request::create($uri, $method);
             $request->headers->set('HOST', 'bench.local');
 
             $response = $this->kernel->handle($request);
 
+            $this->status = $response->getStatusCode();
+
             return (string) $response->getContent();
         } catch (\Throwable $e) {
+            $this->status = 500;
+
             return '500 ' . \get_class($e) . ': ' . $e->getMessage();
         }
+    }
+
+    public function lastStatus(): int
+    {
+        return $this->status;
     }
 
     /**

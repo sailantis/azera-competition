@@ -7,12 +7,14 @@
 use App\Azera\Bootstrap;
 use Azera\AppContext;
 use Azera\Http\Request;
-use Azera\Http\Response;
 
 class AzeraAdapter implements WebAppAdapter
 {
     private AppContext $ctx;
     private string $dbPath;
+
+    /** Status of the most recent dispatch — see WebAppAdapter::lastStatus(). */
+    private int $status = 200;
 
     public function __construct()
     {
@@ -44,6 +46,10 @@ class AzeraAdapter implements WebAppAdapter
     public function dispatch(string $method, string $uri): string
     {
         // Build a synthetic request via Azera's Request using a fake $_SERVER.
+        // The query string is passed explicitly: `Request` falls back to `$_GET`,
+        // which is empty under the in-process harness, so `?page=2` would silently
+        // serve page 1 (the FPM entry reads the real superglobal and does page
+        // correctly — the two arms must agree).
         $server = [
             'REQUEST_URI'     => $uri,
             'REQUEST_METHOD'  => $method,
@@ -52,21 +58,37 @@ class AzeraAdapter implements WebAppAdapter
             'SCRIPT_NAME'     => '/index.php',
         ];
 
-        // Override AppContext's request so route matching sees our synthetic URI.
-        $request = new Request($server);
-        $this->ctx->set(\Azera\Http\Request::class, $request);
+        $query = [];
+        parse_str((string) (parse_url($uri, PHP_URL_QUERY) ?? ''), $query);
 
-        $path   = $request->path();
-        $method = $request->method();
+        // Reset first: an exception below must not publish the previous request's
+        // status (see WebAppAdapter::lastStatus()).
+        $this->status = 200;
 
-        $route = $this->ctx->router()->match($path, $method);
-        if ($route === null) {
-            return '404 Not Found';
-        }
+        // The framework's own front controller, not its primitives.
+        //
+        // This used to call router()->match() and dispatcher()->dispatch() by hand,
+        // which skipped the layer every other entrant runs: Symfony and Laravel
+        // through HttpKernel::handle(), CakePHP through Server::run(), and now
+        // Phalcon through Mvc\Application::handle(). Kernel owns the parts a front
+        // controller is for — the 404 and 405 bodies, the error boundary that turns a
+        // thrown exception into a 500 instead of a fatal, and the queued-cookie
+        // flush — so calling the router directly meant Azera was the only entrant
+        // measured without one and its own 404 page was never exercised.
+        //
+        // Measured, Kernel is not a cost: on GET /api/items-fast it ran 36.4 us
+        // against 34.8 us for the manual pair (interleaved, order-rotated), and the
+        // bodies are byte-identical.
+        $response = $this->ctx->kernel()->handle(new Request($server, $query));
 
-        $response = $this->ctx->dispatcher()->dispatch($route);
+        $this->status = $response->getStatus();
 
-        return self::readBody($response);
+        return $response->getBody();
+    }
+
+    public function lastStatus(): int
+    {
+        return $this->status;
     }
 
     /**
@@ -80,14 +102,5 @@ class AzeraAdapter implements WebAppAdapter
     public function cleanup(): void
     {
         $this->ctx->clearRequestScope();
-    }
-
-    /**
-     * Read the protected Response::$body via reflection (no public getter).
-     */
-    private static function readBody(Response $response): string
-    {
-        $r = new ReflectionProperty(Response::class, 'body');
-        return (string) $r->getValue($response);
     }
 }

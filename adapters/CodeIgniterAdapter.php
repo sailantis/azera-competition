@@ -22,6 +22,9 @@ final class CodeIgniterAdapter implements WebAppAdapter
 
     private ?\CodeIgniter\CodeIgniter $app = null;
 
+    /** Status of the most recent dispatch — see WebAppAdapter::lastStatus(). */
+    private int $status = 200;
+
     private string $dbPath;
 
     public function __construct()
@@ -59,6 +62,8 @@ final class CodeIgniterAdapter implements WebAppAdapter
     {
         \assert($this->app instanceof \CodeIgniter\CodeIgniter);
 
+        $this->status = 200;
+
         // Spoof the SAPI env for the incoming request. CI4 reads
         // $_SERVER[REQUEST_URI] per its App::$uriProtocol, REMOTE_ADDR for
         // rate limiting parity and REQUEST_METHOD for method spoofing.
@@ -88,10 +93,19 @@ final class CodeIgniterAdapter implements WebAppAdapter
         }
 
         if (!isset($response)) {
+            $this->status = 500;
+
             return $error;
         }
 
+        $this->status = $response->getStatusCode();
+
         return (string) $response->getBody();
+    }
+
+    public function lastStatus(): int
+    {
+        return $this->status;
     }
 
     /**

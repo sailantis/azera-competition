@@ -20,6 +20,9 @@ class CakePhpAdapter implements WebAppAdapter
 {
     private ?Server $server = null;
 
+    /** Status of the most recent dispatch — see WebAppAdapter::lastStatus(). */
+    private int $status = 200;
+
     public function name(): string
     {
         return 'cakephp';
@@ -92,6 +95,8 @@ class CakePhpAdapter implements WebAppAdapter
     {
         \assert($this->server instanceof Server);
 
+        $this->status = 200;
+
         // ServerRequestFactory::fromGlobals() reads $_SERVER; give it a
         // minimal spoof per request (same approach as the CI4 worker).
         $server = [
@@ -114,10 +119,19 @@ class CakePhpAdapter implements WebAppAdapter
             $request  = WorkerRequestFactory::fromGlobals($server);
             $response = $this->server->run($request);
         } catch (\Throwable $e) {
+            $this->status = 500;
+
             return '500 ' . \get_class($e) . ': ' . $e->getMessage();
         }
 
+        $this->status = $response->getStatusCode();
+
         return (string) $response->getBody();
+    }
+
+    public function lastStatus(): int
+    {
+        return $this->status;
     }
 
     /**

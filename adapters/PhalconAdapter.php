@@ -18,6 +18,9 @@ class PhalconAdapter implements WebAppAdapter
 {
     private ?Bootstrap $app = null;
 
+    /** Status of the most recent dispatch — see WebAppAdapter::lastStatus(). */
+    private int $status = 200;
+
     public function name(): string
     {
         return 'phalcon';
@@ -55,11 +58,24 @@ class PhalconAdapter implements WebAppAdapter
     {
         \assert($this->app instanceof Bootstrap);
 
+        $this->status = 200;
+
         try {
-            return $this->app->handle($method, $uri);
+            $body = $this->app->handle($method, $uri);
+
+            $this->status = $this->app->lastStatus();
+
+            return $body;
         } catch (\Throwable $e) {
+            $this->status = 500;
+
             return '500 ' . get_class($e) . ': ' . $e->getMessage();
         }
+    }
+
+    public function lastStatus(): int
+    {
+        return $this->status;
     }
 
     /**

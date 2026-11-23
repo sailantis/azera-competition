@@ -32,6 +32,25 @@ interface WebAppAdapter
     public function dispatch(string $method, string $uri): string;
 
     /**
+     * The HTTP status the framework produced for the request just dispatched.
+     *
+     * The contract returns a BODY, so a status can only travel beside it. Before
+     * this existed, every consumer guessed: `response-guard.php` classified a body
+     * by its first line (`/^([1-5]\d{2}) /`) or a `Not Found` prefix. That worked
+     * for adapters that hand-wrote status-shaped bodies and failed for the ones
+     * whose framework rendered a real page — Cake's 404 arrived as
+     * "500 Cake\Routing\Exception\MissingRouteException: ..." because the body
+     * carried no status and nothing else did either.
+     *
+     * Adapters now report the status their framework actually set. The body rule
+     * stays as a fallback for the FPM entry scripts, which have no adapter to ask.
+     *
+     * Must be 200 before the first dispatch(), and must be reset at the top of
+     * every dispatch() so a throw cannot publish the previous request's status.
+     */
+    public function lastStatus(): int;
+
+    /**
      * Per-request teardown — the work a long-lived worker performs AFTER the
      * response has been sent and BEFORE the next request starts:
      * terminate()-style finalizers, request-scoped service resets,

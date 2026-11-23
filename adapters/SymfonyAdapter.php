@@ -26,6 +26,9 @@ class SymfonyAdapter implements WebAppAdapter
 
     private ?\Symfony\Component\HttpFoundation\Response $lastResponse = null;
 
+    /** Status of the most recent dispatch — see WebAppAdapter::lastStatus(). */
+    private int $status = 200;
+
     public function name(): string
     {
         return 'symfony';
@@ -46,6 +49,20 @@ class SymfonyAdapter implements WebAppAdapter
     private function bootKernel(): void
     {
         $this->kernel = null;
+
+        // Tell Symfony this is a WEB app even when it runs under the CLI SAPI.
+        //
+        // `kernel.runtime_mode.web` comes from `%env(...APP_RUNTIME_MODE)%`, and
+        // the compiled fallback is `in_array(PHP_SAPI, ['cli', ...]) ? 'web=0' :
+        // 'web=1'`. The resident arms are a web app inside a CLI process, so
+        // Symfony concluded "CLI" and `RuntimeModeErrorRendererSelector` picked
+        // CliErrorRenderer — which dumps the raw exception object as the body.
+        // The status was right but the body was not a page.
+        //
+        // Symfony's own WebTestCase does exactly this for the same reason
+        // (`$_SERVER['APP_RUNTIME_MODE'] = 'web=1';`). Under FPM the value is
+        // already web=1, so this only fixes the arm that needs it.
+        $_SERVER['APP_RUNTIME_MODE'] ??= 'web=1';
 
         // Ensure the runtime dirs Symfony requires exist (Twig cache +
         // Doctrine proxy/cache).
@@ -137,20 +154,35 @@ class SymfonyAdapter implements WebAppAdapter
     {
         \assert($this->kernel instanceof BenchKernel);
 
+        $this->status = 200;
+
         try {
             $request = Request::create($uri, $method);
             $request->headers->set('HOST', 'bench.local');
 
-            $response = $this->kernel->handle($request, HttpKernelInterface::MAIN_REQUEST, false);
+            // $catch = true: let the kernel turn a NotFoundHttpException /
+            // MethodNotAllowedHttpException into a response through
+            // error_controller. Passing false made every 404 and 405 escape into
+            // the catch below, where the best the adapter could do was invent a
+            // 'Not Found' body or print the exception class — i.e. the app had no
+            // working error page and the transport never saw a real status.
+            $response = $this->kernel->handle($request, HttpKernelInterface::MAIN_REQUEST, true);
             $this->lastRequest  = $request;
             $this->lastResponse = $response;
 
+            $this->status = $response->getStatusCode();
+
             return (string) $response->getContent();
-        } catch (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e) {
-            return 'Not Found';
         } catch (\Throwable $e) {
+            $this->status = 500;
+
             return '500 ' . \get_class($e) . ': ' . $e->getMessage();
         }
+    }
+
+    public function lastStatus(): int
+    {
+        return $this->status;
     }
 
     /**
