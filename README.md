@@ -27,7 +27,7 @@ attributable to that variable alone. `/echo` removes the template from `/`;
 `/items-fast` removes hydration from `/items`; `/api/items-fast` removes hydration
 from `/api/items`. `/items` vs `/items-qb` changes two things at once (the data-access
 layer **and** hydration), which is exactly why the single-variable pairs exist. All are
-implemented in all six apps with the same contract, and all are verified to return the
+implemented in all seven apps with the same contract, and all are verified to return the
 same body as the route they neighbour.
 
 **The hydration contract is uniform across the six apps.** `/items`, `/items/1`,
@@ -51,8 +51,13 @@ The harness dispatches synthetic requests **in-process** (no real HTTP socket) s
 | **Spiral**        | Stempler              | Cycle ORM / DBAL            |
 | **CodeIgniter 4** | CI4 View parser       | CI4 Model / QueryBuilder    |
 | **CakePHP 5**     | CakePHP View (`.ctp`) | CakePHP ORM / Table         |
+| **Phalcon 6**     | Volt                  | Phalcon Model / DataMapper  |
 
-All six ship built-in template engines and model/DB layers, so the comparison is apples-to-apples for a full-stack workload.
+All seven ship built-in template engines and model/DB layers, so the comparison is
+apples-to-apples for a full-stack workload. Phalcon is the one entrant that sits out a
+single feature race (`GET /features/aop`, which compares generated proxies against
+hand-written calls) because Phalcon 6 has no interceptor layer — see
+`BenchmarkConfig::adapterFeatures()`.
 
 ## Cold vs Warm
 
