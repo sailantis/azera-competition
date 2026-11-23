@@ -25,6 +25,7 @@ if ($key === 'codeigniter') {
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
+require_once __DIR__ . '/response-guard.php';
 
 $map = [
     'azera'       => 'AzeraAdapter',
@@ -59,6 +60,7 @@ $checks = [
     'GET /api/items/1',
     'POST /api/items',
     'GET /features/aop',
+    'GET /features/aop-direct',
     'GET /features/cache',
     'GET /features/log',
     'GET /features/retry',
@@ -90,7 +92,7 @@ foreach ($checks as $req) {
     $ms = (hrtime(true) - $t0) / 1e6;
     $adapter->cleanup();
 
-    $bad = $err !== null || $body === '' || str_starts_with($body, '500 ') || str_starts_with($body, 'Not Found');
+    $bad = $err !== null || $body === '' || isBenchErrorBody($body);
 
     if ($bad) {
         $failures++;

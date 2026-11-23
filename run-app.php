@@ -82,6 +82,7 @@ if ($appKey === 'codeigniter') {
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
+require_once __DIR__ . '/response-guard.php';
 $itersPerRun = isset($opts['iterations-per-run']) ? (int) $opts['iterations-per-run'] : 1000;
 $runs        = isset($opts['runs']) ? (int) $opts['runs'] : 30;
 $modeName    = $opts['mode'] ?? 'warm';
@@ -127,6 +128,7 @@ $requests = isset($opts['requests'])
         // Feature demo endpoints (each framework participates only if it
         // supports the underlying feature — see run.php $adapterFeatures)
         'GET /features/aop',
+        'GET /features/aop-direct',
         'GET /features/cache',
         'GET /features/log',
         'GET /features/retry',
@@ -447,7 +449,7 @@ function benchRequestForked(WebAppAdapter $adapter, array $request, int $itersPe
                     $tb2  = hrtime(true);
                     $adapter->cleanup();
                     $tb3 = hrtime(true);
-                    if (str_starts_with((string) $body, 'Not Found') || str_starts_with((string) $body, '500 ')) {
+                    if (isBenchErrorBody((string) $body)) {
                         $status = 1;
                     }
                     $cb[] = ($tb1 - $tb0) / 1e6;
@@ -609,7 +611,7 @@ function benchRequest(WebAppAdapter $adapter, string $mode, array $request, int 
             // the 2026-09-12 symfony /features/* rows came out flat at
             // ~0.05 ms: every request was actually a 404). Fail loudly
             // instead so the run can be fixed and re-run.
-            if (str_starts_with($body, 'Not Found') || str_starts_with($body, '500 ')) {
+            if (isBenchErrorBody($body)) {
                 fwrite(STDERR, "\n[ABORT] {$mode} {$reqLabel} returned an error response\n"
                     . "  body: " . substr($body, 0, 300) . "\n"
                     . "  A dataset must never contain error responses — fix the app\n"

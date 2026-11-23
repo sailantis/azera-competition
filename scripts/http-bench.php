@@ -162,7 +162,10 @@ if ($memOnly) {
     foreach ($requests as [$method, $uri]) {
         $reqLabel = "{$method} {$uri}";
         try {
-            httpRequest($baseUrl, $method, $uri); // the endpoint's own work
+            // The endpoint's own work, plus the same abort guard the timed path
+            // uses. Without it a 404 here would produce a memory row for an
+            // error page, which merge-mem.php would then graft onto the dataset.
+            abortIfBroken($server, $appKey, $reqLabel, httpRequest($baseUrl, $method, $uri));
             $samples = memProbeRepeated(
                 $baseUrl,
                 $method,

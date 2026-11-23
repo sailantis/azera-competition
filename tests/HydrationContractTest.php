@@ -133,6 +133,25 @@ final class HydrationContractTest extends TestCase
                 'htmlWhat' => 'getResultObject() instead of Model findAll()',
                 'apiWhat' => 'getResultObject() instead of Model findAll()',
             ],
+            // Phalcon was absent from this table, which is exactly how it kept issuing raw
+            // SQL — `$db->fetchAll()` — on both `-fast` routes long after the other six had
+            // been normalised. Removing the ORM is TWO variables in a route whose contract
+            // is one, and it was worth 2.4x (HTML) and 3.8x (API) to Phalcon.
+            //
+            // `->columns(` is the marker because that is the call that keeps the model
+            // query hydration-free: Phalcon returns `Mvc\Model\Row` values instead of model
+            // instances when explicit columns are selected, while `/items` and
+            // `/api/items` use `find()` and therefore hydrate `Item`.
+            'phalcon' => [
+                'html' => 'apps/phalcon/src/Controller/BenchController.php',
+                'api'  => 'apps/phalcon/src/Controller/ApiController.php',
+                'list' => 'listAction', 'listFast' => 'listFastAction',
+                'apiIndex' => 'indexAction', 'apiFast' => 'indexFastAction',
+                'htmlFast' => '->columns(',
+                'apiFastCall' => '->columns(',
+                'htmlWhat' => 'Item::query()->columns() (Model\\Row) instead of Item::find()',
+                'apiWhat' => 'Item::query()->columns() (Model\\Row) instead of Item::find()',
+            ],
         ];
     }
 

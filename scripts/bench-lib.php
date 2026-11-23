@@ -30,6 +30,10 @@ function probeUsesHeaders(string $probeKind): bool
     return $probeKind === 'rr' || $probeKind === 'volucer';
 }
 
+// The shared "is this body an error page" rule, so the client and the server
+// transports cannot disagree (see response-guard.php).
+require_once dirname(__DIR__) . '/response-guard.php';
+
 // --- Stats (mirrors run.php) -------------------------------------------------
 
 function stats(array $values): array
@@ -176,6 +180,11 @@ function parseRequestsArg(?string $raw): array
             'GET /api/items/1',
             'POST /api/items',
             'GET /features/aop',
+        // The direct twin of /features/aop: SAME work, transaction written by
+        // hand instead of applied by generated advice. The only same-work
+        // transparent-vs-direct pair in the suite, so the difference between the
+        // two rows prices the abstraction.
+        'GET /features/aop-direct',
             'GET /features/cache',
             'GET /features/log',
             'GET /features/retry',
@@ -583,9 +592,14 @@ function httpHeaderProbe(string $baseUrl, string $method, string $uri, string $h
 
 // --- Abort guard (mirrors benchRequest) ----------------------------------------
 /**
- * A benchmark against a broken deployment must never produce numbers:
- * identical guard to run.php's benchRequest() — "Not Found" bodies or "500 "
- * prefixes abort the whole client with exit 1.
+ * A benchmark against a broken deployment must never produce numbers: an error
+ * response aborts the whole client with exit 1.
+ *
+ * Both halves of the check come from response-guard.php, which the transports
+ * also use — that is the point. The former rule here (`body === 'Not Found'` or
+ * a `'500 '` prefix) disagreed with the transports' rule (status 200 unless the
+ * body said `'500 '`), so a `'404 Not Found'` body sailed through as a healthy
+ * 200 and was timed. See response-guard.php for the run that published it.
  */
 function abortIfBroken(string $server, string $appKey, string $reqLabel, string $body, int $status = 200): void
 {
@@ -594,8 +608,9 @@ function abortIfBroken(string $server, string $appKey, string $reqLabel, string 
             . "  body head: " . substr($body, 0, 200) . "\n");
         exit(1);
     }
-    if ($body === 'Not Found' || str_starts_with($body, '500 ')) {
-        fwrite(STDERR, "[ABORT] {$server}/{$appKey} {$reqLabel}: broken response body\n");
+    if (isBenchErrorBody($body)) {
+        fwrite(STDERR, "[ABORT] {$server}/{$appKey} {$reqLabel}: broken response body\n"
+            . "  body head: " . substr($body, 0, 200) . "\n");
         exit(1);
     }
 }

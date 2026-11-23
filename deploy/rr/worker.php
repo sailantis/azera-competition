@@ -49,6 +49,7 @@ require $benchRoot . '/vendor/autoload.php';
 require $benchRoot . '/WebAppAdapter.php';
 require $benchRoot . '/adapters/BenchmarkAutoloader.php';
 require $benchRoot . '/boot-probe.php';
+require $benchRoot . '/response-guard.php';
 
 // --- Resolve the app under test ---------------------------------------------
 
@@ -253,15 +254,16 @@ while (true) {
         if ($split) {
             $tHandle0 = hrtime(true);
             $body     = $adapter->dispatch($method, $uri);
+            $status   = benchStatus($body, $adapter->lastStatus());
             $tHandle1 = hrtime(true);
             $adapter->cleanup();
             $tSplit1 = hrtime(true);
         } else {
-            $body = $adapter->dispatch($method, $uri);
+            $body   = $adapter->dispatch($method, $uri);
+            $status = benchStatus($body, $adapter->lastStatus());
             $adapter->cleanup();
         }
 
-        $status  = str_starts_with($body, '500 ') ? 500 : 200;
         $headers = ['Content-Type' => 'text/html; charset=utf-8'];
 
         if ($split) {

@@ -58,6 +58,7 @@ $expect = [
     // 'GET /items-orm/1'           => 'Item 1',
     // 'POST /items-orm'            => 'flash',
     'GET /features/aop'            => '"new_id"',
+    'GET /features/aop-direct'     => '"new_id"',
     'GET /features/cache'          => '"item_count"',
     'GET /features/log'            => '"log_entries"',
     'GET /features/retry'          => '"result"',
@@ -96,10 +97,23 @@ $adapter->bootstrap();
 foreach ($expect as $req => $needle) {
     [$method, $uri] = explode(' ', $req, 2);
     try {
-        $body = $adapter->dispatch($method, $uri);
+        $body   = $adapter->dispatch($method, $uri);
+        $status = $adapter->lastStatus();
         $adapter->cleanup();
     } catch (\Throwable $e) {
         echo "  [FAIL] {$req} — threw: " . $e->getMessage() . "\n";
+        $failures++;
+        continue;
+    }
+
+    // Every endpoint verified here is a success path, so a non-2xx means the
+    // framework answered with an error page. Checked explicitly because the
+    // substring test below is not enough: the body of an error page often
+    // contains the very key it was asked about (a JSON error payload carrying
+    // "listener_log": [] passed parity for months).
+    if ($status < 200 || $status >= 300) {
+        echo "  [FAIL] {$req} — HTTP {$status}, expected 2xx\n";
+        echo "         got: " . substr($body, 0, 200) . "\n";
         $failures++;
         continue;
     }
@@ -109,6 +123,18 @@ foreach ($expect as $req => $needle) {
         echo "         got: " . substr($body, 0, 200) . "\n";
         $failures++;
         continue;
+    }
+
+    // An empty collection is a missing implementation, not a passing demo: this
+    // is the shape the Laravel event listener was absent in.
+    if (str_contains($needle, 'log') || str_contains($needle, 'events')) {
+        $emptyKey = '"' . trim($needle, '"') . '":[]';
+        if (str_contains($body, $emptyKey)) {
+            echo "  [FAIL] {$req} — '{$needle}' is present but EMPTY\n";
+            echo "         got: " . substr($body, 0, 200) . "\n";
+            $failures++;
+            continue;
+        }
     }
 
     echo "  [ OK ] {$req}\n";

@@ -70,6 +70,7 @@ require $benchRoot . '/vendor/autoload.php';
 require $benchRoot . '/WebAppAdapter.php';
 require $benchRoot . '/adapters/BenchmarkAutoloader.php';
 require $benchRoot . '/boot-probe.php';
+require $benchRoot . '/response-guard.php';
 
 $adapter = createAdapter($benchApp);
 
@@ -118,14 +119,17 @@ return static function (Volucer\Request $request) use ($adapter, $bootHeap): Vol
         memory_reset_peak_usage();
     }
 
-    $body = $adapter->dispatch($request->method, $uri);
+    $body   = $adapter->dispatch($request->method, $uri);
+    // Read the status BEFORE cleanup(): cleanup() is free to reset per-request
+    // state, and the status belongs to the request that just finished.
+    $status = benchStatus($body, $adapter->lastStatus());
     // Per-request teardown, the resident-worker contract: without it the
     // request-scoped heap and any service resolved from AppContext survive into
     // the next request.
     $adapter->cleanup();
 
     $response = new Volucer\Response(
-        str_starts_with($body, '500 ') ? 500 : 200,
+        $status,
         [['Content-Type', 'text/html; charset=utf-8']],
         $body,
     );
