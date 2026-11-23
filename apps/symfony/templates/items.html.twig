@@ -3,10 +3,7 @@
 {% block title %}Items{% endblock %}
 
 {% block content %}
-<header>
-    <h1>{{ 'Items'|upper }}</h1>
-    <p>Showing {{ items|length }} items.</p>
-</header>
+{% include 'partials/header.html.twig' %}
 
 <table>
 <thead>

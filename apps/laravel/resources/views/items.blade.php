@@ -3,10 +3,7 @@
 @section('title', 'Items')
 
 @section('content')
-<header>
-    <h1>{{ strtoupper('Items') }}</h1>
-    <p>Showing {{ count($items) }} items.</p>
-</header>
+@include('partials.header')
 
 <table>
 <thead>

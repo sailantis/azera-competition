@@ -7,10 +7,7 @@
  * @var array{currentPage: int, lastPage: int, previousPage: int, nextPage: int, totalItems: int, firstItem: int, lastItem: int, hasPrevious: bool, hasNext: bool} $pagination
  */
 ?>
-<header>
-    <h1><?= h(strtoupper($title)) ?></h1>
-    <p>Showing <?= count($items) ?> items.</p>
-</header>
+<?= $this->element('header') ?>
 
 <table>
 <thead>

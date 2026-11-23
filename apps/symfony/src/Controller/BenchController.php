@@ -86,6 +86,7 @@ class BenchController extends AbstractController
         $items     = \iterator_to_array($paginator);
 
         return $this->render('items.html.twig', \array_merge(self::viewGlobals(), [
+            'title'      => 'Items',
             'baseUrl'    => '/items',
             'items'      => $items,
             'pagination' => self::pagination($page, $total),
@@ -139,6 +140,7 @@ class BenchController extends AbstractController
         $items = $qb->getQuery()->getArrayResult();
 
         return $this->render('items.html.twig', \array_merge(self::viewGlobals(), [
+            'title'      => 'Items',
             'baseUrl'    => '/items-fast',
             'items'      => $items,
             'pagination' => self::pagination($page, $total),
@@ -218,6 +220,7 @@ class BenchController extends AbstractController
         $items = \array_map(static fn(array $row): object => (object) $row, $rows);
 
         return $this->render('items.html.twig', \array_merge(self::viewGlobals(), [
+            'title'      => 'Items',
             'baseUrl'    => '/items-qb',
             'items'      => $items,
             'pagination' => self::pagination($page, $total),

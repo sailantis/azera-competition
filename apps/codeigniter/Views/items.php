@@ -1,10 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<header>
-    <h1><?= esc(strtoupper($title)) ?></h1>
-    <p>Showing <?= count($items) ?> items.</p>
-</header>
+<?= $this->include('partials/header') ?>
 
 <table>
 <thead>

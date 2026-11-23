@@ -37,7 +37,5 @@
     </tbody>
     </table>
 
-    <footer>
-        <p class="meta">ID #{{ $item->id }} — created {{ $item->created_at }}</p>
-    </footer>
+    <use:element path="partials/item_footer"/>
 </block:content>

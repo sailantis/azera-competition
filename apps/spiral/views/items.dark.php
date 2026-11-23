@@ -3,10 +3,7 @@
 <block:title>Items</block:title>
 
 <block:content>
-    <header>
-        <h1>{{ strtoupper('Items') }}</h1>
-        <p>Showing {{ count($items) }} items.</p>
-    </header>
+    <use:element path="partials/header"/>
 
     <table>
     <thead>
