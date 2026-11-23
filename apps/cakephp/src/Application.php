@@ -44,8 +44,28 @@ final class Application extends BaseApplication
 
     public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
     {
-        // Own middleware only (no ErrorHandler — errors become adapter
-        // 500s like the other apps; no Session — nothing needs it).
+        // ErrorHandlerMiddleware FIRST — it must wrap everything below to catch
+        // what they throw. A stock Cake app ships it for the same reason:
+        // without it a route miss leaves Server::run() as a
+        // MissingRouteException, and the adapter could only report the class
+        // name as a 500 body. The exception already carries the right status
+        // (MissingRouteException::$_defaultCode = 404), so Cake renders its own
+        // 404 page and the transport gets a real status.
+        //
+        // `exceptionRenderer` is pinned to WebExceptionRenderer because Cake
+        // chooses by SAPI (`ExceptionTrap::chooseRenderer()`: `PHP_SAPI === 'cli'`
+        // → ConsoleExceptionRenderer). The resident arms are a web app running
+        // inside a CLI process, so the heuristic picked the console renderer,
+        // whose output is a string — which the middleware then republishes as a
+        // hard 500 ("An Internal Server Error Occurred") instead of the 404 the
+        // exception carried. A real FPM request gets the web renderer anyway, so
+        // pinning it makes the two arms agree on the thing being measured.
+        $middlewareQueue->add(new \Cake\Error\Middleware\ErrorHandlerMiddleware([
+            'exceptionRenderer' => \Cake\Error\Renderer\WebExceptionRenderer::class,
+        ]));
+
+        // RoutingMiddleware resolves the request into a controller + action, and
+        // is what invokes the routes() hook (see the routesLoaded guard above).
         $middlewareQueue->add(new \Cake\Routing\Middleware\RoutingMiddleware($this));
 
         return $middlewareQueue;

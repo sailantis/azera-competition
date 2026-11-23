@@ -12,7 +12,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= h($title) ?> — Azera Competition (CakePHP 5)</title>
+    <title><?= h($title ?? 'Error') ?> — Azera Competition (CakePHP 5)</title>
     <style>
         body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
 

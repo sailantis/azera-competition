@@ -14,6 +14,22 @@ use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
 
+// --- 404 handling --------------------------------------------------------
+// CI4's own 404 policy, used instead of letting the exception escape.
+//
+// CodeIgniter::run() catches PageNotFoundException and calls
+// display404errors(), which — when no override is registered — rethrows
+// PageNotFoundException. That rethrow is correct for FPM (the global handler
+// prints the error page) but wrong for this harness: run(null, true) hands the
+// response back to the caller, so the rethrow escaped to the adapter and every
+// missing route and wrong method surfaced as
+// "500 CodeIgniter\Exceptions\PageNotFoundException: ...".
+//
+// Registering the override is CI4's documented way to answer a 404 yourself, and
+// it makes display404errors() return a real 404 response. The method-mismatch
+// case (PageNotFoundException::forMethodNotFound) goes through the same catch.
+$routes->set404Override(static fn(): string => '404 Not Found');
+
 // --- Core benchmark endpoints -------------------------------------------
 $routes->get('/echo', 'Bench::echo');
 $routes->get('/', 'Bench::index');

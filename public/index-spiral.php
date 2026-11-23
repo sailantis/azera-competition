@@ -30,8 +30,6 @@ use Psr\Http\Message\ResponseInterface;
 use Spiral\Boot\Environment;
 use Spiral\Core\Container;
 use Spiral\Core\Scope;
-use Spiral\Router\Exception\RouteNotFoundException;
-use Spiral\Router\RouterInterface;
 
 // Boot probe: the clock MUST start before any framework code loads.
 require_once __DIR__ . '/../boot-probe.php';
@@ -63,6 +61,49 @@ spl_autoload_register(function (string $class): void {
 });
 
 $root = dirname(__DIR__) . '/';
+
+// Drop Stempler's compiled views when they were built from ANOTHER checkout.
+// Stempler records the absolute source path inside each compiled template, so a
+// moved/copied repo keeps pointing at the old one and every HTML route dies with
+// FileNotFoundException for a file that exists right here. Mirrors the guard in
+// SpiralAdapter::clearForeignViewCache() — see that docblock for the details.
+(function (string $root): void {
+    $dir = $root . 'runtime/cache/views';
+    if (!is_dir($dir)) {
+        return;
+    }
+
+    $current = str_replace('\\', '/', (string) realpath($root));
+
+    $it = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+    );
+    foreach ($it as $file) {
+        if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+            continue;
+        }
+
+        $src = (string) file_get_contents($file->getPathname());
+        if (preg_match_all("#(['\"])([^'\"]+\.dark\.php)\\1#", $src, $m) === false) {
+            continue;
+        }
+
+        foreach ($m[2] as $path) {
+            if (!str_starts_with(str_replace('\\', '/', $path), $current)) {
+                $files = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+                    RecursiveIteratorIterator::CHILD_FIRST,
+                );
+                foreach ($files as $f) {
+                    $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
+                }
+                @rmdir($dir);
+
+                return;
+            }
+        }
+    }
+})($root);
 
 if (!file_exists($root . 'data/bench.sqlite')) {
     http_response_code(500);
@@ -105,27 +146,23 @@ if (!$container instanceof Container) {
     exit;
 }
 
-// --- Dispatch the real HTTP request through the router ---------------------
+// --- Dispatch the real HTTP request through the framework's dispatcher ------
 $request = ServerRequestFactory::fromGlobals();
 
 try {
-    // Same dispatch path as SpiralAdapter: route handling inside the `http`
-    // scope (where CurrentRequest / request bindings live).
+    // Spiral\Http\Http, not RouterInterface::handle().
+    //
+    // The router alone skips the middleware pipeline, the CurrentRequest binding
+    // and ErrorHandlerMiddleware, so a route miss escaped as an exception and this
+    // file had to hand-roll a 404 page. Http::handle() is what Spiral's own
+    // workers call; the adapter makes the same call, which keeps the FPM arm and
+    // the resident arm on one code path.
     $response = $container->runScope(
-        new Scope(name: 'http'),
+        new Scope(name: Spiral\Framework\Spiral::Http->value),
         static function (Container $c) use ($request): ResponseInterface {
-            return $c->get(RouterInterface::class)->handle($request);
+            return $c->get(\Spiral\Http\Http::class)->handle($request);
         },
     );
-} catch (RouteNotFoundException) {
-    http_response_code(404);
-    header('Content-Type: text/html; charset=utf-8');
-    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-    $path   = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-    echo '<h1>404 Not Found</h1>';
-    echo "<p>No route matched: {$method} {$path}</p>";
-    echo '<p><a href="/">Go home</a></p>';
-    exit;
 } catch (Throwable $e) {
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');

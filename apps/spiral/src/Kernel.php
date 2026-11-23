@@ -20,6 +20,7 @@ namespace App\Spiral;
 
 use Spiral\Boot\Bootloader\CoreBootloader;
 use Spiral\Bootloader\Http\HttpBootloader;
+use Spiral\Bootloader\Http\ErrorHandlerBootloader;
 use Spiral\Bootloader\Http\RouterBootloader;
 use Spiral\Cache\Bootloader\CacheBootloader;
 use Spiral\Cycle\Bootloader\AnnotatedBootloader;
@@ -74,6 +75,12 @@ final class Kernel extends \Spiral\Framework\Kernel
 
             // HTTP + routing
             HttpBootloader::class,
+            // Turns a routing miss / client error into an HTTP response instead
+            // of letting it escape as an exception. Without it every 404 left
+            // the framework as RouteNotFoundException, which the transport could
+            // only report as a 500 — so the app had no working 404 at all, and
+            // the entry script had to hand-roll one with `catch`.
+            ErrorHandlerBootloader::class,
             RouterBootloader::class,
         ];
     }

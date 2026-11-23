@@ -23,9 +23,20 @@ use Spiral\Router\Loader\Configurator\RoutingConfigurator;
 
 final class AppRoutesBootloader extends RoutesBootloader
 {
+    /**
+     * Global middleware, i.e. what every request passes through.
+     *
+     * ErrorHandlerMiddleware turns a routing miss or client error into an HTTP
+     * response. ErrorHandlerBootloader (see Kernel.php) only binds the renderer
+     * and the "suppress errors" policy — the middleware itself is added here,
+     * which is why loading the bootloader alone still let RouteNotFoundException
+     * escape as a 500. A stock Spiral skeleton lists it in this method.
+     */
     protected function globalMiddleware(): array
     {
-        return [];
+        return [
+            \Spiral\Http\Middleware\ErrorHandlerMiddleware::class,
+        ];
     }
 
     protected function middlewareGroups(): array
