@@ -90,6 +90,36 @@ final class FeatureController extends AppController
     }
 
     /**
+     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     *
+     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     */
+    public function aopDirect(): \Cake\Http\Response
+    {
+        $connection = Db::connection();
+        $now        = date('Y-m-d H:i:s');
+        $rand       = random_int(1000, 9999);
+
+        $connection->begin();
+        $connection->insertQuery('items', [
+            'id'         => self::FEATURE_SENTINEL_ID,
+            'title'      => 'AOP Item ' . $now . ' #' . $rand,
+            'created_at' => $now,
+        ])
+            ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at')
+            ->execute();
+        $connection->commit();
+
+        return $this->json([
+            'feature'     => 'Direct transaction (no pipeline)',
+            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'new_id'      => self::FEATURE_SENTINEL_ID,
+            'title'       => 'AOP Item ' . $now . ' #' . $rand,
+            'log_entries' => [],
+        ]);
+    }
+
+    /**
      * GET /features/cache — cached DB count (array pool, 10s TTL).
      */
     public function cache(): \Cake\Http\Response
@@ -212,7 +242,7 @@ final class FeatureController extends AppController
         // otherwise the count() below would measure ever-growing work.
         $connection->insertQuery('items', [
             'id'         => self::FEATURE_SENTINEL_ID,
-            'title'      => 'DbEvent Item ' . $now,
+            'title'      => 'DbEvent Item ' . $now . ' #' . random_int(1000, 9999),
             'created_at' => $now,
         ])
             ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at')
@@ -234,11 +264,12 @@ final class FeatureController extends AppController
     {
         $connection = Db::connection();
         $now        = date('Y-m-d H:i:s');
+        $title      = 'Event Item ' . $now . ' #' . random_int(1000, 9999);
         // Fixed feature sentinel row (upsert, not a fresh INSERT per
         // request) — the row count must stay stable across benchmark runs.
         $connection->insertQuery('items', [
             'id'         => self::EVENT_SENTINEL_ID,
-            'title'      => 'Event Item ' . $now,
+            'title'      => $title,
             'created_at' => $now,
         ])
             ->epilog('ON CONFLICT (id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at')
@@ -252,7 +283,7 @@ final class FeatureController extends AppController
                 . ' title=' . $event->getData('title');
         });
 
-        $events->dispatch(new Event('item.created', null, ['id' => $id, 'title' => 'Event Item ' . $now]));
+        $events->dispatch(new Event('item.created', null, ['id' => $id, 'title' => $title]));
 
         return $this->json([
             'feature'      => 'Cake EventManager',

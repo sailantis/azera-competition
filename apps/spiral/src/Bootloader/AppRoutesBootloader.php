@@ -201,6 +201,9 @@ final class AppRoutesBootloader extends RoutesBootloader
         $routes->add('feature:aop', '/features/aop')
             ->action(FeatureController::class, 'aop')
             ->methods('GET');
+        $routes->add('feature:aop-direct', '/features/aop-direct')
+            ->action(FeatureController::class, 'aopDirect')
+            ->methods('GET');
         $routes->add('feature:cache', '/features/cache')
             ->action(FeatureController::class, 'cache')
             ->methods('GET');

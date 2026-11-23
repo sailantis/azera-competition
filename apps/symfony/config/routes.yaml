@@ -100,6 +100,10 @@ feature_aop:
     path: /features/aop
     controller: App\Symfony\Controller\FeatureController::aop
     methods: GET
+feature_aop_direct:
+    path: /features/aop-direct
+    controller: App\Symfony\Controller\FeatureController::aopDirect
+    methods: GET
 feature_cache:
     path: /features/cache
     controller: App\Symfony\Controller\FeatureController::cache

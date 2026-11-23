@@ -87,6 +87,50 @@ class FeatureService
     }
 
     /**
+     * Create an item inside a transaction, WITHOUT advice — the direct twin of
+     * {@see createItemTransactional()}.
+     *
+     * This exists so `GET /features/aop-direct` can run the SAME work as
+     * `GET /features/aop` through hand-written `begin`/`commit` instead of the
+     * generated `#[Transactional]` proxy. It is the only same-work
+     * transparent-vs-direct pair in the suite, and therefore the only way to
+     * price the abstraction instead of comparing two different workloads.
+     *
+     * Identical in every respect to the advised method — same upsert, same
+     * sentinel id, same `ItemCreated` dispatch and listener — because any
+     * difference here would be measured as though it were proxy cost.
+     */
+    public function createItemDirect(string $title): int
+    {
+        $db = $this->ctx->dbManager()->getOrDefault('default');
+
+        // Same calls the #[Transactional] interceptor makes (see
+        // Azera\Aop\TransactionalInterceptor): begin(true) — savepoint-aware —
+        // then commit/rollback. Using a different transaction API here would
+        // make the pair measure the API rather than the interception.
+        $db->begin(true);
+
+        try {
+            $db->query(
+                'INSERT INTO items (id, title, created_at) VALUES (?, ?, ?)'
+                    . ' ON CONFLICT(id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at',
+                [self::FEATURE_SENTINEL_ID, $title, date('Y-m-d H:i:s')],
+            );
+            $id = self::FEATURE_SENTINEL_ID;
+
+            $this->ctx->events()->dispatch(new \App\Azera\Events\ItemCreated($id, $title));
+
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollback();
+
+            throw $e;
+        }
+
+        return $id;
+    }
+
+    /**
      * Count items WITHOUT the #[Cache] interceptor — the plain query path.
      *
      * Used by the Db Events demo, which must exercise a real query (and its

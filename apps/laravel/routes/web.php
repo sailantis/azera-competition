@@ -32,6 +32,7 @@ Route::post('/items-qb', [BenchController::class, 'createQb']);
 // --- Feature demos ----------------------------------------------------------
 Route::get('/features', [FeatureController::class, 'index']);
 Route::get('/features/aop', [FeatureController::class, 'aop']);
+Route::get('/features/aop-direct', [FeatureController::class, 'aopDirect']);
 Route::get('/features/cache', [FeatureController::class, 'cache']);
 Route::get('/features/log', [FeatureController::class, 'log']);
 Route::get('/features/retry', [FeatureController::class, 'retry']);

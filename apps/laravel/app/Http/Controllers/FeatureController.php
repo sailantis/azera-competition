@@ -88,6 +88,25 @@ class FeatureController
     }
 
     /**
+     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     *
+     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     */
+    public function aopDirect(): JsonResponse
+    {
+        $title = 'AOP Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
+        $id    = $this->aopService->createItemDirect($title);
+
+        return response()->json([
+            'feature'     => 'Direct transaction (no pipeline)',
+            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'new_id'      => $id,
+            'title'       => $title,
+            'log_entries' => [],
+        ]);
+    }
+
+    /**
      * GET /features/cache — demonstrate Laravel's Cache repository.
      */
     public function cache(): JsonResponse
@@ -191,7 +210,7 @@ class FeatureController
      */
     public function events(): JsonResponse
     {
-        $title = 'Event Item ' . \date('Y-m-d H:i:s');
+        $title = 'Event Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
         // Fixed feature sentinel row (upsert, not a fresh INSERT per
         // request) — the row count must stay stable across benchmark runs.
         DB::table('items')->upsert(
@@ -283,7 +302,7 @@ class FeatureController
         $this->dbLog->clear();
 
         // Run a couple of queries + a transaction so the query events fire.
-        [$id] = $this->aopService->createItem('DbEvent Item ' . \date('Y-m-d H:i:s'));
+        [$id] = $this->aopService->createItem('DbEvent Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999));
         $count = Item::query()->count();
 
         return response()->json([

@@ -100,6 +100,32 @@ final class Feature extends BaseController
     }
 
     /**
+     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     *
+     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     */
+    public function aopDirect(): \CodeIgniter\HTTP\ResponseInterface|string
+    {
+        $db   = \Config\Database::connect();
+        $now  = date('Y-m-d H:i:s');
+        $rand = random_int(1000, 9999);
+
+        $db->table('items')->upsert([
+            'id'         => self::FEATURE_SENTINEL_ID,
+            'title'      => 'AOP Item ' . $now . ' #' . $rand,
+            'created_at' => $now,
+        ]);
+
+        return $this->response->setJSON([
+            'feature'     => 'Direct transaction (no pipeline)',
+            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'new_id'      => self::FEATURE_SENTINEL_ID,
+            'title'       => 'AOP Item ' . $now . ' #' . $rand,
+            'log_entries' => [],
+        ]);
+    }
+
+    /**
      * GET /features/cache — cached DB count (array handler, 10s TTL).
      */
     public function cache(): \CodeIgniter\HTTP\ResponseInterface|string
@@ -221,7 +247,7 @@ final class Feature extends BaseController
         // otherwise the countAll() below would measure ever-growing work.
         $db->table('items')->upsert([
             'id'         => self::FEATURE_SENTINEL_ID,
-            'title'      => 'DbEvent Item ' . $now,
+            'title'      => 'DbEvent Item ' . $now . ' #' . random_int(1000, 9999),
             'created_at' => $now,
         ]);
         $count = (new \Ci4App\Models\Item())->countAll();
@@ -238,20 +264,21 @@ final class Feature extends BaseController
      */
     public function events(): \CodeIgniter\HTTP\ResponseInterface|string
     {
-        $db  = \Config\Database::connect();
-        $now = date('Y-m-d H:i:s');
+        $db    = \Config\Database::connect();
+        $now   = date('Y-m-d H:i:s');
+        $title = 'Event Item ' . $now . ' #' . random_int(1000, 9999);
         // Fixed feature sentinel row (upsert, not a fresh INSERT per
         // request) — the row count must stay stable across benchmark runs.
         $db->table('items')->upsert([
             'id'         => self::EVENT_SENTINEL_ID,
-            'title'      => 'Event Item ' . $now,
+            'title'      => $title,
             'created_at' => $now,
         ]);
         $id = self::EVENT_SENTINEL_ID;
 
         $receiver = new EventsReceiver();
         \CodeIgniter\Events\Events::on('item.created', $receiver);
-        \CodeIgniter\Events\Events::trigger('item.created', $id, 'Event Item ' . $now);
+        \CodeIgniter\Events\Events::trigger('item.created', $id, $title);
         // CI4 Events is a process-global static registry — in worker mode the
         // listener must be deregistered or it accumulates one closure per
         // request (memory leak across benchmark iterations).

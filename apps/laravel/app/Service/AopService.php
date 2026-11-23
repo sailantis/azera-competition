@@ -58,6 +58,30 @@ final class AopService
     }
 
     /**
+     * Create the same item with the transaction written by hand — the direct
+     * twin of {@see createItem()}.
+     *
+     * `/features/aop` wraps this write in a retry pipeline; this runs the
+     * identical upsert with no interceptor at all. The two together are a
+     * same-work pair, so the difference is the pipeline's cost rather than the
+     * cost of two different demonstrations.
+     */
+    public function createItemDirect(string $title): int
+    {
+        \app('db')->table('items')->upsert(
+            [
+                'id'         => self::FEATURE_SENTINEL_ID,
+                'title'      => $title,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ],
+            ['id'],
+            ['title', 'created_at'],
+        );
+
+        return self::FEATURE_SENTINEL_ID;
+    }
+
+    /**
      * Wrap a plain callable with LogInterceptor via the pipeline.
      */
     public function loggedCall(callable $fn): mixed

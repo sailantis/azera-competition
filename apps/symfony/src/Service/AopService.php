@@ -68,6 +68,29 @@ final class AopService
     }
 
     /**
+     * Create the same item with no interceptor pipeline — the direct twin of
+     * {@see createItem()}.
+     *
+     * Same upsert, same connection, no retry interceptor. The pair exists so the
+     * pipeline's cost can be measured on identical work.
+     */
+    public function createItemDirect(string $title): int
+    {
+        $this->connection->executeStatement(
+            'INSERT INTO items (id, title, created_at) VALUES (:id, :title, :created_at)'
+                . ' ON CONFLICT(id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at',
+            [
+                'id'         => self::FEATURE_SENTINEL_ID,
+                'title'      => $title,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ],
+            ['id' => ParameterType::INTEGER],
+        );
+
+        return self::FEATURE_SENTINEL_ID;
+    }
+
+    /**
      * Wrap a plain callable with LogInterceptor via the pipeline.
      */
     public function loggedCall(callable $fn): mixed

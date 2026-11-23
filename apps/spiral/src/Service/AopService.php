@@ -57,6 +57,28 @@ final class AopService
     }
 
     /**
+     * Create the same item with no interceptor pipeline — the direct twin of
+     * {@see createItem()}.
+     *
+     * Same insert, same connection, no `PipelineBuilder`. The pair exists so the
+     * pipeline's cost can be measured on identical work.
+     */
+    public function createItemDirect(string $title): int
+    {
+        \spiral(\Cycle\Database\DatabaseInterface::class)
+            ->insert('items')
+            ->values([
+                'id'         => self::FEATURE_SENTINEL_ID,
+                'title'      => $title,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ])
+            ->onConflict('id')
+            ->run();
+
+        return self::FEATURE_SENTINEL_ID;
+    }
+
+    /**
      * Wrap a plain callable with LogInterceptor via the pipeline builder.
      */
     public function loggedCall(callable $fn): mixed

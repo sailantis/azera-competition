@@ -88,6 +88,25 @@ class FeatureController extends AbstractController
     }
 
     /**
+     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     *
+     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     */
+    public function aopDirect(): JsonResponse
+    {
+        $title = 'AOP Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
+        $id    = $this->aopService->createItemDirect($title);
+
+        return $this->json([
+            'feature'     => 'Direct transaction (no pipeline)',
+            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'new_id'      => $id,
+            'title'       => $title,
+            'log_entries' => [],
+        ]);
+    }
+
+    /**
      * GET /features/cache — demonstrate Symfony's PSR-6 cache.
      */
     public function cache(): JsonResponse
@@ -200,7 +219,7 @@ class FeatureController extends AbstractController
      */
     public function events(): JsonResponse
     {
-        $title = 'Event Item ' . \date('Y-m-d H:i:s');
+        $title = 'Event Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
         // Fixed feature sentinel row (upsert, not a fresh INSERT per
         // request) — the row count must stay stable across benchmark runs.
         // A high id far above the seeded 1..N rows and the 999997-999999
@@ -307,7 +326,7 @@ class FeatureController extends AbstractController
         // logger fires. Upsert (not a fresh INSERT per request) — the row
         // count must stay stable across benchmark runs, otherwise the
         // COUNT below would measure ever-growing work.
-        [$id] = $this->aopService->createItem('DbEvent Item ' . \date('Y-m-d H:i:s'));
+        [$id] = $this->aopService->createItem('DbEvent Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999));
         $count = (int) $this->em->createQueryBuilder()
             ->select('COUNT(i.id)')
             ->from(Item::class, 'i')

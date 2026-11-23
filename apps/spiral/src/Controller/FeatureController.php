@@ -99,6 +99,25 @@ class FeatureController
     }
 
     /**
+     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     *
+     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     */
+    public function aopDirect(): Response
+    {
+        $title = 'AOP Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
+        $id    = $this->aopService->createItemDirect($title);
+
+        return $this->response->json([
+            'feature'     => 'Direct transaction (no pipeline)',
+            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'new_id'      => $id,
+            'title'       => $title,
+            'log_entries' => [],
+        ]);
+    }
+
+    /**
      * GET /features/cache — demonstrate Spiral's PSR-16 cache.
      */
     public function cache(): Response
@@ -208,7 +227,7 @@ class FeatureController
      */
     public function events(): Response
     {
-        $title = 'Event Item ' . \date('Y-m-d H:i:s');
+        $title = 'Event Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
         // Fixed feature sentinel row (upsert, not a fresh INSERT per
         // request) — the row count must stay stable across benchmark runs.
         $this->db->insert('items')
@@ -301,7 +320,7 @@ class FeatureController
         $log->clear();
 
         // Run a couple of queries + a transaction so the DBAL logger fires.
-        [$id] = $aopService->createItem('DbEvent Item ' . \date('Y-m-d H:i:s'));
+        [$id] = $aopService->createItem('DbEvent Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999));
         $count = (new Select($this->orm, Item::class))->count();
 
         return $this->response->json([
