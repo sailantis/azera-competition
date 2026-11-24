@@ -6475,7 +6475,7 @@
             "dist": {
                 "type": "path",
                 "url": "../azera-framework",
-                "reference": "27d7cfc4767a3654b4c7e10582a925c2ac59fdaf"
+                "reference": "435b36bacdc0b01a4aa3ab984cc3d04f3dfee301"
             },
             "require": {
                 "ext-mbstring": "*",
@@ -6484,7 +6484,7 @@
                 "psr/event-dispatcher": "^1.0",
                 "psr/log": "^3.0",
                 "psr/simple-cache": "^3.0",
-                "sailantis/clarity-engine": "dev-main || ^0.4"
+                "sailantis/clarity-engine": "dev-main || ^0.6"
             },
             "require-dev": {
                 "illuminate/view": "^10.49",
@@ -6556,7 +6556,7 @@
             "dist": {
                 "type": "path",
                 "url": "../clarity-engine",
-                "reference": "c5e2ffa29ed5f2d0c5d69ae99d68316a5237a27d"
+                "reference": "46da0d6ff8f207fc501c65d5aed5d8c54c720c00"
             },
             "require": {
                 "ext-mbstring": "*",
