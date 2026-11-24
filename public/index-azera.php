@@ -20,6 +20,7 @@
 // Boot probe: the clock MUST start as the first statement so the measurement
 // covers "PHP start → framework ready" (see boot-probe.php).
 require_once __DIR__ . '/../boot-probe.php';
+require_once __DIR__ . '/../bench-view-globals.php';
 boot_probe_start();
 
 require __DIR__ . '/../vendor/autoload.php';

@@ -19,6 +19,7 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
+require_once __DIR__ . '/bench-view-globals.php';
 require_once __DIR__ . '/scripts/report/BenchmarkConfig.php';
 require_once __DIR__ . '/scripts/version-lib.php';
 

@@ -60,14 +60,17 @@ class AppServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../../config/database.php', 'database');
         $this->mergeConfigFrom(__DIR__ . '/../../config/view.php', 'view');
 
-        // View globals — locale + platform stamped into EVERY template render
-        // (the layout footer renders them unconditionally). Mirrors azera's
-        // RequestContextMiddleware, which reads Accept-Language + User-Agent
-        // and stamps the detected values into the view engine. The benchmark
-        // adapter dispatches synthetic requests with fixed headers, so the
-        // values are the same deterministic defaults azera and Spiral render.
-        View::share('locale', 'en_US');
-        View::share('platform', 'desktop');
+        // View globals — locale + platform for the layout footer, resolved by the
+        // SAME parser every other entrant runs (`bench-view-globals.php`).
+        //
+        // These used to be two literal constants shared at boot, which meant the
+        // footer asserted a locale and platform Laravel had never resolved while
+        // Azera parsed headers to produce the identical values. One entrant doing the
+        // work and the rest asserting the result is a comparison between different
+        // work; running one parser in all seven removes the difference.
+        $globals = benchViewGlobalsFromGlobals();
+        View::share('locale', $globals['locale']);
+        View::share('platform', $globals['platform']);
 
         // ItemCreated fan-out for /features/events.
         //

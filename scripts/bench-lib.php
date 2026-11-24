@@ -142,6 +142,128 @@ function assertUniformBudget(array $budgets): array
     ];
 }
 
+// --- Floor sanity -------------------------------------------------------------
+
+/**
+ * A row measured on a server cannot be faster than the SAME server with no
+ * framework behind it.
+ *
+ * WHY THIS EXISTS. The 2026-11-23 dataset published Phalcon's `volucer-attach`
+ * `GET /echo` at 0.1494 ms against a `floor-volucer-attach` probe of 0.1734 ms on
+ * the same arm — 13.9% BELOW a route that boots nothing at all. That is not a fast
+ * framework, it is a probe that describes a different server than the rows it is
+ * held against: the floors in that dataset were added afterwards by a
+ * `--quick` floors-only pass at 100x3 and grafted in by merge-floors.php, which
+ * checked nothing. The row was then read as the framework comparison it had the
+ * shape of, and `/echo` looked like a Phalcon win over Azera when the in-process
+ * A/B on the same VM has Azera's whole request layer ~1.06 us FASTER there.
+ *
+ * The measurement is a difference of two random variables, so a row a little below
+ * the floor is ordinary sampling error and must not fail. $tolerance is the share
+ * of the floor a row may sit below before the pair is treated as inconsistent.
+ *
+ * It defaults to 8%, and that number is CALIBRATED, not chosen to make a dataset
+ * pass. Two volucer-attach `/echo` runs of the same code on the bench VM, one in
+ * each block order, differed by 3.0% (Azera 0.1687 vs 0.1737) and 5.0% (Phalcon
+ * 0.1668 vs 0.1751) — so the FLOOR and a ROW, which come from different runs, can
+ * legitimately differ by about 5%. A 5% threshold sat inside that drift and flagged
+ * honest rows. 8% clears the measured drift and still catches the case that
+ * motivated this check, which was 13.9% under. A caller with a noisier server can
+ * widen it; narrowing it below the measured drift produces false failures.
+ *
+ * Modes with no floor, and floors missing a `GET /` row, are SKIPPED rather than
+ * failed: "no reference point" is not "inconsistent", and FloorCoverageTest is what
+ * asserts that a floor exists at all.
+ *
+ * @param array $dataset A real-deployment dataset (apps[] + floors[]).
+ * @param float $tolerance Fraction of the floor a row may sit below (0.08 = 8%).
+ * @return array{ok:bool, checked:int, violations:list<array{app:string,mode:string,request:string,row:float,floor:float,deficit_pct:float}>}
+ */
+function assertRowsNotBelowFloor(array $dataset, float $tolerance = 0.08): array
+{
+    // The floor of a mode is its `GET /` probe: the same request shape as the
+    // template rows (routing + a body), so it is a fair reference for every row on
+    // that server, and it is the row the report's floor note already quotes.
+    $floorByMode = [];
+    foreach (($dataset['floors'] ?? []) as $floor) {
+        foreach (($floor['modes'] ?? []) as $mode => $m) {
+            if (!is_array($m)) {
+                continue;
+            }
+            foreach (($m['requests'] ?? []) as $row) {
+                if (($row['request'] ?? null) === 'GET /' && is_numeric($row['trimmed_mean_ms'] ?? null)) {
+                    $floorByMode[$mode] = (float) $row['trimmed_mean_ms'];
+                }
+            }
+        }
+    }
+
+    $violations = [];
+    $checked    = 0;
+
+    foreach (($dataset['apps'] ?? []) as $app) {
+        foreach (($app['modes'] ?? []) as $mode => $m) {
+            if (!is_array($m) || !isset($floorByMode[$mode]) || $floorByMode[$mode] <= 0.0) {
+                continue;
+            }
+            $floor = $floorByMode[$mode];
+            foreach (($m['requests'] ?? []) as $row) {
+                if (!is_numeric($row['trimmed_mean_ms'] ?? null)) {
+                    continue;
+                }
+                $checked++;
+                $value   = (float) $row['trimmed_mean_ms'];
+                $deficit = ($floor - $value) / $floor;
+                if ($deficit > $tolerance) {
+                    $violations[] = [
+                        'app'         => (string) ($app['app'] ?? '?'),
+                        'mode'        => (string) $mode,
+                        'request'     => (string) ($row['request'] ?? '?'),
+                        'row'         => $value,
+                        'floor'       => $floor,
+                        'deficit_pct' => $deficit * 100.0,
+                    ];
+                }
+            }
+        }
+    }
+
+    usort($violations, static fn(array $a, array $b): int => $b['deficit_pct'] <=> $a['deficit_pct']);
+
+    return ['ok' => $violations === [], 'checked' => $checked, 'violations' => $violations];
+}
+
+/**
+ * The message an operator needs when assertRowsNotBelowFloor() rejects a dataset.
+ *
+ * Kept beside the check so every writer reports the same shape, and spelled out
+ * because the violation is counter-intuitive: the failing rows look FAST. The
+ * likely causes are a floor probed on a different arm (a `--quick` run grafted into
+ * a 1000x10 dataset) or a row whose boot is amortised differently than its floor's.
+ *
+ * @param array{ok:bool, checked:int, violations:list<array<string,mixed>>} $result
+ */
+function describeFloorViolations(array $result): string
+{
+    $lines = [];
+    foreach ($result['violations'] as $v) {
+        $lines[] = sprintf(
+            '    %-12s %-16s %-28s %8.4f ms vs floor %8.4f ms  (%+.1f%%)',
+            $v['app'],
+            $v['mode'],
+            $v['request'],
+            $v['row'],
+            $v['floor'],
+            -$v['deficit_pct'],
+        );
+    }
+
+    return "Rows faster than their own server's framework-free floor:\n"
+        . implode("\n", $lines) . "\n"
+        . "A row cannot beat a request that boots nothing. Re-probe the floor on the same\n"
+        . "arm with the same iterations/runs as the rows it is held against.";
+}
+
 // --- Request parsing ----------------------------------------------------------
 
 /**

@@ -6,6 +6,10 @@ namespace AzeraCompetition\Tests;
 
 use PHPUnit\Framework\TestCase;
 
+// The shared locale/platform resolver, so this test renders the layout the way the
+// app does. Tests are not autoloaded through the harness, so the require is explicit.
+require_once dirname(__DIR__) . '/bench-view-globals.php';
+
 /**
  * The Phalcon templates must use VOLT syntax, not raw PHP.
  *
@@ -320,6 +324,14 @@ final class PhalconVoltTemplateTest extends TestCase
         $view->setViewsDir(self::viewsDir() . '/');
         $view->setLayoutsDir('layouts/');
         $view->setLayout('main');
+        // The app sets these when it builds the view (Bootstrap::boot()), because the
+        // layout footer renders them; handle() then overwrites them per request from
+        // the shared resolver. Rendering the layout without them warns "Undefined
+        // variable" inside the page, so this mirrors the app rather than pretending
+        // the layout stands alone.
+        foreach (benchViewGlobals(null, null) as $key => $value) {
+            $view->setVar($key, $value);
+        }
 
         $volt = new \Phalcon\Mvc\View\Engine\Volt($view, $di);
         $volt->setOptions(['path' => $cache . '/', 'compileAlways' => false]);

@@ -60,6 +60,20 @@
     </nav>
 
     {% block content %}{% endblock %}
+
+    {#
+     * The footer every other entrant renders. Symfony's `viewGlobals()` produced
+     * `locale` and `platform` but no template ever read them, so this app was the
+     * mirror image of Phalcon's fault: Phalcon printed a footer with nothing to put
+     * in it, Symfony had the values and printed nothing. Both now agree with the
+     * other five, and the values come from the shared resolver in
+     * `bench-view-globals.php`.
+     #}
+    <footer class="meta">
+        Rendered with Twig — Azera Competition Benchmark
+        {% if locale is defined and locale %}| Locale: {{ locale }}{% endif %}
+        {% if platform is defined and platform %}| Platform: {{ platform }}{% endif %}
+    </footer>
 </body>
 
 </html>

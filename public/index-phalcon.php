@@ -21,6 +21,7 @@
 
 require_once __DIR__ . '/../boot-probe.php';
 require_once __DIR__ . '/../response-guard.php';
+require_once __DIR__ . '/../bench-view-globals.php';
 boot_probe_start();
 
 require __DIR__ . '/../vendor/autoload.php';

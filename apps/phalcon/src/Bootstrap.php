@@ -235,6 +235,21 @@ final class Bootstrap
         $view->setLayoutsDir('layouts/');
         $view->setLayout('main');
 
+        // The layout footer reads `locale` and `platform`, so a DEFAULT pair is set
+        // when the view is built — the same values `benchViewGlobals(null, null)`
+        // answers. `handle()` overwrites them per request from the shared parser
+        // (see there), which is what a real request gets.
+        //
+        // This is not belt-and-braces: the Volt template tests render this layout
+        // directly, with no request in scope, and an unset variable makes Volt emit
+        // "Undefined variable" into the rendered page. Declaring the default in one
+        // place — the view's own construction — keeps the layout renderable on its
+        // own, which is what the tests assert, while leaving the per-request value to
+        // the resolver.
+        foreach (benchViewGlobals(null, null) as $key => $value) {
+            $view->setVar($key, $value);
+        }
+
         $volt = new Volt($view, $di);
         $volt->setOptions([
             'path' => dirname(__DIR__) . '/cache/',
@@ -441,6 +456,25 @@ final class Bootstrap
         // inverse of `disable()` and changes nothing else — `reset()` is NOT used
         // because it also clears the registered engines.
         $di->getShared('view')->enable();
+
+        // Locale + platform for the layout footer, resolved by the SAME parser every
+        // other entrant runs (`bench-view-globals.php`) and stamped per request.
+        //
+        // Phalcon is the one entrant with no framework slot for "shared view data":
+        // `Mvc\View` has no `setVars()`/`share()` — `assign()`/`setVar()` are
+        // per-render and are cleared by the render that consumes them — so a request
+        // that renders has to set them itself. Doing it here, in the code path every
+        // request passes, is the equivalent of the middleware the others use, and it
+        // is why this app previously rendered NO footer values at all: the layout
+        // had nothing to read, so the `<footer>` printed only its static half and the
+        // page silently disagreed with the other six.
+        $globals = benchViewGlobals(
+            isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? (string) $_SERVER['HTTP_ACCEPT_LANGUAGE'] : null,
+            isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : null,
+        );
+        $view = $di->getShared('view');
+        $view->setVar('locale', $globals['locale']);
+        $view->setVar('platform', $globals['platform']);
 
         // `Application::handle()` calls `$view->start()` (an `ob_start()`) and then
         // `$view->finish()` (`ob_end_clean()`) only when it took the rendering

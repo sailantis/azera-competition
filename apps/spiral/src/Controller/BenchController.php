@@ -72,7 +72,7 @@ class BenchController
     public function index(): Response
     {
         return $this->response->html(
-            $this->views->render('home', self::viewGlobals()),
+            $this->views->render('home', $this->viewGlobals()),
         );
     }
 
@@ -90,7 +90,7 @@ class BenchController
             ->orderBy('id', 'ASC')
             ->fetchAll();
 
-        $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
+        $html = $this->views->render('items', \array_merge($this->viewGlobals(), [
             'title'      => 'Items',
             'baseUrl'    => '/items',
             'items'      => $rows,
@@ -127,7 +127,7 @@ class BenchController
 
         $items = \array_map(static fn(array $row): object => (object) $row, $rows);
 
-        $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
+        $html = $this->views->render('items', \array_merge($this->viewGlobals(), [
             'title'      => 'Items',
             'baseUrl'    => '/items-fast',
             'items'      => $items,
@@ -152,7 +152,7 @@ class BenchController
         }
 
         return $this->response->html(
-            $this->views->render('item', \array_merge(self::viewGlobals(), ['item' => $item])),
+            $this->views->render('item', \array_merge($this->viewGlobals(), ['item' => $item])),
         );
     }
 
@@ -189,7 +189,7 @@ class BenchController
         $this->em->run();
 
         return $this->response->html(
-            $this->views->render('item', \array_merge(self::viewGlobals(), [
+            $this->views->render('item', \array_merge($this->viewGlobals(), [
                 'item'  => $item,
                 'flash' => 'Item #' . $item->id . ($existed ? ' updated' : ' created') . ' ✓',
             ])),
@@ -219,7 +219,7 @@ class BenchController
         // syntax uniformly (same as showQb and the ORM path).
         $items = \array_map(static fn(array $row): object => (object) $row, $rows);
 
-        $html = $this->views->render('items', \array_merge(self::viewGlobals(), [
+        $html = $this->views->render('items', \array_merge($this->viewGlobals(), [
             'title'      => 'Items',
             'baseUrl'    => '/items-qb',
             'items'      => $items,
@@ -245,7 +245,7 @@ class BenchController
         }
 
         return $this->response->html(
-            $this->views->render('item', \array_merge(self::viewGlobals(), ['item' => (object) $row])),
+            $this->views->render('item', \array_merge($this->viewGlobals(), ['item' => (object) $row])),
         );
     }
 
@@ -278,7 +278,7 @@ class BenchController
             ->run();
 
         return $this->response->html(
-            $this->views->render('item', \array_merge(self::viewGlobals(), [
+            $this->views->render('item', \array_merge($this->viewGlobals(), [
                 'item' => (object) [
                     'id'         => self::SENTINEL_QB_ID,
                     'title'      => 'Created Item ' . $now,
@@ -328,10 +328,22 @@ class BenchController
      * directly (not Spiral's HTTP middleware pipeline), we pass them as
      * render data instead.
      *
-     * @return array<string, string>
+     * View globals — locale and platform for the layout footer, resolved by the
+     * SAME parser every other entrant runs (`bench-view-globals.php`).
+     *
+     * Spiral hands the request to the controller, so the two header values come from
+     * it rather than from the superglobal: under the resident arms the process
+     * outlives the request and `$_SERVER` still holds the first one.
+     *
+     * @return array{locale: string, platform: string}
      */
-    private static function viewGlobals(): array
+    private function viewGlobals(): array
     {
-        return ['locale' => 'en_US', 'platform' => 'desktop'];
+        $server = $this->request->getServerParams();
+
+        return benchViewGlobals(
+            isset($server['HTTP_ACCEPT_LANGUAGE']) ? (string) $server['HTTP_ACCEPT_LANGUAGE'] : null,
+            isset($server['HTTP_USER_AGENT']) ? (string) $server['HTTP_USER_AGENT'] : null,
+        );
     }
 }

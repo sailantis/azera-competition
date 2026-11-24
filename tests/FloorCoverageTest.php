@@ -163,4 +163,186 @@ final class FloorCoverageTest extends TestCase
         );
         self::assertStringContainsString('Supervisor::serve(', $src);
     }
+
+    // --- a floor the rows can actually be held against ----------------------
+
+    /** One floor probe carrying a single `GET /` row. */
+    private static function floor(string $app, string $mode, float $trimmedMs): array
+    {
+        return [
+            'app'   => $app,
+            'modes' => [
+                $mode => [
+                    'iterations_per_run' => 1000,
+                    'runs'               => 10,
+                    'requests'           => [[
+                        'request'         => 'GET /',
+                        'trimmed_mean_ms' => $trimmedMs,
+                        'median_ms'       => $trimmedMs,
+                    ]],
+                ],
+            ],
+        ];
+    }
+
+    /** One app block whose rows are the given "<request> => ms" map on one mode. */
+    private static function appOn(string $app, string $mode, array $rows): array
+    {
+        $requests = [];
+        foreach ($rows as $label => $ms) {
+            $requests[] = ['request' => $label, 'trimmed_mean_ms' => $ms];
+        }
+
+        return [
+            'app'   => $app,
+            'modes' => [$mode => ['iterations_per_run' => 1000, 'runs' => 10, 'requests' => $requests]],
+        ];
+    }
+
+    /**
+     * The exact 2026-11-23 shape is rejected.
+     *
+     * These are the published figures: a floor of 0.1734 ms on volucer-attach and a
+     * Phalcon `/echo` row 13.9% below it. The row is not fast, it is impossible — and
+     * it was read as a framework win for a release.
+     */
+    public function testARowBelowItsOwnFloorIsRejected(): void
+    {
+        $result = assertRowsNotBelowFloor([
+            'apps'   => [self::appOn('phalcon', 'volucer-attach', ['GET /echo' => 0.1494, 'GET /' => 0.1767])],
+            'floors' => [self::floor('floor-volucer-attach', 'volucer-attach', 0.1734)],
+        ]);
+
+        self::assertFalse($result['ok'], 'a row cannot beat a request that boots nothing');
+        self::assertCount(1, $result['violations'], 'only the sub-floor row is a violation');
+        self::assertSame('GET /echo', $result['violations'][0]['request']);
+        self::assertSame('phalcon', $result['violations'][0]['app']);
+    }
+
+    /**
+     * Sampling error is NOT a violation.
+     *
+     * A row and a floor are two independent samples — often from DIFFERENT runs — so
+     * a row a little under its floor is ordinary drift. Measured on the bench VM, two
+     * volucer-attach `/echo` runs of the same code differed by 3.0% and 5.0%, so the
+     * default tolerance is 8%. This case is the largest such drift the real data
+     * contains (Phalcon `/echo` against the correctly-sampled floor), and it must
+     * pass or the check would fail every honest run.
+     */
+    public function testASmallDeficitInsideTheNoiseBandPasses(): void
+    {
+        $result = assertRowsNotBelowFloor([
+            'apps'   => [self::appOn('phalcon', 'volucer-attach', ['GET /echo' => 0.1494])],
+            'floors' => [self::floor('floor-volucer-attach', 'volucer-attach', 0.1588)],
+        ]);
+
+        self::assertTrue($result['ok'], '5.9% under the floor is cross-run drift, not a mismatch');
+        self::assertSame(1, $result['checked'], 'the row must still be counted as checked');
+    }
+
+    /**
+     * A missing floor is skipped, not failed.
+     *
+     * "No reference point" and "inconsistent with the reference point" are different
+     * states, and only the second is this check's business —
+     * testTheDatasetFloorsCoverEveryMeasuredMode() is what asserts the first.
+     */
+    public function testAModeWithNoFloorIsSkippedRatherThanFailed(): void
+    {
+        $result = assertRowsNotBelowFloor([
+            'apps'   => [self::appOn('azera', 'volucer-attach', ['GET /echo' => 0.1])],
+            'floors' => [],
+        ]);
+
+        self::assertTrue($result['ok']);
+        self::assertSame(0, $result['checked'], 'nothing to hold the row against');
+    }
+
+    /**
+     * The tolerance is a real knob, not decoration.
+     *
+     * The 13.9% case sits far outside the default, so a caller with a noisier server
+     * has to widen it explicitly. Asserting the boundary keeps the default from
+     * silently growing into "no check at all".
+     */
+    public function testTheToleranceIsHonoured(): void
+    {
+        $dataset = [
+            'apps'   => [self::appOn('phalcon', 'volucer-attach', ['GET /echo' => 0.1494])],
+            'floors' => [self::floor('floor-volucer-attach', 'volucer-attach', 0.1734)],
+        ];
+
+        self::assertFalse(assertRowsNotBelowFloor($dataset, 0.02)['ok']);
+        self::assertFalse(assertRowsNotBelowFloor($dataset, 0.05)['ok']);
+        self::assertTrue(
+            assertRowsNotBelowFloor($dataset, 1.00)['ok'],
+            'a 100% tolerance must accept any deficit — the knob is honoured'
+        );
+        // And the DEFAULT must be the calibrated 8%, not something that would have
+        // passed the 13.9% regression: that is the whole point of the number.
+        self::assertFalse(
+            assertRowsNotBelowFloor($dataset)['ok'],
+            'the default tolerance must still reject a 13.9% deficit'
+        );
+    }
+
+    /**
+     * Every writer that can put a floor beside a row fails loudly.
+     *
+     * The 2026-11-23 floors arrived through `merge-floors.php`, which had no check at
+     * all — that is why the impossible row reached the report. The guard is only
+     * worth anything if the paths that write a dataset call it, so the SOURCE is
+     * asserted rather than a re-implementation of it.
+     */
+    public function testEveryDatasetWriterAppliesTheFloorGuard(): void
+    {
+        $root = dirname(__DIR__);
+
+        foreach (['scripts/assemble-real.php', 'scripts/merge-floors.php'] as $relative) {
+            $src = (string) file_get_contents("{$root}/{$relative}");
+            self::assertStringContainsString(
+                'assertRowsNotBelowFloor(',
+                $src,
+                "{$relative} can write floors next to measured rows and must reject a row below its floor"
+            );
+        }
+
+        // merge-floors.php is the specific path the bad probe took, and it did not
+        // even load the library that owns the check.
+        $merge = (string) file_get_contents($root . '/scripts/merge-floors.php');
+        self::assertStringContainsString("require_once __DIR__ . '/bench-lib.php';", $merge);
+    }
+
+    /**
+     * `--floors-only` must skip the app loop, not run it first.
+     *
+     * THIS IS WHY THE BAD PROBE WAS A `--quick` ONE. The flag was only consulted
+     * after the per-app loop, so `--floors-only` still benchmarked every selected
+     * app — hours of work — before reaching the floors block. An operator who wanted
+     * just the probes therefore reached for `--quick` to make it finish, and that
+     * capped the sample at 100x3 while the dataset it was grafted into sat at
+     * 1000x10. The floors were then inconsistent with the rows, and the guard above
+     * is what now refuses that graft.
+     */
+    public function testFloorsOnlySkipsTheAppLoop(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/scripts/run-http.php');
+
+        // The guard has to be INSIDE the loop and before the first per-app echo.
+        $guard = strpos($src, 'if ($floorsOnly) {');
+        self::assertNotFalse($guard, 'run-http.php must consult --floors-only');
+
+        $loop = strpos($src, 'foreach ($apps as $appKey) {');
+        self::assertNotFalse($loop);
+
+        $firstAppEcho = strpos($src, '=== App: {$appKey}');
+        self::assertNotFalse($firstAppEcho);
+
+        self::assertGreaterThan($loop, $guard, 'the guard must be inside the app loop');
+        self::assertLessThan(
+            $firstAppEcho,
+            $guard,
+            'the guard must run BEFORE any app block, or a floors-only pass still benchmarks the apps'
+        );
+    }
 }

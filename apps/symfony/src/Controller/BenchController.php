@@ -62,11 +62,10 @@ class BenchController extends AbstractController
     /**
      * GET / — welcome page via Twig template (no DB).
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        return $this->render('home.html.twig', self::viewGlobals());
+        return $this->render('home.html.twig', self::viewGlobals($request));
     }
-
     /**
      * GET /items — list items via Doctrine ORM with pagination.
      */
@@ -322,10 +321,25 @@ class BenchController extends AbstractController
     }
 
     /**
-     * @return array<string, string>
+     * View globals — locale and platform for the layout footer, resolved by the
+     * SAME parser every other entrant runs (`bench-view-globals.php`).
+     *
+     * This used to return two constants, which meant this app's footer claimed a
+     * locale and platform it had never resolved while Azera's paid for the parsing.
+     * The headers are read from the request when one is available and from the SAPI
+     * superglobal otherwise (the FPM entry path), so both arms resolve identically.
+     *
+     * @return array{locale: string, platform: string}
      */
-    private static function viewGlobals(): array
+    private static function viewGlobals(?Request $request = null): array
     {
-        return ['locale' => 'en_US', 'platform' => 'desktop'];
+        if ($request === null) {
+            return benchViewGlobalsFromGlobals();
+        }
+
+        return benchViewGlobals(
+            $request->headers->get('Accept-Language'),
+            $request->headers->get('User-Agent'),
+        );
     }
 }

@@ -26,6 +26,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
 require_once __DIR__ . '/response-guard.php';
+require_once __DIR__ . '/bench-view-globals.php';
 
 $map = [
     'azera'       => 'AzeraAdapter',

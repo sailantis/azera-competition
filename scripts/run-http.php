@@ -59,6 +59,10 @@ $outPrefix   = $opts['out'] ?? 'results/real-deployments';
 // fatal before any config is even parsed.
 require_once __DIR__ . '/deploy-lib.php';
 require_once __DIR__ . '/version-lib.php';
+// budgetsByAppMode()/assertUniformBudget(), which deploy-lib.php only pulls in from
+// inside waitForServer(). Loaded here as well so this orchestrator's own budget
+// reporting does not depend on a function having been called first.
+require_once __DIR__ . '/bench-lib.php';
 
 // RR binary lives OUTSIDE vendor/ on the bench VM: composer install prunes
 // vendor/bin/rr because it is not owned by any installed package (only the
@@ -476,6 +480,18 @@ killAllBenchVolucers();
 
 foreach ($apps as $appKey) {
     $appKey = trim($appKey);
+
+    // --floors-only measures the server, not the apps. Without this guard the flag
+    // only took effect AFTER the app loop, so the run benchmarked all seven apps
+    // (hours) before reaching the floors block it was asked for. That is why the
+    // 2026-11-23 floor probe was produced with `--quick` instead — a 100x3 sample
+    // grafted into a 1000x10 dataset, which is how Phalcon's `/echo` came to read
+    // 13.9% below its own framework-free floor. See run-http.php's floors block and
+    // bench-lib.php::assertRowsNotBelowFloor().
+    if ($floorsOnly) {
+        break;
+    }
+
     echo "\n=== App: {$appKey}\n";
 
     $appResult = ['app' => $appKey, 'modes' => []];
@@ -654,6 +670,22 @@ if ($bootOnly || $memOnly) {
 if ($floorsOnly) {
     echo "\n=== Floors only (webserver overhead) ===\n";
     $results['floors'] = measureFloors($root, $deployDir, $useRr, $useFpm, $rrPort, $fpmPort, $itersPerRun, $runs, $rrBinary, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase, $phpCgiBin);
+
+    // A floor probed at a different budget than the dataset it will be grafted into
+    // is the 2026-11-23 `/echo` bug, and this is the earliest place it is visible:
+    // the probe itself says what sample it ran at. merge-floors.php refuses the
+    // graft if any measured row ends up below its floor, but telling the operator
+    // HERE, before they run a merge, is what stops the mismatch being created.
+    // `--quick` caps to 100x3, which is exactly how that probe was produced.
+    $graftBudgets = budgetsByAppMode(['apps' => [], 'floors' => $results['floors']]);
+    $graftBudget  = assertUniformBudget($graftBudgets);
+    echo '  floor budget: ', ($graftBudget['budget'] ?? '?');
+    if ($itersPerRun !== 1000 || $runs !== 10) {
+        echo "  (a full run measures its floors at 1000x10; a graft from this probe must"
+            . " be checked against the dataset's budget by merge-floors.php)";
+    }
+    echo "\n";
+
     writeRealResults($outPrefix, ['env' => $results['env'], 'apps' => [], 'floors' => $results['floors']]);
     // Also emit the bare floors array, which is what merge-floors.php reads: the
     // envelope above is the same shape a full run writes, so a probe can be inspected

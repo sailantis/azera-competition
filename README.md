@@ -233,6 +233,18 @@ either escape explicitly at every output or turn autoescape on.
 ## Fairness caveats
 
 - **Idiomatic usage** — each framework uses its own ORM and template engine (not raw PDO / plain PHP), so results reflect real-world usage. Switching all to raw PDO would reduce this to the routing+template case already covered by the `benchmarks/view-engine/` harness in this repository.
+- **`locale` and `platform` are resolved by one shared parser in all seven.** Every layout
+  footer prints both, and the apps used to disagree three ways: Azera parsed `Accept-Language`
+  and regexed the `User-Agent` per request, the other five returned the two literal strings the
+  parser would have produced (an assertion of a detection that never happened), and Symfony and
+  Phalcon each got half of it wrong — Symfony had the values and no template read them, Phalcon
+  printed the footer with nothing to put in it. All seven now call `bench-view-globals.php`, which
+  takes the two raw header values and returns the pair, so the work is identical because the code
+  is identical. With no headers — which is the entire benchmark — the answer is `en_US`/`desktop`,
+  the same values the constants held, so no published byte changed. Azera still reaches its values
+  through middleware and the others through their own view-globals hook: that difference is the
+  framework, and normalising it away would delete a mechanism one entrant has and the rest do not.
+  See `tests/ViewGlobalsTest.php`.
 - **Every server has a floor probe, and the floor is usually most of the row.** Each mode in the
   dataset carries a `floor-*` pseudo-app: one `GET /` to the same server, through the same arm, with
   no framework in it (`floor-http` static file via nginx, `floor-php` a bare PHP file via FPM,

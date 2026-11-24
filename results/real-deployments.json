@@ -48,6 +48,14 @@
             "php_fpm": "PHP 8.5.11 (fpm-fcgi) (built: Sep 24 2026 13:49:29) (NTS) Copyright (c) The PHP Group Built by Ubuntu Zend Engine v4.5.11, Copyright (c) Zend Technologies     with Zend OPcache v8.5.11, Copyright (c), by Zend Technologies",
             "volucer": "volucer 0.6.0   front-ends:       HTTP/1.1, HTTP/2 (cleartext), FastCGI, TLS (rustls)   worker protocol:  1   php floor:        8.2   backends:         worker, attach, external fpm, spawn_cgi, upstream   certificates:     ACME (RFC 8555), the tls-alpn-01 challenge   observability:    access log (combined or json), W3C tracecontext   traces:           OTLP/HTTP export (POST /v1/traces, default port 4318)",
             "volucer_php_worker": "0.4.1@eb05fb47"
+        },
+        "floor_refresh": {
+            "timestamp": "2026-11-24T02:58:25P",
+            "budget": "1000x10",
+            "floors": [
+                "floor-volucer-attach",
+                "floor-volucer-cgi"
+            ]
         }
     },
     "apps": [
@@ -14669,20 +14677,20 @@
             "app": "floor-volucer-attach",
             "modes": {
                 "volucer-attach": {
-                    "iterations_per_run": 100,
-                    "runs": 3,
+                    "iterations_per_run": 1000,
+                    "runs": 10,
                     "requests": [
                         {
                             "request": "GET /",
-                            "iterations_per_run": 100,
-                            "runs": 3,
-                            "trimmed_mean_ms": 0.17342671000000004,
-                            "min_ms": 0.144506,
-                            "mean_ms": 0.21854063000000015,
-                            "median_ms": 0.166608,
-                            "p95_ms": 0.544826,
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.15878822050000008,
+                            "min_ms": 0.122752,
+                            "mean_ms": 0.16071733700000024,
+                            "median_ms": 0.156564,
+                            "p95_ms": 0.191876,
                             "peak_mem": 0,
-                            "connect_ms": 0.00047,
+                            "connect_ms": 5.1e-5,
                             "mem_boot_heap": 0,
                             "mem_peak_heap": 0,
                             "mem_heap": 0,
@@ -14698,20 +14706,20 @@
             "app": "floor-volucer-cgi",
             "modes": {
                 "volucer-cgi": {
-                    "iterations_per_run": 100,
-                    "runs": 3,
+                    "iterations_per_run": 1000,
+                    "runs": 10,
                     "requests": [
                         {
                             "request": "GET /",
-                            "iterations_per_run": 100,
-                            "runs": 3,
-                            "trimmed_mean_ms": 0.16913173,
-                            "min_ms": 0.152524,
-                            "mean_ms": 0.16983069,
-                            "median_ms": 0.164736,
-                            "p95_ms": 0.200047,
+                            "iterations_per_run": 1000,
+                            "runs": 10,
+                            "trimmed_mean_ms": 0.15868538500000007,
+                            "min_ms": 0.130808,
+                            "mean_ms": 0.15884736900000013,
+                            "median_ms": 0.156391,
+                            "p95_ms": 0.189068,
                             "peak_mem": 0,
-                            "connect_ms": 0.00045000000000000004,
+                            "connect_ms": 4.8e-5,
                             "mem_boot_heap": 0,
                             "mem_peak_heap": 0,
                             "mem_heap": 0,

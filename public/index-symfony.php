@@ -27,6 +27,7 @@ declare(strict_types=1);
 
 // Boot probe: the clock MUST start before any framework code loads.
 require_once __DIR__ . '/../boot-probe.php';
+require_once __DIR__ . '/../bench-view-globals.php';
 boot_probe_start();
 
 // Standard guard for PHP's built-in server: let it serve real files from the

@@ -2,14 +2,24 @@
 /**
  * Request-context middleware.
  *
- * Simulates the kind of per-request work that real apps do in middleware:
- *   - reads the Accept-Language header and picks a locale
- *   - reads the User-Agent header and detects a platform
- *   - stamps both into the view engine as global variables
+ * Resolves `locale` and `platform` for the layout footer from the request's
+ * `Accept-Language` and `User-Agent` headers, and stamps them into the view
+ * engine.
  *
- * Modeled after the sailantis-homepage GeoCurrencyMiddleware but without
- * external API calls or session dependency, so it's self-contained and
- * deterministic.
+ * THE PARSING IS NOT HERE. It lives in `bench-view-globals.php`, shared with all
+ * six other entrants. That file explains why: this middleware used to be the only
+ * implementation, so Azera's HTML rows paid for header parsing while the other
+ * six returned the same two constants from a `viewGlobals()` array — and Phalcon
+ * rendered no footer at all. One entrant doing the work and five asserting the
+ * result is a comparison between different work, whichever side you are reading.
+ *
+ * This class keeps the part that is genuinely Azera's: middleware is the framework
+ * mechanism for per-request view context, and it is attached to the routes that
+ * render the layout (see Bootstrap::boot() for the group definition and why it is
+ * route-scoped). The parsing it delegates is now the same code every entrant runs.
+ *
+ * Modeled after the sailantis-homepage GeoCurrencyMiddleware but without external
+ * API calls or session dependency, so it is self-contained and deterministic.
  */
 
 namespace App\Azera\Middleware;
@@ -20,47 +30,30 @@ use Azera\Http\Response;
 
 class RequestContextMiddleware implements MiddlewareInterface
 {
-    private const LOCALES = [
-        'en' => 'en_US',
-        'de' => 'de_DE',
-        'fr' => 'fr_FR',
-        'ja' => 'ja_JP',
-        'es' => 'es_ES',
-    ];
-
     /** @var int Request counter, used to simulate per-request state */
     private static int $requestCount = 0;
 
     public function process(AppContext $ctx, callable $next): ?Response
     {
-        // 1) Locale: parse Accept-Language header, pick first supported
-        $acceptLang = $ctx->request()->header('Accept-Language', 'en');
-        $locale     = 'en_US';
-        if (is_string($acceptLang) && $acceptLang !== '') {
-            foreach (self::LOCALES as $short => $full) {
-                if (stripos($acceptLang, $short) !== false) {
-                    $locale = $full;
-                    break;
-                }
-            }
-        }
+        $request = $ctx->request();
 
-        // 2) Platform: detect from User-Agent
-        $userAgent = $ctx->request()->userAgent();
-        $platform  = 'desktop';
-        if (preg_match('/Mobile|Android|iPhone/i', $userAgent)) {
-            $platform = 'mobile';
-        } elseif (preg_match('/iPad|Tablet/i', $userAgent)) {
-            $platform = 'tablet';
-        }
+        // Shared parser — see bench-view-globals.php. The two raw header values are
+        // read through Azera's own request API and handed over as strings, which is
+        // the interface all seven apps use.
+        $acceptLanguage = $request->header('Accept-Language');
 
-        // 3) Increment request counter (simulates per-request tracking)
+        $globals = benchViewGlobals(
+            is_string($acceptLanguage) ? $acceptLanguage : null,
+            $request->userAgent(),
+        );
+
+        // Increment request counter (simulates per-request tracking)
         self::$requestCount++;
 
-        // 4) Stamp into view vars so templates can use them
+        // Stamp into view vars so templates can use them
         $ctx->view()
-            ->setVar('locale', $locale)
-            ->setVar('platform', $platform)
+            ->setVar('locale', $globals['locale'])
+            ->setVar('platform', $globals['platform'])
             ->setVar('requestCount', self::$requestCount);
 
         return $next();

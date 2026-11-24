@@ -20,14 +20,24 @@ abstract class AppController extends Controller
 {
 
     /**
-     * Shared view vars for every template render — mirrors azera's
-     * RequestContext view vars (locale + platform) used by the layout
-     * footer ("Rendered with … | Locale: en_US | Platform: desktop").
+     * Shared view vars for every template render — locale + platform for the layout
+     * footer, resolved by the SAME parser every other entrant runs
+     * (`bench-view-globals.php`).
+     *
+     * These were two literals here, so Cake's footer asserted a locale and platform
+     * nothing had resolved. Running the shared parser makes all seven do the same
+     * work; the values are unchanged because the benchmark sends no header hints.
      */
     public function beforeRender(EventInterface $event): void
     {
-        $this->set('locale', 'en_US');
-        $this->set('platform', 'desktop');
+        $request = $this->getRequest();
+        $globals = benchViewGlobals(
+            $request->getHeaderLine('Accept-Language') ?: null,
+            $request->getHeaderLine('User-Agent') ?: null,
+        );
+
+        $this->set('locale', $globals['locale']);
+        $this->set('platform', $globals['platform']);
     }
 
     /**

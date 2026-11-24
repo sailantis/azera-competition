@@ -71,6 +71,7 @@ require $benchRoot . '/WebAppAdapter.php';
 require $benchRoot . '/adapters/BenchmarkAutoloader.php';
 require $benchRoot . '/boot-probe.php';
 require $benchRoot . '/response-guard.php';
+require $benchRoot . '/bench-view-globals.php';
 
 $adapter = createAdapter($benchApp);
 

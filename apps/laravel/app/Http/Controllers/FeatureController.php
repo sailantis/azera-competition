@@ -372,13 +372,18 @@ class FeatureController
     }
 
     /**
-     * View globals — locale and platform variables passed to every template,
-     * mirroring azera's RequestContextMiddleware.
+     * View globals — locale and platform for the layout footer, resolved by the
+     * SAME parser every other entrant runs (`bench-view-globals.php`).
      *
-     * @return array<string, string>
+     * These were two `View::share()` constants stamped at boot, which meant the
+     * footer asserted a locale and platform Laravel had never resolved while Azera
+     * paid to parse them. Resolving per render makes the work the same on both
+     * sides; the values are identical because the benchmark sends no header hints.
+     *
+     * @return array{locale: string, platform: string}
      */
     private static function viewGlobals(): array
     {
-        return ['locale' => 'en_US', 'platform' => 'desktop'];
+        return benchViewGlobalsFromGlobals();
     }
 }

@@ -6,6 +6,10 @@ namespace AzeraCompetition\Tests;
 
 use PHPUnit\Framework\TestCase;
 
+// The shared locale/platform resolver, so this test renders the layout the way the
+// app does. Tests are not autoloaded through the harness, so the require is explicit.
+require_once dirname(__DIR__) . '/bench-view-globals.php';
+
 /**
  * Every interpolated value in the Phalcon Volt templates must be escaped.
  *
@@ -142,6 +146,12 @@ final class PhalconTemplateEscapingTest extends TestCase
         $view->setViewsDir(dirname(__DIR__) . '/apps/phalcon/views/');
         $view->setLayoutsDir('layouts/');
         $view->setLayout('main');
+        // Mirrors Bootstrap::boot(): the layout footer renders these, and handle()
+        // overwrites them per request from the shared resolver. Without the defaults
+        // the render emits "Undefined variable" into the page under test.
+        foreach (benchViewGlobals(null, null) as $key => $value) {
+            $view->setVar($key, $value);
+        }
 
         $volt = new \Phalcon\Mvc\View\Engine\Volt($view, $di);
         $volt->setOptions(['path' => $cache . '/', 'compileAlways' => false]);

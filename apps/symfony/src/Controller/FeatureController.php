@@ -51,9 +51,9 @@ class FeatureController extends AbstractController
     /**
      * GET /features — overview page listing all feature demos.
      */
-    public function index(): \Symfony\Component\HttpFoundation\Response
+    public function index(Request $request): \Symfony\Component\HttpFoundation\Response
     {
-        return $this->render('features.html.twig', \array_merge(self::viewGlobals(), [
+        return $this->render('features.html.twig', \array_merge(self::viewGlobals($request), [
             'features' => [
                 ['url' => '/features/aop', 'title' => 'AOP Interceptors', 'desc' => 'Insert a row inside an interceptor-managed DB transaction'],
                 ['url' => '/features/cache', 'title' => 'Cache', 'desc' => 'Cache a method result via Symfony\'s PSR-6 cache'],
@@ -411,10 +411,22 @@ class FeatureController extends AbstractController
     }
 
     /**
-     * @return array<string, string>
+     * View globals — locale and platform for the layout footer, resolved by the
+     * SAME parser every other entrant runs (`bench-view-globals.php`).
+     *
+     * See BenchController::viewGlobals() for why this is not a constant pair.
+     *
+     * @return array{locale: string, platform: string}
      */
-    private static function viewGlobals(): array
+    private static function viewGlobals(?Request $request = null): array
     {
-        return ['locale' => 'en_US', 'platform' => 'desktop'];
+        if ($request === null) {
+            return benchViewGlobalsFromGlobals();
+        }
+
+        return benchViewGlobals(
+            $request->headers->get('Accept-Language'),
+            $request->headers->get('User-Agent'),
+        );
     }
 }

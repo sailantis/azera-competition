@@ -123,10 +123,12 @@ class Bootstrap
                 ->setViewPath($viewsPath)
                 ->setCachePath($cacheDir)
                 ->setRevalidateFreq(60)
-                ->setVars([
-                    'locale'   => 'en_US',
-                    'platform' => 'desktop',
-                ]));
+                // Boot-time defaults, from the SAME shared resolver the middleware
+                // calls (bench-view-globals.php). A request that sends locale hints
+                // has them overwritten by the middleware before the render; one that
+                // sends none renders these. Written as a call rather than as a
+                // literal pair so this app cannot drift from the other six again.
+                ->setVars(benchViewGlobalsFromGlobals()));
 
         // --- Routes ---
         $router = $ctx->router();

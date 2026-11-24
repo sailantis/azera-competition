@@ -144,6 +144,16 @@ if (!$budget['ok']) {
 
 $combined['env']['budget'] = $budget['budget'];
 
+// --- Floor sanity: a row cannot beat its own server with no framework in it ---
+// The floors and the rows here were measured by different invocations, so nothing
+// else in this pipeline would notice a probe taken on another arm. See
+// bench-lib.php::assertRowsNotBelowFloor() for the 2026-11-23 `/echo` case.
+$floorCheck = assertRowsNotBelowFloor($combined);
+if (!$floorCheck['ok']) {
+    fwrite(STDERR, "Floor mismatch — " . describeFloorViolations($floorCheck));
+    exit(1);
+}
+
 file_put_contents($outPath, json_encode($combined, JSON_PRETTY_PRINT) . "\n");
 
 echo "Wrote {$outPath}\n";

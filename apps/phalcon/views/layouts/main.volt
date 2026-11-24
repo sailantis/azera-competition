@@ -61,6 +61,8 @@
     </div>
     <footer class="meta">
         Rendered with Phalcon Volt — Azera Competition Benchmark
+        {% if locale %}| Locale: {{ locale }}{% endif %}
+        {% if platform %}| Platform: {{ platform }}{% endif %}
     </footer>
 </body>
 

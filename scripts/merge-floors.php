@@ -33,6 +33,9 @@ if (count($args) !== 2) {
     exit(1);
 }
 
+// assertRowsNotBelowFloor()/describeFloorViolations() — see bench-lib.php.
+require_once __DIR__ . '/bench-lib.php';
+
 [$targetPath, $floorsPath] = $args;
 
 foreach ([$targetPath, $floorsPath] as $path) {
@@ -113,6 +116,21 @@ foreach ($byKey as $floor) {
 }
 
 $target['floors'] = $ordered;
+
+// --- The graft must not contradict the rows it now sits beside ----------------
+// THIS IS THE HOLE THAT PRODUCED THE 2026-11-23 `/echo` ROW. The Volucer floors in
+// that dataset were added by a later `--quick` pass (100x3) and grafted in here,
+// which checked only the app key and the mode count. The result was a floor probed
+// on a different sample than the rows, and one Phalcon row landed 13.9% BELOW it.
+// assertUniformBudget() in the other writers did not catch it because floors are
+// checked as part of the same dataset and the asymmetry was between a grafted floor
+// and rows measured earlier — a window this script is the only place to close.
+$floorCheck = assertRowsNotBelowFloor($target);
+if (!$floorCheck['ok']) {
+    fwrite(STDERR, "merge-floors: refusing to graft — " . describeFloorViolations($floorCheck)
+        . "\n  The dataset above is UNCHANGED.\n");
+    exit(1);
+}
 
 file_put_contents(
     $targetPath,

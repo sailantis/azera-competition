@@ -76,6 +76,12 @@ final class BenchController extends Controller
 
     /**
      * GET / — welcome page via a Volt template (no DB).
+     *
+     * The template must keep the same SECTIONS as every other entrant's home page
+     * ("What is measured?" + "Stack"). Until 2026-11-24 this page carried only the
+     * first two, so `/` rendered 3402 bytes against Azera's 4976 and the row
+     * compared a larger document against a smaller one. See
+     * tests/HomeTemplateParityTest.php.
      */
     public function indexAction(): void
     {

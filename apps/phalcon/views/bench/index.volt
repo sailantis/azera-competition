@@ -24,6 +24,49 @@
         <button type="submit">POST /items (ORM + flash)</button>
     </form>
     <form method="post" action="/items-qb">
-        <button type="submit">POST /items-qb (query builder)</button>
+        <button type="submit">POST /items-qb (query builder + flash)</button>
     </form>
 </div>
+
+<h2>What is measured?</h2>
+<table>
+    <tbody>
+        <tr>
+            <th>GET /</th>
+            <td>Routing + middleware + template render (no DB)</td>
+        </tr>
+        <tr>
+            <th>GET /items</th>
+            <td>Routing + middleware + model query (COUNT + LIMIT) + pagination + template</td>
+        </tr>
+        <tr>
+            <th>GET /items/{id}</th>
+            <td>Routing + middleware + model find + template</td>
+        </tr>
+        <tr>
+            <th>POST /items</th>
+            <td>Routing + middleware + model upsert (ORM write path) + template + flash</td>
+        </tr>
+        <tr>
+            <th>GET /items-qb</th>
+            <td>Same as /items but without model hydration</td>
+        </tr>
+        <tr>
+            <th>GET /items-qb/{id}</th>
+            <td>Same as /items/{id} but without model hydration</td>
+        </tr>
+        <tr>
+            <th>POST /items-qb</th>
+            <td>Same as POST /items but via query builder (no ORM write path)</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>Stack</h2>
+<ul>
+    <li>Framework: <strong>Phalcon 6</strong></li>
+    <li>Template engine: <strong>Volt</strong></li>
+    <li>Database: <strong>SQLite</strong> (WAL mode)</li>
+    <li>ORM: <strong>Phalcon Model / DataMapper</strong></li>
+    <li>Routes: 4 benchmark endpoints + 100 filler routes</li>
+</ul>

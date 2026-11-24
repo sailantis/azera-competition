@@ -513,6 +513,17 @@ final class MarkdownReport
         /** Does this floor belong to the server this page measures? */
         $floorBelongsToMode = fn(string $key, string $m): bool =>
             ($floors[$key]['mode'] ?? null) === $m;
+
+        /** The floor app key probed on THIS mode's server, or null when none was. */
+        $residentFloorKey = function (string $m) use ($floors, $floorBelongsToMode): ?string {
+            foreach (array_keys($floors) as $key) {
+                if ($floorBelongsToMode($key, $m)) {
+                    return $key;
+                }
+            }
+
+            return null;
+        };
         if ($this->store->isPerRequestMode($mode)) {
             $php = $ms('floor-php');
             if ($php === null) {
@@ -555,27 +566,17 @@ final class MarkdownReport
         }
 
         if ($this->store->isResidentMode($mode)) {
-            $rr = $ms('floor-rr');
-            if ($rr === null) {
-                return '';
-            }
+            // THE FLOOR MUST BE THE ONE THIS SERVER PAID. Resolve it by MODE, not by
+            // the RoadRunner key: `floor-rr` is a RoadRunner process, so reading it
+            // on a Volucer page described a DIFFERENT server's overhead as the
+            // arithmetic behind these rows. That is why the Volucer page used to say
+            // "none measured" even after floor-volucer-attach existed in the dataset
+            // — the check only ever asked for `floor-rr`.
+            $floorKey = $residentFloorKey($mode);
 
-            // THE FLOOR NAMED HERE MUST BE ONE THIS SERVER PAID.
-            //
-            // `floor-rr` is a RoadRunner process. On a Volucer page it was
-            // described as "the IPC + server floor every row below also pays",
-            // which is a claim about a DIFFERENT server's overhead presented as
-            // the arithmetic behind these rows — and the two are not
-            // interchangeable: the published Volucer page carried exactly this
-            // sentence while Volucer's own floor was never measured at all
-            // (measureFloors() takes no arm list). A reader subtracting it from a
-            // Volucer number would be subtracting RoadRunner.
-            //
-            // The honest statement for a server with no floor of its own is that
-            // there is none, and why — not a borrowed number. The model is still
-            // named, because "no floor was measured" is only useful alongside the
-            // reassurance that the rows are measured the same way.
-            if (!$floorBelongsToMode('floor-rr', $mode)) {
+            if ($floorKey === null) {
+                // A resident server with no probe of its own. The honest statement is
+                // that there is none, and why — never a borrowed number.
                 return "\n\n**Server floor** — none measured for this server: the resident floor in "
                     . 'this dataset (`floor-rr`) was measured through RoadRunner, whose process model '
                     . 'differs from ' . $this->serverLabel($mode) . "'s, so its number is not this "
@@ -584,9 +585,18 @@ final class MarkdownReport
                     . 'are framework differences.';
             }
 
-            return "\n\n**Server floor** — real RoadRunner over loopback: a bare resident worker that renders a "
-                . 'fixed string (`floor-rr`) measures the IPC + server floor every row below also pays. '
-                . 'Only differences larger than this floor are framework differences.';
+            $floorMs = $ms($floorKey);
+
+            // The floor's VALUE deliberately stays out of this sentence: the
+            // `floor-*` row in the dataset already carries it, and a figure repeated
+            // in prose is the one thing a re-run cannot update (see
+            // ChartManifestTest::testTheReportProseNamesNoMeasuredFigure).
+            return "\n\n**Server floor** — a resident worker that boots NOTHING (`{$floorKey}`) measures "
+                . 'this server\'s own overhead: a bare request round trip with no framework, no routing '
+                . 'and no template, stated as that floor\'s `GET /` row in the dataset. Every row below '
+                . 'stands on it, so only differences larger than it are framework differences — and a '
+                . 'row BELOW it is a measurement that describes a different server than its floor, '
+                . 'which is what FloorCoverageTest and bench-lib.php::assertRowsNotBelowFloor() now refuse.';
         }
 
         return '';

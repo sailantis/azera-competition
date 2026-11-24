@@ -13,6 +13,7 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
+require_once __DIR__ . '/bench-view-globals.php';
 
 $opts = getopt('', ['apps::']);
 $apps = isset($opts['apps']) ? explode(',', $opts['apps']) : ['azera'];

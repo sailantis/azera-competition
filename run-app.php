@@ -83,6 +83,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
 require_once __DIR__ . '/response-guard.php';
+require_once __DIR__ . '/bench-view-globals.php';
 $itersPerRun = isset($opts['iterations-per-run']) ? (int) $opts['iterations-per-run'] : 1000;
 $runs        = isset($opts['runs']) ? (int) $opts['runs'] : 30;
 $modeName    = $opts['mode'] ?? 'warm';
