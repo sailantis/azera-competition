@@ -51,7 +51,8 @@ if (PHP_SAPI === 'cli-server') {
     }
 }
 
-require __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../bench-app-autoload.php';
+benchRequireAutoload(dirname(__DIR__), 'laravel');
 
 $root     = dirname(__DIR__) . DIRECTORY_SEPARATOR;
 $writable = $root . 'writable' . DIRECTORY_SEPARATOR . 'laravel' . DIRECTORY_SEPARATOR;

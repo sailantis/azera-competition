@@ -66,7 +66,8 @@ require $sdk . '/autoload.php';
 // autoload pulls Laravel's in (see preloadFrameworkHelpers()).
 preloadFrameworkHelpers($benchApp, $benchRoot);
 
-require $benchRoot . '/vendor/autoload.php';
+require_once $benchRoot . '/bench-app-autoload.php';
+benchRequireAutoload($benchRoot, $benchApp);
 require $benchRoot . '/WebAppAdapter.php';
 require $benchRoot . '/adapters/BenchmarkAutoloader.php';
 require $benchRoot . '/boot-probe.php';

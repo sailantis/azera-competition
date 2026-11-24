@@ -45,7 +45,11 @@ $benchRoot = dirname(__DIR__, 2);
 // `files` autoload pulls Laravel's in (see preloadFrameworkHelpers()).
 preloadFrameworkHelpers($benchApp, $benchRoot);
 
-require $benchRoot . '/vendor/autoload.php';
+// The pruned autoloader for THIS app (see scripts/app-autoload.php): composer's own
+// loader with the eager `files` loop reduced to the app's dependency closure. Falls
+// back to vendor/autoload.php when the generator has not run on this checkout.
+require_once $benchRoot . '/bench-app-autoload.php';
+benchRequireAutoload($benchRoot, $benchApp);
 require $benchRoot . '/WebAppAdapter.php';
 require $benchRoot . '/adapters/BenchmarkAutoloader.php';
 require $benchRoot . '/boot-probe.php';

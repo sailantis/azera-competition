@@ -55,7 +55,8 @@ if (PHP_SAPI === 'cli-server') {
     }
 }
 
-require __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../bench-app-autoload.php';
+benchRequireAutoload(dirname(__DIR__), 'cakephp');
 
 $root     = dirname(__DIR__) . DIRECTORY_SEPARATOR;
 $cakeCore = $root . 'vendor' . DIRECTORY_SEPARATOR . 'cakephp' . DIRECTORY_SEPARATOR . 'cakephp' . DIRECTORY_SEPARATOR;

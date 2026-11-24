@@ -97,7 +97,8 @@ if (getcwd() . DIRECTORY_SEPARATOR !== FCPATH) {
 // definitions with no top-level side effects, so an early include is safe.
 require_once __DIR__ . '/../vendor/codeigniter4/framework/system/Common.php';
 
-require __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../bench-app-autoload.php';
+benchRequireAutoload(dirname(__DIR__), 'codeigniter');
 
 $root     = dirname(__DIR__) . DIRECTORY_SEPARATOR;
 $appDir   = $root . 'apps' . DIRECTORY_SEPARATOR . 'codeigniter' . DIRECTORY_SEPARATOR;
@@ -137,6 +138,25 @@ if (!defined('CI_DEBUG')) {
 // Framework constants (COMPOSER_PATH, timing + exit-code constants).
 // bootWeb() skips loadConstants() because APP_NAMESPACE is pre-defined; the
 // require is guarded so CI_DEBUG/ENVIRONMENT from above win.
+//
+// COMPOSER_PATH IS DEFINED HERE, before Constants.php (which only defines it
+// `||`-guarded), because CI4's own Autoloader re-`include`s that path during
+// `initialize()`. Left at its default of `vendor/autoload.php`, that include runs
+// composer's EAGER `files` list a second time — all seven frameworks' bootstrap code,
+// for an app that uses one. Pointing it at the pruned loader means CI registers the
+// same ClassLoader with the same namespaces and executes only its own closure's files
+// (see scripts/app-autoload.php).
+//
+// VENDORPATH is defined too, and BEFORE the Autoloader can derive it: the Autoloader
+// sets `VENDORPATH = dirname(COMPOSER_PATH)`, which for the pruned path would be
+// `vendor/app-autoload/codeigniter/` — wrong for the two places CI uses it to
+// shorten vendor file paths (Common.php, Exceptions.php).
+defined('VENDORPATH') || define('VENDORPATH', dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR);
+defined('COMPOSER_PATH') || define(
+    'COMPOSER_PATH',
+    dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'app-autoload'
+        . DIRECTORY_SEPARATOR . 'codeigniter' . DIRECTORY_SEPARATOR . 'autoload.php',
+);
 require_once SYSTEMPATH . '..' . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Config' . DIRECTORY_SEPARATOR . 'Constants.php';
 
 // --- BOOT THE APPLICATION (stock Boot::bootWeb sequence) ---------------------

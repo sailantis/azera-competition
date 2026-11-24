@@ -99,6 +99,12 @@ class Bootstrap
         // Tell the Item model to use the default role
         //Item::setDefaultRole('default');
 
+        // The shared locale/platform resolver. `bench-view-globals.php` defines
+        // plain (namespace-less) functions, so whoever uses them must load them;
+        // the FPM entry script did, which is why the dependency went unnoticed until
+        // the in-process harness called boot() with no entry script in front of it.
+        require_once dirname(__DIR__, 2) . '/bench-view-globals.php';
+
         // --- Views (Clarity) ---
         // Register a deferred factory on the container instead of calling
         // $ctx->view() at boot: boot never renders, so the Clarity class
@@ -128,7 +134,15 @@ class Bootstrap
                 // has them overwritten by the middleware before the render; one that
                 // sends none renders these. Written as a call rather than as a
                 // literal pair so this app cannot drift from the other six again.
-                ->setVars(benchViewGlobalsFromGlobals()));
+                //
+                // REQUIRED HERE, not assumed. The functions live in a plain
+                // (namespace-less) file that the FPM entry script happens to require,
+                // so before this guard the boot only worked when it was reached
+                // THROUGH that script — the in-process harness and any other transport
+                // died with "Call to undefined function
+                // App\Azera\benchViewGlobalsFromGlobals()". `require_once` keeps the
+                // entry script's own require harmless.
+                ->setVars(\benchViewGlobalsFromGlobals()));
 
         // --- Routes ---
         $router = $ctx->router();
@@ -245,9 +259,27 @@ class Bootstrap
         //
         // Same shape as the pre-existing `session` group below, which was scoped
         // to `/features/security` for exactly this reason.
+        //
+        // CLASS STRINGS, not instances. `Dispatcher::normalizeMiddleware()` accepts
+        // `'Fully\Qualified\Class'` and instantiates it on the first request that
+        // actually runs the group, so registering the group costs one array append
+        // instead of `new`ing both middlewares at boot. `/echo`, every `/api` route and
+        // every feature demo return JSON and never render `layouts/app.clarity.html`,
+        // so on those routes the two classes were being loaded (6 files, 11.7 KB) and
+        // constructed for a group that never ran.
+        //
+        // Measured on the bench VM: the eager pair cost 6 file loads at boot; the
+        // string form costs none. Behaviour is unchanged — the dispatcher builds the
+        // same two objects, with the same no-argument constructors, at the same point
+        // in the request it always did.
+        //
+        // NOTE: no `slash-star` appears in this comment on purpose. Several tests strip
+        // block comments with a non-nesting-aware regex, so a glob written as
+        // `slash-star` inside prose opens a phantom comment and swallows the routes
+        // below it (see FeatureRouteParityTest::declarations()).
         $dispatcher->defineMiddlewareGroup('web', [
-            new \App\Azera\Middleware\SecurityHeadersMiddleware(),
-            new \App\Azera\Middleware\RequestContextMiddleware(),
+            \App\Azera\Middleware\SecurityHeadersMiddleware::class,
+            \App\Azera\Middleware\RequestContextMiddleware::class,
         ]);
 
 
@@ -282,7 +314,10 @@ class Bootstrap
         // free of session overhead (fair comparison with the other 5
         // frameworks) while preserving the CSRF demo over HTTP.
         $dispatcher->defineMiddlewareGroup('session', [
-            new \Azera\Http\SessionMiddleware(),
+            // Class string for the same reason as the `web` group above: only the
+            // two `/features/security` routes run this group, so the boot must not
+            // load `SessionMiddleware` (and its session/cookie graph) for `/`.
+            \Azera\Http\SessionMiddleware::class,
         ]);
 
         // --- Feature Demo Routes ---

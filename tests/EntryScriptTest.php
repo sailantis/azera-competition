@@ -156,14 +156,22 @@ final class EntryScriptTest extends TestCase
         $entry = self::read('public/index-codeigniter.php');
 
         $helpers  = strpos($entry, 'system/Common.php');
-        $composer = strpos($entry, "'/../vendor/autoload.php'");
+
+        // The autoloader is now resolved through benchRequireAutoload(), which picks the
+        // app's PRUNED loader (see scripts/app-autoload.php) instead of naming
+        // vendor/autoload.php directly. Both spellings are accepted here; what matters
+        // to this test is the ORDER, so the first occurrence of either one counts.
+        $composer = strpos($entry, 'benchRequireAutoload(');
+        if ($composer === false) {
+            $composer = strpos($entry, "'/../vendor/autoload.php'");
+        }
 
         self::assertNotFalse($helpers, 'the entry script must preload CI4\'s Common.php');
-        self::assertNotFalse($composer, 'the entry script must load composer');
+        self::assertNotFalse($composer, 'the entry script must load an autoloader');
         self::assertLessThan(
             $composer,
             $helpers,
-            'Common.php must be required BEFORE vendor/autoload.php, or Laravel\'s helpers shadow CI4\'s'
+            'Common.php must be required BEFORE the autoloader, or Laravel\'s helpers shadow CI4\'s'
         );
     }
 

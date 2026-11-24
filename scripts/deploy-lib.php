@@ -11,6 +11,11 @@ declare(strict_types=1);
  * distro packages), readiness polling, and the http-bench child invocation.
  */
 
+// benchIsFloorApp()/benchAppAutoload(), used by ensureAppAutoload(). Loaded here because
+// this file only DEFINES functions at load time — requiring it has no side effects, and
+// it keeps the dependency visible instead of relying on run-http.php's include order.
+require_once dirname(__DIR__) . '/bench-app-autoload.php';
+
 // --- Config stamping -----------------------------------------------------------
 
 /**
@@ -1736,6 +1741,59 @@ function measureFloorApp(string $root, string $name, string $mode, string $baseU
         'app'   => $name,
         'modes' => $data['modes'] ?? [],
     ];
+}
+
+/**
+ * Make sure this app's pruned autoloader exists, generating it if it does not.
+ *
+ * WHY THE HARNESS DOES THIS. The generated loader under `vendor/app-autoload/<app>/`
+ * is a build artifact, not a committed file: it is a pure function of `composer.lock`,
+ * so committing it would mean committing a stale copy the moment a dependency moves.
+ * But every measured process requires it (see `benchRequireAutoload()`), so a run that
+ * started without it would silently measure the SHARED autoloader — and the shared one
+ * executes all seven frameworks' bootstrap files, which is the 4x boot skew this exists
+ * to remove.
+ *
+ * Idempotent and cheap: the generator is skipped when the file is already newer than
+ * `composer.lock`, so a run pays one `stat()` per app after the first.
+ *
+ * A missing generator is NOT fatal here: `benchRequireAutoload()` falls back to
+ * `vendor/autoload.php`, which is exactly the behaviour every published dataset had.
+ * The run then measures the shared chain — degraded, not broken — and
+ * `tests/AppAutoloadTest.php` is what makes the omission visible in CI.
+ */
+function ensureAppAutoload(string $root, string $appKey, string $phpCli = ''): void
+{
+    if (benchIsFloorApp($appKey)) {
+        return; // a floor has no framework closure to prune against
+    }
+
+    $generated = "{$root}/vendor/app-autoload/{$appKey}/autoload.php";
+    $lock      = "{$root}/composer.lock";
+
+    if (is_file($generated) && (!is_file($lock) || filemtime($generated) >= filemtime($lock))) {
+        return;
+    }
+
+    $generator = "{$root}/scripts/app-autoload.php";
+    if (!is_file($generator)) {
+        return;
+    }
+
+    $php = $phpCli !== '' ? $phpCli : PHP_BINARY;
+
+    exec(
+        escapeshellcmd($php) . ' ' . escapeshellarg($generator)
+            . ' --apps=' . escapeshellarg($appKey) . ' 2>&1',
+        $out,
+        $rc,
+    );
+
+    if ($rc !== 0) {
+        fwrite(STDERR, "[run-http] could not generate the pruned autoloader for {$appKey}"
+            . " (exit {$rc}); this block measures the SHARED autoloader instead:\n"
+            . '  ' . implode("\n  ", array_slice($out, -5)) . "\n");
+    }
 }
 
 /**

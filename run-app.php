@@ -79,7 +79,8 @@ if ($appKey === 'codeigniter') {
     require_once __DIR__ . '/vendor/codeigniter4/framework/system/Common.php';
 }
 
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/bench-app-autoload.php';
+benchRequireAutoload(__DIR__, $appKey);
 require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
 require_once __DIR__ . '/response-guard.php';

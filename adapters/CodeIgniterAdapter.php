@@ -168,6 +168,20 @@ final class CodeIgniterAdapter implements WebAppAdapter
         // 2. Framework constants (timing constants, COMPOSER_PATH, exit codes).
         //    Shippped in the sample app dir (Boot::loadConstants() does the
         //    same require from APPPATH); pre-defined APP_NAMESPACE wins there.
+        //
+        //    COMPOSER_PATH and VENDORPATH are pre-defined for the same reason the
+        //    entry script does it: CI4's Autoloader `include`s COMPOSER_PATH during
+        //    `initialize()`, and the default points at the SHARED vendor/autoload.php,
+        //    whose eager `files` list executes all seven frameworks' bootstrap code.
+        //    VENDORPATH is pre-defined because the Autoloader would otherwise derive
+        //    it from the pruned path's directory. See scripts/app-autoload.php.
+        if (!defined('VENDORPATH')) {
+            define('VENDORPATH', $root . 'vendor' . DIRECTORY_SEPARATOR);
+        }
+        if (!defined('COMPOSER_PATH')) {
+            $choice = benchAppAutoload(dirname(__DIR__), 'codeigniter');
+            define('COMPOSER_PATH', $choice['path']);
+        }
         require_once $root . 'vendor/codeigniter4/framework/app/Config/Constants.php';
 
         // 3. Common functions (service(), config(), is_cli(), view(), ...).

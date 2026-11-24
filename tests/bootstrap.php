@@ -15,6 +15,12 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 $root = dirname(__DIR__);
 
+// The per-app autoloader resolver and the closure generator's helpers
+// (benchAppAutoload(), appRootPackages(), dependencyClosure(), owningPackage()).
+// Loaded here because AppAutoloadTest drives the real rule, not a copy of it.
+require_once __DIR__ . '/../bench-app-autoload.php';
+require_once "{$root}/scripts/app-autoload.php";
+
 // Pure helpers: stats, budget detection, request parsing.
 require_once "{$root}/scripts/bench-lib.php";
 

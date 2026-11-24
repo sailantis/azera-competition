@@ -278,18 +278,28 @@ final class WorkloadIntegrityTest extends TestCase
                 . ' no-DB rows measure middleware instead of the framework'
         );
 
+        // The group must be registered as CLASS STRINGS, not instances: the dispatcher
+        // builds a middleware on first use, so `new`ing them at boot loaded two classes
+        // (6 files) for routes that never run the group. Asserted because reverting to
+        // `new` is invisible in the output and only moves the boot band.
         self::assertMatchesRegularExpression(
-            "/defineMiddlewareGroup\(\s*'web'\s*,/",
+            '/defineMiddlewareGroup\(\s*\'web\'\s*,\s*\[/',
             $source,
             'the web middleware group must still exist'
         );
+        self::assertDoesNotMatchRegularExpression(
+            '/defineMiddlewareGroup\(\s*\'web\'\s*,\s*\[\s*new\s+/',
+            $source,
+            'the web group must list class strings, not eager instances — see the'
+                . ' docblock above defineMiddlewareGroup() for the measured boot cost'
+        );
         self::assertMatchesRegularExpression(
-            '/SecurityHeadersMiddleware\(\)/',
+            '/SecurityHeadersMiddleware(::class)?\(?\)?/',
             $source,
             'the security-headers demo must stay, scoped rather than deleted'
         );
         self::assertMatchesRegularExpression(
-            '/RequestContextMiddleware\(\)/',
+            '/RequestContextMiddleware(::class)?\(?\)?/',
             $source,
             'the request-context demo must stay, scoped rather than deleted'
         );
