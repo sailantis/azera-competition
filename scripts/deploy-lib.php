@@ -1732,6 +1732,20 @@ function measureFloorApp(string $root, string $name, string $mode, string $baseU
 
     // Floors are single-endpoint probes (GET / only) — never the full label
     // list; the report only reads the GET / entry.
+    //
+    // WAIT FOR IT FIRST. The app path always waits for its server, but this one did
+    // not, and `measureFloors()` reloads FPM immediately before calling it: a reload
+    // replaces workers ASYNCHRONOUSLY, so the new pool's socket exists while still
+    // being connectionless and nginx answers 502. On 2026-11-24 that aborted a
+    // completed 4-hour run at its last step (`floor-php`), discarding the latency
+    // measurements of every app on every arm — abortIfBroken() treats a 502 as a
+    // broken body, and it is right to, because a 502 in the middle of a timed block
+    // means the number describes a restart rather than a request.
+    //
+    // The floor keys are not app keys, so the fingerprint check inside waitForServer()
+    // is skipped (there is no `/features/config` behind a floor) — it probes until the
+    // body stops being a gateway error, which is exactly the condition that failed.
+    waitForServer($baseUrl, $server, $name);
     runHttpBench($root, $server, $name, $baseUrl, $itersPerRun, $runs, $tmpJson, '--requests="GET /"', $phpCli);
 
     $data = json_decode((string) file_get_contents($tmpJson), true);

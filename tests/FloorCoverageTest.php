@@ -314,6 +314,44 @@ final class FloorCoverageTest extends TestCase
     }
 
     /**
+     * A floor probe must WAIT for its server before timing it.
+     *
+     * `measureFloors()` reloads FPM immediately before it calls `measureFloorApp()`, and
+     * a reload replaces workers ASYNCHRONOUSLY: the new pool's socket exists while it is
+     * still connectionless, so nginx answers 502. The app path always waited for
+     * readiness; the floor path did not, and on 2026-11-24 that aborted a run at its
+     * very last step — after all 28 app blocks had been measured — so the whole
+     * 4-hour latency dataset was discarded. abortIfBroken() is right to treat a 502 as
+     * a broken body: a gateway error inside a timed block means the number describes a
+     * restart, not a request.
+     *
+     * Asserted on the SOURCE because the failure is an ABSENT call: there is nothing to
+     * observe at runtime without a live FPM master whose workers are mid-replacement.
+     */
+    public function testAFloorProbeWaitsForItsServerBeforeTimingIt(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__) . '/scripts/deploy-lib.php');
+
+        $start = strpos($source, 'function measureFloorApp(');
+        self::assertNotFalse($start, 'measureFloorApp() must exist');
+
+        $end = strpos($source, '/**', $start + 1);
+
+        $body = substr($source, $start, $end === false ? null : $end - $start);
+
+        $wait = strpos($body, 'waitForServer($baseUrl, $server, $name);');
+        $bench = strpos($body, 'runHttpBench(');
+
+        self::assertNotFalse($wait, 'a floor must wait for readiness — the FPM reload is asynchronous');
+        self::assertNotFalse($bench);
+        self::assertLessThan(
+            $bench,
+            $wait,
+            'the readiness wait must come BEFORE the timed block, or a 502 is timed and then aborts the run'
+        );
+    }
+
+    /**
      * `--floors-only` must skip the app loop, not run it first.
      *
      * THIS IS WHY THE BAD PROBE WAS A `--quick` ONE. The flag was only consulted
