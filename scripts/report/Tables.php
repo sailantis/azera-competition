@@ -10,6 +10,24 @@ namespace AzeraCompetition\Report;
  */
 final class Tables
 {
+    /**
+     * How far behind the fastest a cell may sit and still be called "not separable".
+     *
+     * CALIBRATED, not chosen. Two full 1000x10 runs of the SAME code, compared cell by
+     * cell on the arms where the code did not change, moved by a median of 3.6% and a
+     * p75 of 8.2% (`|delta|` of one cell's median between the 2026-11-23 and
+     * 2026-11-24 datasets). 3% is the median of that noise: a runner-up closer than
+     * the typical same-cell repeat is not a measured difference, and bolding it as one
+     * is how `GET /` on volucer-attach came to be read as an 8 us defeat when the same
+     * pair flipped sign across repeated interleaved runs.
+     *
+     * On the 2026-11-24 dataset 18 of 104 row/mode pairs have a runner-up inside this
+     * band, and 17 of those 18 are Azera against Phalcon on a RESIDENT arm — the case
+     * the band exists for, where a few microseconds of framework sit inside a ~160 us
+     * row that is almost entirely the server.
+     */
+    private const TIE_BAND = 0.03;
+
     public function __construct(private readonly ResultStore $store) {}
 
     /**
@@ -23,8 +41,14 @@ final class Tables
      * headline, so the reader can see where the time goes instead of taking
      * the total on faith.
      *
+     * The number is the MEDIAN, which is what the charts beside this table draw. The
+     * page published the trimmed mean here and the median there until 2026-11-25,
+     * which put two figures for one cell on one page under two legends; see
+     * ResultStore::medianWithBoot(). A cell within TIE_BAND of the fastest is flagged
+     * `tie` so it is not presented as a defeat it cannot support.
+     *
      * @param list<string> $apps
-     * @return list<array{request:string,feature:string,cells:array<string,array{ms:?float,winner:bool,handle:?float,cleanup:?float,boot:?float}>}>
+     * @return list<array{request:string,feature:string,cells:array<string,array{ms:?float,winner:bool,tie:bool,handle:?float,cleanup:?float,boot:?float}>}>
      */
     public function latencyMatrix(string $mode, array $apps): array
     {
@@ -35,13 +59,22 @@ final class Tables
             $best    = null;
             foreach ($apps as $app) {
                 if ($feature !== '' && !$this->store->supports($app, $feature)) {
-                    $cells[$app] = ['ms' => null, 'winner' => false, 'handle' => null, 'cleanup' => null, 'boot' => null];
+                    $cells[$app] = ['ms' => null, 'winner' => false, 'tie' => false, 'handle' => null, 'cleanup' => null, 'boot' => null];
                     continue;
                 }
-                $ms = $this->store->msWithBoot($app, $mode, $req);
+                // An endpoint an entrant sits out is blank for that entrant only. The
+                // FEATURE-level gate above cannot express this: `aop` covers both
+                // `/features/aop` and its hand-written control, and only the first is
+                // not a race for Phalcon.
+                if (!$this->store->racesOn($app, $req)) {
+                    $cells[$app] = ['ms' => null, 'winner' => false, 'tie' => false, 'handle' => null, 'cleanup' => null, 'boot' => null];
+                    continue;
+                }
+                $ms = $this->store->medianWithBoot($app, $mode, $req);
                 $cells[$app] = [
                     'ms'      => $ms,
                     'winner'  => false,
+                    'tie'     => false,
                     'handle'  => $this->store->ms($app, $mode, $req, 'handle_ms'),
                     'cleanup' => $this->store->ms($app, $mode, $req, 'cleanup_ms'),
                     'boot'    => $this->store->rowBootMs($app, $mode, $req),
@@ -52,8 +85,17 @@ final class Tables
             }
             if ($best !== null) {
                 foreach ($cells as $app => $c) {
-                    if ($c['ms'] !== null && abs($c['ms'] - $best) < 1e-9) {
+                    if ($c['ms'] === null) {
+                        continue;
+                    }
+                    if (abs($c['ms'] - $best) < 1e-9) {
                         $cells[$app]['winner'] = true;
+                        continue;
+                    }
+                    // Strictly slower, but inside the noise band: flag it rather
+                    // than printing a bare number that reads as a loss.
+                    if ($best > 0.0 && ($c['ms'] - $best) / $best <= self::TIE_BAND) {
+                        $cells[$app]['tie'] = true;
                     }
                 }
             }
@@ -87,13 +129,13 @@ final class Tables
             $workload = BenchmarkConfig::workloadFor($row['request']);
             $cells    = ['| `' . $row['request'] . '` | ' . ($workload !== '' ? $workload : '—') . ' |'];
             foreach ($apps as $app) {
-                $c  = $row['cells'][$app] ?? ['ms' => null, 'winner' => false, 'handle' => null, 'cleanup' => null, 'boot' => null];
+                $c  = $row['cells'][$app] ?? ['ms' => null, 'winner' => false, 'tie' => false, 'handle' => null, 'cleanup' => null, 'boot' => null];
                 $ms = $c['ms'];
                 if ($ms === null) {
                     $cells[] = ' — |';
                     continue;
                 }
-                $label = SvgChart::fmt($ms);
+                $label = SvgChart::fmt($ms) . ($c['tie'] ? '≈' : '');
                 $sub   = self::splitLabel($c);
                 if ($split && $sub !== '') {
                     $label .= ' <sub>' . $sub . '</sub>';
@@ -185,13 +227,13 @@ final class Tables
             $body .= '<tr><td><code>' . htmlspecialchars($row['request'], ENT_QUOTES, 'UTF-8') . '</code></td>'
                 . '<td class="muted">' . htmlspecialchars($workload !== '' ? $workload : '—', ENT_QUOTES, 'UTF-8') . '</td>';
             foreach ($apps as $app) {
-                $c  = $row['cells'][$app] ?? ['ms' => null, 'winner' => false, 'handle' => null, 'cleanup' => null, 'boot' => null];
+                $c  = $row['cells'][$app] ?? ['ms' => null, 'winner' => false, 'tie' => false, 'handle' => null, 'cleanup' => null, 'boot' => null];
                 $ms = $c['ms'];
                 if ($ms === null) {
                     $body .= '<td class="muted">—</td>';
                     continue;
                 }
-                $label = SvgChart::fmt($ms);
+                $label = SvgChart::fmt($ms) . ($c['tie'] ? ' <span class="tie" title="within the run-to-run noise band of the fastest">≈</span>' : '');
                 $sub   = self::splitLabel($c);
                 if ($split && $sub !== '') {
                     $label .= ' <sub>' . $sub . '</sub>';
@@ -231,6 +273,6 @@ final class Tables
                 };
             }
         }
-        return "<h2>Latency by endpoint <span class=\"unit\">(ms, trimmed mean — lower is better)</span>{$sub}</h2>\n<table class=\"matrix\">\n<thead>{$head}</thead>\n<tbody>\n{$body}</tbody>\n</table>";
+        return "<h2>Latency by endpoint <span class=\"unit\">(ms, median — lower is better)</span>{$sub}</h2>\n<table class=\"matrix\">\n<thead>{$head}</thead>\n<tbody>\n{$body}</tbody>\n</table>";
     }
 }

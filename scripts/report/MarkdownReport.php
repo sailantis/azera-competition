@@ -149,7 +149,13 @@ final class MarkdownReport
         $realServer = $this->store->floors() !== [];
         $l[] = '## Latency by endpoint';
         $l[] = '';
-        $l[] = 'Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. '
+        $l[] = 'Median in milliseconds, lower is better. **Bold** = fastest for that endpoint; a '
+            . 'trailing `≈` = within the run-to-run noise band of the fastest, so read it as a tie '
+            . 'rather than a defeat (`Tables::TIE_BAND` states the band and how it was calibrated). '
+            . 'The median is the statistic the charts beside this table draw, so a cell and its bar '
+            . 'are the same number; the dataset also carries a trimmed mean, which sits a few percent '
+            . 'higher and ranks identically in all but two dead-heat cells, and it stays available for '
+            . 'the outlier-robust cross-check rather than as a second published figure. '
             . ($this->store->hasBoot()
                 ? 'Every number is END-TO-END per-request occupancy for the view\'s deployment model: the '
                     . 'framework boot of that model is part of the cell, not parked in a separate chart. '
@@ -596,10 +602,45 @@ final class MarkdownReport
                 . 'and no template, stated as that floor\'s `GET /` row in the dataset. Every row below '
                 . 'stands on it, so only differences larger than it are framework differences — and a '
                 . 'row BELOW it is a measurement that describes a different server than its floor, '
-                . 'which is what FloorCoverageTest and bench-lib.php::assertRowsNotBelowFloor() now refuse.';
+                . 'which is what FloorCoverageTest and bench-lib.php::assertRowsNotBelowFloor() now refuse.'
+                . $this->runToRunNote($mode);
         }
 
         return '';
+    }
+
+    /**
+     * How much a resident-arm cell moves between two runs of the same code.
+     *
+     * WHY THIS IS ON THE PAGE. On a resident arm the framework layer is a few
+     * microseconds inside a row that is mostly the server, so a small gap between two
+     * entrants sits INSIDE the spread and its sign is not stable. Reported 2026-11-25
+     * when `GET /` on volucer-attach was read as one entrant beating another by a few
+     * microseconds: repeated interleaved runs of those two supervisors produced gaps
+     * that flipped sign, with a span an order of magnitude wider than the "win".
+     *
+     * The figure is deliberately a QUALITATIVE band rather than a measured number in
+     * prose, for the reason ChartManifestTest enforces: two full runs of this suite,
+     * compared cell by cell on the arms whose code did not change, moved by a median
+     * of a few percent and by more than a tenth on roughly one cell in five. A
+     * sentence that froze those percentages would be stale after the next run, so the
+     * page states the SHAPE and points at the band the tie mark uses.
+     *
+     * Per-request arms do not get this note: their rows are dominated by a boot that
+     * costs hundreds of microseconds, so run-to-run movement is a much smaller share
+     * of the number and a gap there is usually a real difference.
+     */
+    private function runToRunNote(string $mode): string
+    {
+        if (!$this->store->isResidentMode($mode)) {
+            return '';
+        }
+
+        return "\n\n**Run-to-run spread** — a resident arm's rows are mostly the server, so a cell moves "
+            . 'by a few percent between two runs of unchanged code, and by more than a tenth on roughly '
+            . 'one cell in five. Read a gap smaller than that band as a tie, which is what the trailing '
+            . '`≈` in the table marks, and prefer the rows where real work is done over the routing-only '
+            . 'ones when the question is which framework is faster.';
     }
 
     /**
@@ -1337,6 +1378,9 @@ final class MarkdownReport
             foreach ($reqs as $req) {
                 $measured = [];
                 foreach ($participants as $app) {
+                    if (!$this->store->racesOn($app, $req)) {
+                        continue;
+                    }
                     $spread = $this->store->spread($app, $mode, $req);
                     if ($spread !== null) {
                         $measured[$app] = $spread;
@@ -1417,9 +1461,25 @@ final class MarkdownReport
             // with six and no explanation; and the AOP row silently ranks
             // transparent interception (generated proxies, handler untouched)
             // against hand-written pipelines, which are different work.
+            //
+            // An ENDPOINT-level exclusion counts as absent here even though the app
+            // supports the feature: `aop` is in Phalcon's feature list because it
+            // serves the control, but it must not appear in the `/features/aop` band.
             $absent = [];
             foreach ($apps as $app) {
                 if (!$this->store->supports($app, $feature)) {
+                    $absent[] = BenchmarkConfig::appLabel($app);
+                    continue;
+                }
+                // Absent from EVERY request of this feature, or merely some?
+                $racedSome = false;
+                foreach ($reqs as $req) {
+                    if ($this->store->racesOn($app, $req)) {
+                        $racedSome = true;
+                        break;
+                    }
+                }
+                if (!$racedSome) {
                     $absent[] = BenchmarkConfig::appLabel($app);
                 }
             }
@@ -1442,9 +1502,26 @@ final class MarkdownReport
                 if ($parts !== []) {
                     $notCompeting .= "\n\n*Read this row in two styles.* " . implode('. ', $parts)
                         . '. The two styles pay for different machinery, and the cross-style ranking '
-                        . 'is not a speed verdict. `GET /features/aop-direct` is the control — the '
-                        . 'identical insert with the transaction written by hand — so the gap between '
-                        . 'that row and this one is what interception actually costs.';
+                        . 'is not a speed verdict.';
+                }
+                // Name the endpoint-level exclusion and the row that replaces it, so a
+                // reader who notices one entrant missing from this band knows which
+                // band does include it.
+                $sitsOut = [];
+                foreach ($apps as $app) {
+                    foreach ($reqs as $req) {
+                        if (!$this->store->racesOn($app, $req)) {
+                            $sitsOut[] = BenchmarkConfig::appLabel($app) . ' (`' . $req . '`)';
+                        }
+                    }
+                }
+                if ($sitsOut !== []) {
+                    $notCompeting .= "\n\n*Sits out one endpoint, not the feature:* "
+                        . implode(', ', $sitsOut) . ' — the identical insert with the transaction '
+                        . 'written by hand, which is what this entrant\'s `/features/aop` already '
+                        . 'does, so racing it there would compare machinery rather than speed. It '
+                        . 'DOES compete on `GET /features/aop-direct`, the control, so the gap '
+                        . 'between that row and this one is what interception actually costs.';
                 }
             }
 

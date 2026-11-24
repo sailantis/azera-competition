@@ -1045,6 +1045,15 @@ final class ResultStore
 
     /**
      * Trimmed-mean latency in ms for one measurement.
+     *
+     * The trimmed mean is the mean of each run's mean with the top and bottom run
+     * discarded. It is the OUTLIER-ROBUST cross-check: it survives a single bad run
+     * the way a mean of all samples would not.
+     *
+     * It is deliberately NOT what the charts draw. A chart cannot show a trim
+     * proportion, and its whisker runs from the fastest OBSERVATION to p95 — values
+     * that exist in the sample, where a trimmed mean of run means does not. See
+     * medianWithBoot() for the number the charts and tables publish.
      */
     public function ms(string $app, string $mode, string $request, string $metric = 'trimmed_mean_ms'): ?float
     {
@@ -1053,6 +1062,32 @@ final class ResultStore
             return null;
         }
         return (float) $row[$metric];
+    }
+
+    /**
+     * Median latency with the mode's boot added — the number the charts draw and the
+     * tables print.
+     *
+     * WHY THE MEDIAN, AND WHY HERE. The page used to publish the trimmed mean in its
+     * table and the median in its chart, which put two different numbers for one cell
+     * on one page with one legend each. Reported 2026-11-25 after a reader found
+     * `GET /` reading 0.198 in the table and 0.191 in the chart beside it.
+     *
+     * The median is the statistic that can be shown: it is one of the plotted points,
+     * so the dot on a bar IS the published number, and the whisker (fastest
+     * observation to p95) brackets it with values that also exist in the sample. A
+     * trimmed mean of run means is not any observation, so no mark on the chart could
+     * equal it and no bar could reveal that it discarded the top and bottom run.
+     *
+     * The two agree to within a few percent — across the 2026-11-24 dataset the
+     * trimmed mean sits a mean of 3.0% above the median, symmetrically across
+     * entrants — so this changes no conclusion, only which number is named.
+     * `ms()` keeps the trimmed mean available for the cross-check the docs describe.
+     */
+    public function medianWithBoot(string $app, string $mode, string $request): ?float
+    {
+        $spread = $this->spread($app, $mode, $request);
+        return $spread['median'] ?? null;
     }
 
     /**
@@ -1491,6 +1526,12 @@ final class ResultStore
             if (!$this->supports($app, $feature)) {
                 continue;
             }
+            // The endpoint-level exclusion, which the feature gate cannot express:
+            // Phalcon implements `aop` (it serves the control endpoint) but sits out
+            // `/features/aop` itself.
+            if (!$this->racesOn($app, $request)) {
+                continue;
+            }
             // Boot-inclusive: a race is decided on full per-request worker
             // occupancy, matching the table and the charts.
             $ms = $this->msWithBoot($app, $mode, $request);
@@ -1582,6 +1623,12 @@ final class ResultStore
     /**
      * Requests that every app in $apps has a measurement for (fair comparison).
      *
+     * An app that is EXCLUDED from an endpoint is treated as absent from it. Without
+     * that, `GET /features/aop` would drop out of every total because Phalcon sits
+     * that one endpoint out, and six frameworks would be compared over a smaller
+     * workload than the seventh's own feature page draws — the totals would silently
+     * answer a different question than the tables above them.
+     *
      * @param list<string> $apps
      * @return list<string>
      */
@@ -1591,6 +1638,9 @@ final class ResultStore
         foreach ($this->requests($mode) as $req) {
             $all = true;
             foreach ($apps as $app) {
+                if (!$this->racesOn($app, $req)) {
+                    continue; // not this app's race: the request stays common
+                }
                 if ($this->ms($app, $mode, $req) === null) {
                     $all = false;
                     break;
@@ -1601,5 +1651,17 @@ final class ResultStore
             }
         }
         return $out;
+    }
+
+    /**
+     * Whether an app may be raced on this endpoint.
+     *
+     * Delegates to BenchmarkConfig so the table, the totals and the feature charts
+     * cannot disagree about which endpoints an entrant sits out — the failure mode is
+     * a row blank in one place and counted in another.
+     */
+    public function racesOn(string $app, string $request): bool
+    {
+        return BenchmarkConfig::racesOn($app, $request);
     }
 }

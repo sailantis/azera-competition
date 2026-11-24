@@ -83,9 +83,14 @@ final class BenchmarkConfig
             'spiral'      => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
             'codeigniter' => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
             'cakephp'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
-            // Phalcon 6 has no AOP/interceptor layer, so it sits out exactly one
-            // race: `GET /features/aop`, which compares generated proxies against
-            // hand-written calls.
+            // Phalcon 6 has no AOP/interceptor layer, so it sits out ONE ENDPOINT:
+            // `GET /features/aop`, which compares generated proxies against
+            // hand-written calls. That exclusion is expressed per endpoint in
+            // excludedRequests(), not by dropping the whole 'aop' feature — the
+            // feature also covers `GET /features/aop-direct`, the hand-written
+            // CONTROL that every entrant serves and that prices the abstraction.
+            // Dropping 'aop' hid Phalcon's control row from the one entrant that
+            // reads it best (see excludedRequests()).
             //
             // `logging`, `retry` and `pipeline` are SEPARATE features, and Phalcon
             // competes in all three — they are Phalcon's Logger, a retry loop and a
@@ -97,8 +102,50 @@ final class BenchmarkConfig
             // adapter's events manager, Phalcon\Events\Manager,
             // Phalcon\Filter\Validation, Phalcon\Config, an explicit request-scope
             // reset, and a cache-backed rate limiter.
-            'phalcon'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
+            'phalcon'     => ['routing', 'throughput', 'orm', 'query-builder', 'rest-api', 'aop', 'logging', 'retry', 'pipeline', 'cache', 'db-events', 'events', 'validation', 'config', 'request-scoped', 'rate-limiter'],
         ];
+    }
+
+    /**
+     * Endpoints an entrant MEASURED but must not be raced on, per app.
+     *
+     * WHY THIS IS SEPARATE FROM adapterFeatures(). A feature is a coarse thing —
+     * `'aop'` covers both `/features/aop` and `/features/aop-direct` — so omitting it
+     * removes both rows. That was right for the proxy comparison and wrong for its
+     * control: `GET /features/aop-direct` exists precisely to be served by everyone
+     * (the same insert with the transaction written out by hand), and it is the
+     * denominator that says what the abstraction costs. Phalcon's `/features/aop`
+     * already IS the hand-written version, so it is the clearest reader of that
+     * number, and a feature-level exclusion hid it.
+     *
+     * So `'aop'` is now NOT omitted for Phalcon; this map suppresses the single
+     * endpoint instead. `/features/aop` still cannot be raced — comparing a bare
+     * begin/commit against generated proxies is comparing machinery — but
+     * `/features/aop-direct` is measured, published, and counted in the totals.
+     *
+     * @return array<string,list<string>> app => request keys it must not be raced on
+     */
+    public static function excludedRequests(): array
+    {
+        return [
+            // Phalcon 6 has no interceptor layer, so its `/features/aop` runs the
+            // hand-written transaction that every other entrant reaches through
+            // advice. Its `aopDirectAction()` is that same work by design, which is
+            // exactly what the control endpoint is for.
+            'phalcon' => ['GET /features/aop'],
+        ];
+    }
+
+    /**
+     * Whether an entrant may be raced on this endpoint.
+     *
+     * Consulted by the table, the totals and the feature charts, so an excluded
+     * endpoint is absent everywhere rather than blank in one place and counted in
+     * another.
+     */
+    public static function racesOn(string $app, string $request): bool
+    {
+        return !in_array($request, self::excludedRequests()[$app] ?? [], true);
     }
 
     /**
@@ -489,8 +536,15 @@ final class BenchmarkConfig
 
     /**
      * The `aop` participants grouped by style, for the page that has to say
-     * which is which. Derived from adapterFeatures() so an app absent from the
-     * race is not named.
+     * which is which.
+     *
+     * Derived from adapterFeatures() so an app that does not implement `aop` at all
+     * is not named, AND from excludedRequests() so an app that implements the feature
+     * but sits out its one raced endpoint is not named either. Phalcon is that second
+     * case: it serves `/features/aop-direct`, so `'aop'` is in its feature list, but
+     * its `/features/aop` runs the hand-written transaction every other entrant
+     * reaches through advice — so it must not be listed as having competed, or the
+     * style split would claim a race it did not run.
      *
      * @return array{transparent:list<string>,direct:list<string>}
      */
@@ -500,6 +554,9 @@ final class BenchmarkConfig
 
         foreach (self::adapterFeatures() as $app => $features) {
             if (!in_array('aop', $features, true)) {
+                continue;
+            }
+            if (!self::racesOn($app, 'GET /features/aop')) {
                 continue;
             }
             $out[self::aopStyle()[$app] ?? 'direct'][] = self::appLabel($app);
@@ -609,10 +666,10 @@ final class BenchmarkConfig
                 . ($absent === ['Phalcon 6 (RC)']
                     ? ' has no interceptor layer (no attribute-declared, proxy-generated advice), '
                         . 'so this race would compare its hand-written transaction against the other '
-                        . 'entrants\' generated proxies — the machinery, not the framework. It serves '
-                        . '`GET /features/aop` and the three advice demos, so a missing row is a '
-                        . 'deliberate exclusion, not an unimplemented endpoint.'
-                    : ' sits this race out; see `BenchmarkConfig::adapterFeatures()`.');
+                        . 'entrants\' generated proxies — the machinery, not the framework. It DOES '
+                        . 'serve `GET /features/aop-direct`, the hand-written control, and the three '
+                        . 'advice demos: the exclusion is one endpoint, not a missing feature.'
+                    : ' sits this race out; see `BenchmarkConfig::excludedRequests()`.');
         }
 
         return ($named !== '' ? $named : 'This entrant')

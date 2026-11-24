@@ -60,33 +60,50 @@ final class AdapterFeaturesTest extends TestCase
     }
 
     /**
-     * Phalcon's one genuine gap is AOP, and nothing else.
+     * Phalcon's one genuine gap is ONE ENDPOINT of AOP, not the feature.
      *
-     * AOP covers /features/aop, /features/log, /features/retry and
-     * /features/pipeline (see `BenchmarkConfig::featureMap()`). The first is the
-     * interceptor pipeline itself; the other three are implemented BY that
-     * pipeline — `#[Transactional]`, `#[Log]` and `#[Retry]` on azera, and the
-     * equivalent proxy advice elsewhere. Phalcon 6 has no interceptor layer, so
-     * those four rows would compare generated proxies against hand-written calls:
-     * a difference in machinery, not in speed, that flatters Phalcon.
+     * `GET /features/aop` compares generated proxies against hand-written calls. Phalcon
+     * 6 has no interceptor layer, so racing its hand-written insert there would compare
+     * machinery rather than speed — that endpoint is excluded, per app, in
+     * `BenchmarkConfig::excludedRequests()`.
      *
-     * Everything else is a native Phalcon subsystem — Phalcon\Cache, the db
-     * adapter's events manager, Phalcon\Events\Manager, Phalcon\Filter\Validation,
-     * Phalcon\Config, an explicit request-scope reset and a cache-backed limiter.
-     * Excluding it from those would hide a real result.
+     * `GET /features/aop-direct` is a DIFFERENT question and Phalcon answers it best: it
+     * is the hand-written CONTROL that every entrant serves, and Phalcon's `/features/aop`
+     * is already that same code. Excluding the whole `aop` feature (what this test used
+     * to require) hid the control row from the entrant that reads it best and dropped
+     * Phalcon from the totals' comparison silently.
+     *
+     * Everything else is a native Phalcon subsystem — Phalcon\Cache, the db adapter's
+     * events manager, Phalcon\Events\Manager, Phalcon\Filter\Validation, Phalcon\Config,
+     * an explicit request-scope reset and a cache-backed limiter. Excluding it from
+     * those would hide a real result.
      */
-    public function testPhalconSitsOutOnlyTheAopRace(): void
+    public function testPhalconSitsOutOneAopEndpointNotTheFeature(): void
     {
         $features = self::config()['phalcon'] ?? [];
         $all      = array_keys(self::featureRequests());
 
-        $missing = array_values(array_diff($all, $features));
-
         self::assertSame(
-            ['aop'],
-            $missing,
-            'Phalcon must take part in every feature it implements natively, and sit out only AOP '
-                . '(no interceptor layer in Phalcon 6). Unexpectedly missing: ' . implode(', ', $missing)
+            [],
+            array_values(array_diff($all, $features)),
+            'Phalcon implements every feature natively; its gap is one ENDPOINT, not a facility. '
+                . 'Missing: ' . implode(', ', array_values(array_diff($all, $features)))
+        );
+
+        require_once dirname(__DIR__) . '/scripts/report/BenchmarkConfig.php';
+        $cfg = \AzeraCompetition\Report\BenchmarkConfig::class;
+
+        self::assertTrue(
+            $cfg::racesOn('phalcon', 'GET /features/aop-direct'),
+            'the hand-written control is everyone\'s race, including the entrant that always writes it by hand'
+        );
+        self::assertFalse(
+            $cfg::racesOn('phalcon', 'GET /features/aop'),
+            'the proxy comparison is the one endpoint Phalcon cannot be raced on'
+        );
+        self::assertTrue(
+            $cfg::racesOn('azera', 'GET /features/aop'),
+            'every other entrant races both endpoints'
         );
     }
 
@@ -171,7 +188,8 @@ final class AdapterFeaturesTest extends TestCase
     /**
      * The in-race style split names only participants.
      *
-     * Phalcon is absent from the AOP race, so it must not appear in either list —
+     * Phalcon implements the `aop` FEATURE (it serves the control endpoint) but sits
+     * out the raced `/features/aop` endpoint, so it must not appear in either list —
      * naming it would tell a reader it competed and lost.
      */
     public function testTheStyleSplitNamesOnlyParticipants(): void
@@ -185,8 +203,9 @@ final class AdapterFeaturesTest extends TestCase
         self::assertNotContains(
             'Phalcon 6 (RC)',
             $split['direct'],
-            'Phalcon sits out the AOP race; listing it among the direct entrants would '
-                . 'claim it competed'
+            'Phalcon sits out the raced /features/aop endpoint; listing it among the direct '
+                . 'entrants would claim it competed. It serves /features/aop-direct, which is a '
+                . 'different row.'
         );
         self::assertContains('Laravel', $split['direct']);
     }
