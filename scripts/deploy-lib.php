@@ -818,14 +818,21 @@ function startVolucerSupervisor(string $root, string $deployDir, string $appKey,
 {
     @mkdir(dirname($relay), 0777, true);
 
+    // A floor key has no framework to boot, and app.php exits on an unknown
+    // BENCH_APP by design. So the floor gets its own supervisor — see
+    // deploy/volucer/attach-floor.php for why that is a separate file rather than a
+    // "no framework" branch inside the worker every measured request pays for.
+    $isFloor = str_starts_with($appKey, 'floor-');
+    $script  = $isFloor ? "{$root}/deploy/volucer/attach-floor.php" : "{$root}/deploy/volucer/attach.php";
+
     $cmd = sprintf(
-        'exec env BENCH_APP=%s VOLUCER_RELAY_SOCKET=%s %s -d opcache.enable_cli=1 '
+        'exec env %sVOLUCER_RELAY_SOCKET=%s %s -d opcache.enable_cli=1 '
             . '-d opcache.validate_timestamps=0 -d opcache.jit=tracing '
             . '-d opcache.jit_buffer_size=64M %s 2>&1',
-        escapeshellarg($appKey),
+        $isFloor ? '' : ('BENCH_APP=' . escapeshellarg($appKey) . ' '),
         escapeshellarg($relay),
         escapeshellarg($phpCli),
-        escapeshellarg("{$root}/deploy/volucer/attach.php"),
+        escapeshellarg($script),
     );
 
     $logPath = "{$deployDir}/volucer-attach-{$appKey}.supervisor.log";
@@ -1515,6 +1522,7 @@ function measureFloors(
     array $volucerArms = [],
     string $volucerBinary = '',
     int $volucerPortBase = 8800,
+    string $phpCgi = '',
 ): array {
     // Same defaulting rule as stampAllDeployConfigs(): empty means "this
     // orchestrator", so the floor probe runs on the interpreter the RR workers use.
@@ -1615,6 +1623,86 @@ function measureFloors(
         }
     }
 
+    // --- Volucer floors ------------------------------------------------------
+    //
+    // WHY THESE EXIST. The other three servers get a floor probe so the constant
+    // webserver overhead is visible in the dataset. The two Volucer arms had none,
+    // which made their rows UNREADABLE in exactly the case where the floor matters
+    // most: `/echo` on volucer-attach is 149 us and the framework part of it is 4 us,
+    // so a reader comparing 149 against 160 on another server is comparing two
+    // floors and calling it a framework difference. That is the trap the
+    // 2026-11-24 `/echo` investigation fell into.
+    //
+    // WHAT THEY MEASURE. The floor app is a real entry script — a front controller
+    // that echoes `floor-volucer` — served by the same arm, the same config, the
+    // same one-connection rule and the same probe-kind env as a measured app. Only
+    // the framework is absent. So `floor − app` is the framework, and `floor` alone
+    // is the arm's constant overhead.
+    //
+    // floor-volucer-attach is 2.3 ms, not 150 us: that arm's supervisor FORKS A
+    // CHILD PER CONNECTION, and with `workers = 1` volucer holds one connection for
+    // the life of the slot, so the child is forked once per run and never again.
+    // The per-request cost of that arm is a unix-socket handshake, which is what the
+    // floor reports. floor-volucer-cgi re-runs the entry script through `php-cgi`
+    // every request, so its floor carries the CGI spawn plus a bare PHP boot — the
+    // number to hold a cold row against.
+    //
+    // Ports are pinned ABOVE every real app's bank (attach starts at 8810, cgi at
+    // 8820, six apps each, so the highest in use is 8837) rather than derived from
+    // BENCH_APP_ORDER, because a floor is not an app and must not shift an app's
+    // port when it is added. The base is passed so the pinning is stated on the
+    // SAME scale as the bank it sits above, and the returned map is checked
+    // against the pins — stampPort() is the authority on what was written.
+    if ($volucerArms !== []) {
+        $floorApps = [
+            'floor-volucer-attach' => 'volucer-attach',
+            'floor-volucer-cgi'    => 'volucer-cgi',
+        ];
+
+        // Stamped by the SAME function that stamps the real apps, so a floor cannot
+        // drift from the arm it is a floor FOR (templates, placeholders, env).
+        $floorPortMap = [];
+        stampVolucerConfigs(
+            $root,
+            $deployDir,
+            array_keys($floorApps),
+            array_values($floorApps),
+            $phpCli,
+            $phpCgi !== '' ? $phpCgi : ('php-cgi' . (phpSeriesFromFpmBin($phpFpmBin) ?? '')),
+            $volucerPortBase,
+            $floorPortMap,
+        );
+
+        $floorPorts = [];
+        foreach ($floorApps as $floorKey => $arm) {
+            $stamped = $floorPortMap[$arm][$floorKey] ?? null;
+            if (!is_int($stamped)) {
+                fwrite(STDERR, "[run-http] the {$floorKey} floor was not stamped a port — refusing to guess one.\n");
+                exit(1);
+            }
+            $floorPorts[$arm] = $stamped;
+        }
+
+        foreach ($floorApps as $floorKey => $arm) {
+            $port = $floorPorts[$arm];
+
+            if (!waitForPortFree($port)) {
+                fwrite(STDERR, "[run-http] Port {$port} is in use before the {$floorKey} floor — refusing to benchmark a stale server.\n");
+                exit(1);
+            }
+
+            killAllBenchVolucers();
+            $proc = startVolucer($root, $deployDir, $floorKey, $arm, $volucerBinary, $phpCli, $port);
+            try {
+                waitForServer("http://127.0.0.1:{$port}", $arm, $floorKey, null);
+                $floors[] = measureFloorApp($root, $floorKey, $arm, "http://127.0.0.1:{$port}", $itersPerRun, $runs, $phpCli);
+            } finally {
+                stopVolucer($proc);
+                @unlink(volucerRelayPath($floorKey));
+            }
+        }
+    }
+
     return $floors;
 }
 
@@ -1625,9 +1713,21 @@ function measureFloors(
 function measureFloorApp(string $root, string $name, string $mode, string $baseUrl, int $itersPerRun, int $runs, string $phpCli = ''): array
 {
     $tmpJson = "{$root}/temp/bench-floor-{$name}.json";
+
+    // `mode` here is the ARM name ('roadrunner', 'php-fpm', 'volucer-attach', ...).
+    // http-bench.php keys its output by modeNameFor($server), and the two Volucer
+    // arms previously fell through the 'not rr => fpm' shorthand below and came back
+    // labelled 'php-fpm' — a floor for the wrong server, in a dataset whose whole
+    // purpose is to keep server overhead apart.
+    $server = match ($mode) {
+        'roadrunner' => 'rr',
+        'php-fpm'    => 'fpm',
+        default      => $mode,
+    };
+
     // Floors are single-endpoint probes (GET / only) — never the full label
     // list; the report only reads the GET / entry.
-    runHttpBench($root, $mode === 'roadrunner' ? 'rr' : 'fpm', $name, $baseUrl, $itersPerRun, $runs, $tmpJson, '--requests="GET /"', $phpCli);
+    runHttpBench($root, $server, $name, $baseUrl, $itersPerRun, $runs, $tmpJson, '--requests="GET /"', $phpCli);
 
     $data = json_decode((string) file_get_contents($tmpJson), true);
     unlink($tmpJson);

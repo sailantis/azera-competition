@@ -233,6 +233,18 @@ either escape explicitly at every output or turn autoescape on.
 ## Fairness caveats
 
 - **Idiomatic usage** — each framework uses its own ORM and template engine (not raw PDO / plain PHP), so results reflect real-world usage. Switching all to raw PDO would reduce this to the routing+template case already covered by the `benchmarks/view-engine/` harness in this repository.
+- **Every server has a floor probe, and the floor is usually most of the row.** Each mode in the
+  dataset carries a `floor-*` pseudo-app: one `GET /` to the same server, through the same arm, with
+  no framework in it (`floor-http` static file via nginx, `floor-php` a bare PHP file via FPM,
+  `floor-rr` a hello-world RoadRunner worker, and since 2026-11-24 `floor-volucer-attach` /
+  `floor-volucer-cgi`). `apps[] − floors[]` is the framework; `floors[]` alone is the server. The
+  two Volucer arms went a full release without one, which made their rows the hardest to read: a
+  `/echo` on volucer-attach prints ~150 us while the entire framework layer on that route is ~4 us.
+  That gap is why `/echo` must not be read across servers as a framework comparison — see the
+  `routing` description in `BenchmarkConfig`, and `tests/FloorCoverageTest.php`, which fails if a
+  measured mode has no floor or if a floor is attached to the wrong mode. Floors are the one block
+  that can be re-measured independently of the apps: `scripts/run-http.php --floors-only` writes just
+  that block, and `scripts/merge-floors.php` grafts it in without touching a single latency row.
 - **Teardown must not throw away what the server would keep.** `cleanup()` runs between requests in the resident arms, and whatever it discards is re-paid on the next request. Phalcon's used to drop `modelsMetadata`, a cache of the table mapping that costs ~0.45 ms to re-derive by introspecting the schema; every other entrant keeps the equivalent warm, so the reset made Phalcon pay a teardown the other six do not (0.319 → 0.200 ms per `GET /items` in one booted worker, interleaved A/B). It is kept now; the identity map, which is genuinely request-scoped, is still cleared. Nothing about this changes the php-fpm arm, where every request is a fresh process and the cache is cold regardless.
 - **Template caching** — compiled templates (Twig, Blade, Stempler) use a persistent cache dir so warm runs reflect cached compiled templates. Use `--clear-cache` to measure cold-from-scratch compilation.
 - **In-process dispatch** — no real HTTP socket; we measure framework kernel overhead, not web server / FPM / Swoole cost.

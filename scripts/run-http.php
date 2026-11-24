@@ -37,6 +37,7 @@ $opts = getopt('', [
     'quick',
     'boot-only',
     'mem-only',
+    'floors-only',
     'mem-repeats::',
     'rr-binary::',
     'php-fpm::',
@@ -216,6 +217,12 @@ $bootOnly = isset($opts['boot-only']);
 // was measured with rather than assuming today's default.
 $memOnly    = isset($opts['mem-only']);
 $memRepeats = max(1, (int) ($opts['mem-repeats'] ?? 10));
+
+// Floors-only: measure just the constant server overhead and write it on its own,
+// for splicing into a dataset that was produced before a floor existed. Floors are
+// the one block that is APP-INDEPENDENT (each probe is a GET / to a server with no
+// framework in it), so unlike a boot or memory probe they can come from a later run.
+$floorsOnly = isset($opts['floors-only']);
 
 // ONE budget for every server. RoadRunner and FPM are two ways of running the
 // same request, so the only meaningful comparison measures both with the same
@@ -637,8 +644,27 @@ if ($bootOnly || $memOnly) {
     exit(0);
 }
 
+// Floors-only: re-measure the constant server overhead and write JUST that block,
+// so a dataset measured before a floor existed can gain one without re-timing 26
+// endpoints x 7 apps. The floors are the one part of the dataset that is independent
+// of the apps (each probe is one GET / to a server with no framework in it), so
+// grafting them from a later run cannot mix two measurements of the same thing —
+// unlike a boot or memory probe, which is per (server, app) and must come from the
+// run whose latency rows it sits beside.
+if ($floorsOnly) {
+    echo "\n=== Floors only (webserver overhead) ===\n";
+    $results['floors'] = measureFloors($root, $deployDir, $useRr, $useFpm, $rrPort, $fpmPort, $itersPerRun, $runs, $rrBinary, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase, $phpCgiBin);
+    writeRealResults($outPrefix, ['env' => $results['env'], 'apps' => [], 'floors' => $results['floors']]);
+    // Also emit the bare floors array, which is what merge-floors.php reads: the
+    // envelope above is the same shape a full run writes, so a probe can be inspected
+    // exactly like a dataset.
+    file_put_contents("{$outPrefix}-floors.json", json_encode($results['floors'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    echo "Floors written to: {$outPrefix}-floors.json\n";
+    exit(0);
+}
+
 echo "\n=== Floors (webserver overhead, measured once per server) ===\n";
-$results['floors'] = measureFloors($root, $deployDir, $useRr, $useFpm, $rrPort, $fpmPort, $itersPerRun, $runs, $rrBinary, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase);
+$results['floors'] = measureFloors($root, $deployDir, $useRr, $useFpm, $rrPort, $fpmPort, $itersPerRun, $runs, $rrBinary, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase, $phpCgiBin);
 
 
 writeRealResults($outPrefix, $results);
