@@ -503,6 +503,14 @@ foreach ($apps as $appKey) {
         // Fresh DB per block — same rationale as run.php's per-app re-seed.
         seedDatabase($root, $rows, $phpCli);
 
+        // Generate this app's PRUNED autoloader before it is booted. The shared
+        // composer.json requires all seven frameworks, so vendor/autoload.php executes
+        // about 1 MB of other entrants' `files` bootstrap code on every request; the
+        // pruned loader runs only this app's dependency closure. Measured through real
+        // nginx + PHP-FPM: 0.283 ms -> 0.066 ms on the boot band, with the framework's
+        // own work unchanged. See scripts/app-autoload.php.
+        ensureAppAutoload($root, $appKey, $phpCli);
+
         // Warm the route cache ONCE per app, not once per (app, server) block. The
         // artifact is a file on disk and both servers read the same one, so re-warming
         // inside this loop would only rewrite an already-fresh table — and, worse, would
@@ -698,6 +706,13 @@ if ($floorsOnly) {
 echo "\n=== Floors (webserver overhead, measured once per server) ===\n";
 $results['floors'] = measureFloors($root, $deployDir, $useRr, $useFpm, $rrPort, $fpmPort, $itersPerRun, $runs, $rrBinary, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase, $phpCgiBin);
 
+// A full run produces both halves of the boot story in one pass, so they must agree
+// before anything is written. See bench-lib.php::assertRowBootStampsMatchProbe().
+$bootStampCheck = assertRowBootStampsMatchProbe($results);
+if (!$bootStampCheck['ok']) {
+    fwrite(STDERR, "Boot stamp mismatch — " . describeRowBootStampViolations($bootStampCheck));
+    exit(1);
+}
 
 writeRealResults($outPrefix, $results);
 

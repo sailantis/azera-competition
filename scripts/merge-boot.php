@@ -30,14 +30,26 @@ if (count($args) < 2) {
 }
 $datasetPath = array_shift($args);
 
+// assertRowBootStampsMatchProbe()/describeRowBootStampViolations() — see bench-lib.php.
+require_once __DIR__ . '/bench-lib.php';
+
 $dataset = json_decode((string) file_get_contents($datasetPath), true);
 if (!is_array($dataset) || !isset($dataset['apps'])) {
     fwrite(STDERR, "{$datasetPath}: not a result dataset\n");
     exit(1);
 }
 
-// server => mode, matching run-http.php's $modeOf.
-$modeOf = static fn(string $server): string => $server === 'rr' ? 'roadrunner' : 'php-fpm';
+// server => mode, mirroring run-http.php's modeNameFor(). The volucer arms are
+// included because their server name IS the mode name, and a table that mapped
+// everything non-RoadRunner to php-fpm would graft a volucer-cgi boot onto the FPM
+// block. Keep this in step with modeNameFor(): it is the same decision.
+$modeOf = static function (string $server): string {
+    return match ($server) {
+        'rr'    => 'roadrunner',
+        'fpm'   => 'php-fpm',
+        default => $server,
+    };
+};
 
 // Index the dataset's app blocks by name.
 $byApp = [];
@@ -86,9 +98,15 @@ foreach ($args as $path) {
         $dataset['apps'][$idx]['boot_kind']    = $b['boot_kind'] ?? null;
     }
 
-    // php-fpm boot IS inside every timed row, so stamp boot_ms on the rows too
-    // (the report's FPM band reads it). RoadRunner's worker boot happens once
-    // before serving, so its rows must NOT carry it — that would double-count.
+    // A per-request boot IS inside every timed row, so stamp boot_ms on the rows too
+    // (the report's lifecycle split reads it). A resident arm boots before serving, so
+    // its rows must NOT carry it — that would charge one boot to every request.
+    //
+    // php-fpm is the ONLY mode that carries the stamp, because http-bench.php gates
+    // its own stamping on the probe kind being 'fpm' and volucer's spawn_cgi arm has
+    // kind 'volucer-cgi'. Stamping it there too would produce a row shape the run
+    // itself never writes, so the gate copies http-bench.php rather than reasoning
+    // independently about which arms boot per request.
     if ($mode === 'php-fpm') {
         foreach ($dataset['apps'][$idx]['modes'][$mode]['requests'] as &$row) {
             $row['boot_ms'] = $b['boot_samples']['median'];
@@ -101,6 +119,16 @@ foreach ($args as $path) {
 
 // Stamp the probe so the report stops using the legacy startup proxy.
 $dataset['env']['boot_probe'] = 50;
+
+// A boot merge is exactly the operation that can leave the row stamp and the probe it
+// came from describing different runs, so the invariant is checked before writing.
+// See bench-lib.php::assertRowBootStampsMatchProbe() for the 2026-11-24 case, where a
+// refreshed mode-level block reached the dataset while the rows kept the old stamp.
+$bootStampCheck = assertRowBootStampsMatchProbe($dataset);
+if (!$bootStampCheck['ok']) {
+    fwrite(STDERR, "Boot stamp mismatch — " . describeRowBootStampViolations($bootStampCheck));
+    exit(1);
+}
 
 file_put_contents($datasetPath, json_encode($dataset, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 

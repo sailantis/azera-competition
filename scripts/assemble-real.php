@@ -154,6 +154,17 @@ if (!$floorCheck['ok']) {
     exit(1);
 }
 
+// --- Row boot stamps must agree with the probe they came from ----------------
+// A per-request row's boot_ms and boot_samples_by_mode[mode].median are one
+// measurement recorded twice, so a merge that refreshed only one of them leaves a
+// dataset that reports different boots in a chart and a table. See
+// bench-lib.php::assertRowBootStampsMatchProbe() for the 2026-11-24 case.
+$bootStampCheck = assertRowBootStampsMatchProbe($combined);
+if (!$bootStampCheck['ok']) {
+    fwrite(STDERR, "Boot stamp mismatch — " . describeRowBootStampViolations($bootStampCheck));
+    exit(1);
+}
+
 file_put_contents($outPath, json_encode($combined, JSON_PRETTY_PRINT) . "\n");
 
 echo "Wrote {$outPath}\n";

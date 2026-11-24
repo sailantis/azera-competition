@@ -223,6 +223,14 @@ if (!$budget['ok']) {
     exit(1);
 }
 
+// --- row boot stamps: one measurement must not be recorded twice, differently ----
+
+$bootStampCheck = assertRowBootStampsMatchProbe($target);
+if (!$bootStampCheck['ok']) {
+    fwrite(STDERR, "Boot stamp mismatch — " . describeRowBootStampViolations($bootStampCheck));
+    exit(1);
+}
+
 // --- write -----------------------------------------------------------------
 
 if (!is_file($targetPath . '.bak')) {

@@ -264,6 +264,122 @@ function describeFloorViolations(array $result): string
         . "arm with the same iterations/runs as the rows it is held against.";
 }
 
+// --- Row boot stamp consistency -----------------------------------------------
+
+/**
+ * A row's `boot_ms` must agree with the boot probe for that mode.
+ *
+ * WHY THIS EXISTS. `boot_ms` is the share of a per-request row's clock that the
+ * framework boot occupies, and it is written from the SAME probe distribution the
+ * report reads for the startup chart (`boot_samples_by_mode[mode].median`). Those two
+ * therefore describe one measurement in two places, and nothing used to check they
+ * still agreed. They stopped agreeing on 2026-11-24: the boot was re-probed against
+ * pruned autoloaders and the refreshed mode-level block was written into the dataset
+ * (Azera 0.2754 -> 0.0680 ms), while the per-request rows kept the stamp from the
+ * original 2026-11-23 run. Every app then carried a `boot_ms` that disagreed with the
+ * probe it claimed to come from — Azera's by 305%.
+ *
+ * That is invisible today because the report reads the mode-level block on the
+ * probed path, and VISIBLE the moment anything reads the row instead: ResultStore's
+ * lifecycle sub-line and fpmBootMedian() both do. A number that means one thing in a
+ * chart and another in a table is the failure mode this guards.
+ *
+ * Only PER-REQUEST modes carry `boot_ms`; a resident arm boots before serving, so the
+ * invariant is asserted where it applies and skipped elsewhere (ProbeTransportTest is
+ * what pins that rule). A dataset with no boot probe at all is skipped: "no probe"
+ * is not "inconsistent".
+ *
+ * $tolerance is the share of the probe median a stamp may differ by. The two values
+ * are the same statistic from the same run, so they should be identical; the
+ * tolerance exists only so a future merge that recomputes a median from a different
+ * subset does not fail on rounding. It defaults to 2%.
+ *
+ * @param array $dataset A real-deployment dataset (apps[] with per-mode rows).
+ * @param float $tolerance Fraction of the probe median a stamp may differ by.
+ * @return array{ok:bool,checked:int,violations:list<array{app:string,mode:string,stamp:float,probe:float,delta_pct:float}>}
+ */
+function assertRowBootStampsMatchProbe(array $dataset, float $tolerance = 0.02): array
+{
+    $violations = [];
+    $checked    = 0;
+
+    foreach (($dataset['apps'] ?? []) as $app) {
+        $appKey = (string) ($app['app'] ?? '?');
+        foreach (($app['modes'] ?? []) as $mode => $m) {
+            if (!is_array($m)) {
+                continue;
+            }
+
+            $stamps = [];
+            foreach (($m['requests'] ?? []) as $row) {
+                if (is_numeric($row['boot_ms'] ?? null)) {
+                    $stamps[] = (float) $row['boot_ms'];
+                }
+            }
+            if ($stamps === []) {
+                continue; // resident arm, or a dataset recorded before the stamp
+            }
+
+            $probe = $app['boot_samples_by_mode'][$mode]['median'] ?? null;
+            if (!is_numeric($probe) || (float) $probe <= 0.0) {
+                continue; // no probe for this mode: nothing to compare against
+            }
+            $probe = (float) $probe;
+
+            // httpSplitProbe()/http-bench.php stamp ONE value on every row of the
+            // mode, so a mode whose rows disagree is already broken; report the
+            // spread rather than silently picking the first.
+            foreach (array_unique($stamps) as $stamp) {
+                $checked++;
+                $delta = abs($stamp - $probe) / $probe;
+                if ($delta > $tolerance) {
+                    $violations[] = [
+                        'app'       => $appKey,
+                        'mode'      => (string) $mode,
+                        'stamp'     => $stamp,
+                        'probe'     => $probe,
+                        'delta_pct' => $delta * 100.0,
+                    ];
+                }
+            }
+        }
+    }
+
+    usort($violations, static fn(array $a, array $b): int => $b['delta_pct'] <=> $a['delta_pct']);
+
+    return ['ok' => $violations === [], 'checked' => $checked, 'violations' => $violations];
+}
+
+/**
+ * The message an operator needs when assertRowBootStampsMatchProbe() rejects a dataset.
+ *
+ * Spelled out because the cause is not a wrong measurement but an INCOMPLETE MERGE:
+ * both numbers were measured correctly, and one of them was not carried forward. The
+ * fix is therefore a re-run or a re-merge of that mode, not a re-probe of either side.
+ *
+ * @param array{ok:bool,checked:int,violations:list<array<string,mixed>>} $result
+ */
+function describeRowBootStampViolations(array $result): string
+{
+    $lines = [];
+    foreach ($result['violations'] as $v) {
+        $lines[] = sprintf(
+            '    %-12s %-16s row boot_ms %8.4f ms vs probe median %8.4f ms  (%.1f%% apart)',
+            $v['app'],
+            $v['mode'],
+            $v['stamp'],
+            $v['probe'],
+            $v['delta_pct'],
+        );
+    }
+
+    return "Per-request rows whose boot_ms disagrees with the boot probe for that mode:\n"
+        . implode("\n", $lines) . "\n"
+        . "The two come from one measurement, so a mismatch means a merge carried one\n"
+        . "forward and not the other. Re-run that mode, or re-merge it, rather than\n"
+        . "re-probing either number.";
+}
+
 // --- Request parsing ----------------------------------------------------------
 
 /**
