@@ -52,9 +52,9 @@ One race per framework feature, each run as a real request against a real databa
 ### AOP (Aspect-Oriented)
  `GET /features/aop` — runs a request through interceptor machinery — logging, retry and transaction advice wrapped around the handler. The entrants split into two styles, and this row means different work on each side. TRANSPARENT interception — advice declared on the method and applied by generated code, handler body untouched — is what Azera does (`#[Advised]`, `#[Transactional]`, `#[Cache]`, `#[Log]`, `#[Retry]`). DIRECT interception — the pipeline written out in the code — is what everyone else does: Laravel composes an Illuminate Pipeline and Symfony chains invokable interceptor classes, both documenting that they have no proxy-based AOP; Spiral builds a `PipelineBuilder` pipeline; CodeIgniter, CakePHP and Phalcon have no interceptor layer at all and write the transactional insert by hand. Do NOT read the ranking across styles as a speed verdict: the two sides pay for different machinery, and the same caution applies to `cache`, `log` and `retry`, which on Azera also route through generated proxies while every other entrant implements them plainly. `GET /features/aop-direct` is the control: the identical insert with the transaction written by hand, served by every entrant, so the pair prices the abstraction on the same work. Phalcon sits the aop race out; it competes in logging, retry and pipeline.
 
-*Not measured here:* Phalcon 6 (RC) — Phalcon 6 (RC) has no interceptor layer (no attribute-declared, proxy-generated advice), so this race would compare its hand-written transaction against the other entrants' generated proxies — the machinery, not the framework. It serves `GET /features/aop` and the three advice demos, so a missing row is a deliberate exclusion, not an unimplemented endpoint.
+*Read this row in two styles.* **transparent** (advice declared on the method, applied by generated code): Azera. **direct** (the pipeline is written out in the code): Laravel, Symfony, Spiral, CodeIgniter, CakePHP. The two styles pay for different machinery, and the cross-style ranking is not a speed verdict.
 
-*Read this row in two styles.* **transparent** (advice declared on the method, applied by generated code): Azera. **direct** (the pipeline is written out in the code): Laravel, Symfony, Spiral, CodeIgniter, CakePHP. The two styles pay for different machinery, and the cross-style ranking is not a speed verdict. `GET /features/aop-direct` is the control — the identical insert with the transaction written by hand — so the gap between that row and this one is what interception actually costs.
+*Sits out one endpoint, not the feature:* Phalcon 6 (RC) (`GET /features/aop`) — the identical insert with the transaction written by hand, which is what this entrant's `/features/aop` already does, so racing it there would compare machinery rather than speed. It DOES compete on `GET /features/aop-direct`, the control, so the gap between that row and this one is what interception actually costs.
 
 ![AOP (Aspect-Oriented)](svg/real-roadrunner/feature-aop.svg)
 
@@ -122,40 +122,42 @@ The dot and the right cap are both endpoint-order dependent — the probe reads 
 
 ## Latency by endpoint
 
-Trimmed mean in milliseconds, lower is better. **Bold** = fastest for that endpoint. Every number is END-TO-END per-request occupancy for the view's deployment model: the framework boot of that model is part of the cell, not parked in a separate chart. These are REAL deployments measured over HTTP: every row carries the constant server cost, which is why the values cluster — the floor note below states what stands under them. The workload column states what each request reads or writes. Every framework runs the same seeded database and the same page size, so the payload is identical no matter which framework served it; the workload column is the part of the suite that varies.
+Median in milliseconds, lower is better. **Bold** = fastest for that endpoint; a trailing `≈` = within the run-to-run noise band of the fastest, so read it as a tie rather than a defeat (`Tables::TIE_BAND` states the band and how it was calibrated). The median is the statistic the charts beside this table draw, so a cell and its bar are the same number; the dataset also carries a trimmed mean, which sits a few percent higher and ranks identically in all but two dead-heat cells, and it stays available for the outlier-robust cross-check rather than as a second published figure. Every number is END-TO-END per-request occupancy for the view's deployment model: the framework boot of that model is part of the cell, not parked in a separate chart. These are REAL deployments measured over HTTP: every row carries the constant server cost, which is why the values cluster — the floor note below states what stands under them. The workload column states what each request reads or writes. Every framework runs the same seeded database and the same page size, so the payload is identical no matter which framework served it; the workload column is the part of the suite that varies.
 
 These rows are end-to-end for a resident worker with a pool that never recycles it (max_jobs=0): the worker booted once before the first request and serves the whole run, so a cell is the measured request itself and carries no boot. The one-time recycle cost is measured in the startup chart — read that when sizing a pool that is recycled or restarted, or when requests queue behind one worker.
 
 **Server floor** — a resident worker that boots NOTHING (`floor-rr`) measures this server's own overhead: a bare request round trip with no framework, no routing and no template, stated as that floor's `GET /` row in the dataset. Every row below stands on it, so only differences larger than it are framework differences — and a row BELOW it is a measurement that describes a different server than its floor, which is what FloorCoverageTest and bench-lib.php::assertRowsNotBelowFloor() now refuse.
 
+**Run-to-run spread** — a resident arm's rows are mostly the server, so a cell moves by a few percent between two runs of unchanged code, and by more than a tenth on roughly one cell in five. Read a gap smaller than that band as a tie, which is what the trailing `≈` in the table marks, and prefer the rows where real work is done over the routing-only ones when the question is which framework is faster.
+
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP | Phalcon 6 (RC) |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| `GET /api/routing/1` | no DB — typed route + constant body (routing only) | 0.175 | 0.446 | 0.325 | 0.709 | 0.586 | 0.248 | **0.165** |
-| `GET /` | no DB — routing + template only | **0.184** | 0.453 | 0.341 | 0.741 | 0.697 | 0.314 | 0.226 |
-| `GET /echo` | no DB — static route, constant body (throughput floor) | 0.164 | 0.366 | 0.287 | 0.731 | 0.575 | 0.236 | **0.162** |
-| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.389** | 1.08 | 0.994 | 1.02 | 1.11 | 0.760 | 0.765 |
-| `GET /items-fast` | 20 of 1000 items (page 1, + COUNT), hydrated rows not built | **0.340** | 0.842 | 0.896 | 0.923 | 1.06 | 0.714 | 0.778 |
-| `GET /items/1` | 1 item by id | **0.272** | 0.806 | 0.528 | 0.810 | 0.946 | 0.600 | 0.461 |
-| `POST /items` | 1 row upserted (sentinel #999999) | **0.405** | 0.997 | 0.606 | 1.03 | 1.11 | 0.821 | 0.593 |
-| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.324** | 0.784 | 0.586 | 0.816 | 1.02 | 0.589 | 0.461 |
-| `GET /items-qb/1` | 1 item by id | **0.223** | 0.633 | 0.454 | 0.738 | 0.927 | 0.501 | 0.285 |
-| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.271** | 0.767 | 0.509 | 0.837 | 1.17 | 0.620 | 0.353 |
-| `GET /api/items` | 20 of 1000 items as JSON | **0.248** | 0.918 | 0.609 | 0.863 | 0.920 | 0.511 | 0.341 |
-| `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | **0.218** | 0.638 | 0.515 | 0.762 | 0.879 | 0.483 | 0.365 |
-| `GET /api/items/1` | 1 item by id as JSON | **0.199** | 0.716 | 0.460 | 0.765 | 0.846 | 0.508 | 0.304 |
-| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.238** | 0.829 | 0.530 | 0.966 | 0.941 | 0.654 | 0.426 |
-| `GET /features/aop` | 1 row upserted (sentinel #888800) | **0.229** | 0.620 | 0.411 | 0.845 | 0.982 | 0.425 | — |
-| `GET /features/aop-direct` | 1 row upserted (sentinel #888800) | **0.224** | 0.597 | 0.398 | 0.823 | 0.986 | 0.429 | — |
-| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **0.169** | 0.476 | 0.304 | 0.682 | 0.638 | 0.254 | 0.170 |
-| `GET /features/log` | no DB — buffered log handlers | **0.171** | 0.429 | 0.304 | 0.683 | 0.644 | 0.242 | 0.172 |
-| `GET /features/retry` | no DB — retry policy | 0.170 | 0.442 | 0.317 | 0.708 | 0.639 | 0.247 | **0.168** |
-| `GET /features/pipeline` | no DB — middleware pipeline | **0.172** | 0.423 | 0.311 | 0.689 | 0.635 | 0.251 | 0.173 |
-| `GET /features/db-events` | 1 row upserted (sentinel #888800) + COUNT(*), events collected | 0.246 | 0.722 | 0.579 | 0.957 | 1.05 | 0.577 | **0.237** |
-| `GET /features/events` | no DB — in-process listeners | **0.229** | 0.615 | 0.400 | 0.826 | 0.990 | 0.472 | 0.864 |
-| `GET /features/validation` | no DB — validator run | **0.177** | 1.16 | 0.487 | 0.753 | 0.932 | 0.407 | 0.202 |
-| `GET /features/config` | no DB — config lookup | **0.167** | 0.529 | 0.303 | 0.688 | 0.645 | 0.244 | 0.170 |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **0.162** | 0.525 | 0.301 | 0.706 | 0.636 | 0.242 | 0.164 |
-| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.166** | 0.564 | 0.318 | 0.709 | 0.643 | 0.248 | 0.169 |
+| `GET /api/routing/1` | no DB — typed route + constant body (routing only) | 0.166 | 0.428 | 0.309 | 0.701 | 0.565 | 0.230 | **0.157** |
+| `GET /` | no DB — routing + template only | **0.174** | 0.434 | 0.326 | 0.728 | 0.677 | 0.288 | 0.214 |
+| `GET /echo` | no DB — static route, constant body (throughput floor) | 0.156≈ | 0.352 | 0.275 | 0.714 | 0.556 | 0.215 | **0.155** |
+| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **0.374** | 1.05 | 0.972 | 0.993 | 1.08 | 0.727 | 0.743 |
+| `GET /items-fast` | 20 of 1000 items (page 1, + COUNT), hydrated rows not built | **0.325** | 0.835 | 0.874 | 0.901 | 1.04 | 0.684 | 0.769 |
+| `GET /items/1` | 1 item by id | **0.257** | 0.791 | 0.511 | 0.790 | 0.923 | 0.580 | 0.446 |
+| `POST /items` | 1 row upserted (sentinel #999999) | **0.390** | 0.975 | 0.579 | 1.00 | 1.08 | 0.795 | 0.574 |
+| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.309** | 0.774 | 0.566 | 0.795 | 0.995 | 0.566 | 0.446 |
+| `GET /items-qb/1` | 1 item by id | **0.210** | 0.617 | 0.437 | 0.721 | 0.905 | 0.481 | 0.269 |
+| `POST /items-qb` | 1 row upserted (sentinel #999997) | **0.245** | 0.736 | 0.483 | 0.817 | 1.13 | 0.593 | 0.328 |
+| `GET /api/items` | 20 of 1000 items as JSON | **0.233** | 0.899 | 0.592 | 0.839 | 0.896 | 0.491 | 0.322 |
+| `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | **0.207** | 0.623 | 0.499 | 0.740 | 0.866 | 0.461 | 0.347 |
+| `GET /api/items/1` | 1 item by id as JSON | **0.189** | 0.701 | 0.443 | 0.745 | 0.824 | 0.487 | 0.289 |
+| `POST /api/items` | 1 row upserted (sentinel #999998) | **0.220** | 0.810 | 0.507 | 0.948 | 0.911 | 0.628 | 0.408 |
+| `GET /features/aop` | 1 row upserted (sentinel #888800) | **0.211** | 0.592 | 0.384 | 0.826 | 0.953 | 0.402 | — |
+| `GET /features/aop-direct` | 1 row upserted (sentinel #888800) | 0.208≈ | 0.580 | 0.376 | 0.804 | 0.952 | 0.401 | **0.204** |
+| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **0.161** | 0.457 | 0.289 | 0.665 | 0.619 | 0.232 | 0.163≈ |
+| `GET /features/log` | no DB — buffered log handlers | **0.163** | 0.412 | 0.289 | 0.663 | 0.625 | 0.223 | 0.165≈ |
+| `GET /features/retry` | no DB — retry policy | 0.162≈ | 0.427 | 0.302 | 0.686 | 0.619 | 0.224 | **0.161** |
+| `GET /features/pipeline` | no DB — middleware pipeline | **0.163** | 0.409 | 0.296 | 0.669 | 0.617 | 0.228 | 0.166≈ |
+| `GET /features/db-events` | 1 row upserted (sentinel #888800) + COUNT(*), events collected | 0.228 | 0.688 | 0.554 | 0.937 | 1.01 | 0.552 | **0.220** |
+| `GET /features/events` | no DB — in-process listeners | **0.212** | 0.591 | 0.378 | 0.806 | 0.963 | 0.444 | 0.745 |
+| `GET /features/validation` | no DB — validator run | **0.168** | 1.14 | 0.474 | 0.728 | 0.907 | 0.386 | 0.189 |
+| `GET /features/config` | no DB — config lookup | **0.160** | 0.513 | 0.290 | 0.668 | 0.626 | 0.224 | 0.161≈ |
+| `GET /features/request-scoped` | no DB — scoped service resolve | **0.154** | 0.510 | 0.287 | 0.685 | 0.616 | 0.222 | 0.156≈ |
+| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.158** | 0.548 | 0.303 | 0.689 | 0.626 | 0.227 | 0.159≈ |
 
 ---
 
