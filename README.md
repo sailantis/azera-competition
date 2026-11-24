@@ -230,6 +230,14 @@ interpolation and Phalcon did not. Every interpolation now carries `|e`, and
 If you add an entrant whose engine defaults to no escaping, the same rule applies:
 either escape explicitly at every output or turn autoescape on.
 
+The Clarity engine can be configured to match Volt — `denyRule('escapeHtml')` compiles
+`{{ }}` to its bare value — but the benchmark uses the default policy, because the
+comparison is between engines as a project would adopt them, not between a project's
+tuning. Note that Clarity's `escape` (`|e`) is a *marker* rather than a filter: it
+applies the escaping and cancels the automatic wrapper, so it can opt **in** per
+expression when the rule is denied, without the double-escaping a plain filter would
+cause.
+
 ## Fairness caveats
 
 - **Idiomatic usage** — each framework uses its own ORM and template engine (not raw PDO / plain PHP), so results reflect real-world usage. Switching all to raw PDO would reduce this to the routing+template case already covered by the `benchmarks/view-engine/` harness in this repository.

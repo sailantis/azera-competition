@@ -1084,6 +1084,17 @@ final class MarkdownReport
 
             return "## Framework startup\n\n"
                 . $intro . "\n\n"
+                // The autoloader note belongs HERE, not in the prose: every number in
+                // this band depends on it, and a reader who does not know the vendor tree
+                // is shared will attribute the shared cost to the framework.
+                . "- Each app boots through a **pruned autoloader** (`vendor/app-autoload/<app>/autoload.php`). "
+                . "This repository has ONE composer.json, so the shared `vendor/autoload.php` runs composer's "
+                . "EAGER `files` list for all seven frameworks on every request: the bootstrap code of "
+                . "entrants the app never instantiates. The pruned loader is the same ClassLoader with the "
+                . "same PSR-4 and classmap tables, restricted to the app's own dependency closure (see "
+                . "`scripts/app-autoload.php`). What it removes is a fixed per-request cost, so it dominates "
+                . "a lean framework's boot and is invisible against a slow one — read this band as framework "
+                . "work, not as composer work.\n"
                 . $rebuiltNote
                 . $noopNote
                 . "- Each framework's boot is reduced to one statistic (median of the probe samples), "
