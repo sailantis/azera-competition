@@ -107,33 +107,54 @@ final class BenchmarkConfig
     }
 
     /**
-     * Endpoints an entrant MEASURED but must not be raced on, per app.
+     * Endpoints an entrant must not be measured on, per app.
      *
-     * WHY THIS IS SEPARATE FROM adapterFeatures(). A feature is a coarse thing —
-     * `'aop'` covers both `/features/aop` and `/features/aop-direct` — so omitting it
-     * removes both rows. That was right for the proxy comparison and wrong for its
-     * control: `GET /features/aop-direct` exists precisely to be served by everyone
-     * (the same insert with the transaction written out by hand), and it is the
-     * denominator that says what the abstraction costs. Phalcon's `/features/aop`
-     * already IS the hand-written version, so it is the clearest reader of that
-     * number, and a feature-level exclusion hid it.
+     * ONE SOURCE OF TRUTH. This map is read by the MEASUREMENT (run-http.php passes
+     * `--requests` minus these to http-bench, so the endpoint is never timed) and by
+     * the REPORT (the table, the totals and the feature charts). Before that it was a
+     * reporting-only idea, which is why Phalcon's `/features/aop` had to be served by a
+     * placeholder action: the harness asks every app for the full endpoint list, so a
+     * missing route aborted the whole run with
      *
-     * So `'aop'` is now NOT omitted for Phalcon; this map suppresses the single
-     * endpoint instead. `/features/aop` still cannot be raced — comparing a bare
-     * begin/commit against generated proxies is comparing machinery — but
-     * `/features/aop-direct` is measured, published, and counted in the totals.
+     *   2026-11-21: "[ABORT] fpm/phalcon GET /features/aop: HTTP status 404"
      *
-     * @return array<string,list<string>> app => request keys it must not be raced on
+     * and `aopAction()` was written to stop that abort. Removing the route without
+     * teaching the harness about the exclusion would bring the abort straight back.
+     *
+     * WHY PHALCON SITS OUT `/features/aop`. The endpoint compares AOP MACHINERY:
+     * Azera runs a generated `#[Transactional]` proxy, Laravel and Symfony compose
+     * interceptor pipelines, Spiral builds a `PipelineBuilder`. Phalcon 6 has no
+     * advice layer at all, so the only row it can produce there is a bare
+     * begin/upsert/commit — a different workload under a label that claims to be
+     * about interception. Its own `aopAction()` docblock says as much.
+     *
+     * NOT EXCLUDED: `GET /features/aop-direct`. That is the hand-written control every
+     * entrant serves, and comparing it is legitimate.
+     *
+     * @return array<string,list<string>> app => request keys it must not be measured on
      */
     public static function excludedRequests(): array
     {
         return [
-            // Phalcon 6 has no interceptor layer, so its `/features/aop` runs the
-            // hand-written transaction that every other entrant reaches through
-            // advice. Its `aopDirectAction()` is that same work by design, which is
-            // exactly what the control endpoint is for.
             'phalcon' => ['GET /features/aop'],
         ];
+    }
+
+    /**
+     * The endpoints one app should actually be measured on.
+     *
+     * This is what the harness passes to http-bench. Kept here — beside the exclusion
+     * that defines it — so measurement and reporting cannot drift apart, which is the
+     * failure that made a placeholder action necessary in the first place.
+     *
+     * @return list<string>
+     */
+    public static function requestsFor(string $app): array
+    {
+        return array_values(array_filter(
+            self::requestOrder(),
+            static fn(string $req): bool => self::racesOn($app, $req)
+        ));
     }
 
     /**

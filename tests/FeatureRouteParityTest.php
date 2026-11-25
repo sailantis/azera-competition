@@ -150,8 +150,21 @@ final class FeatureRouteParityTest extends TestCase
         $declarations = self::declarations($source);
         self::assertNotSame('', $declarations, "{$app}'s route file could not be read");
 
-        $missing = [];
+        require_once self::repoRoot() . '/scripts/report/BenchmarkConfig.php';
+        $config = \AzeraCompetition\Report\BenchmarkConfig::class;
+
+        $missing   = [];
+        $excluded  = [];
         foreach (self::featurePaths() as $path) {
+            // A path an app is EXCLUDED from must not be required of it, and must not
+            // be silently absent either: it is collected so the assertion below can
+            // state which exclusions this app leans on. The exclusion is the single
+            // source of truth (BenchmarkConfig::excludedRequests()) that the harness
+            // also honours, so a route removed here cannot surprise a run with a 404.
+            if (!$config::racesOn($app, 'GET ' . $path)) {
+                $excluded[] = $path;
+                continue;
+            }
             // Laravel groups the feature routes under a prefix, and Symfony
             // declares them in YAML — matching the bare path text is what all
             // seven spellings have in common. A trailing quote or a word
@@ -167,7 +180,22 @@ final class FeatureRouteParityTest extends TestCase
             "{$app} does not register these measured endpoints: " . implode(', ', $missing)
                 . "\nA missing route is not a slow row — the framework silently disappears"
                 . ' from that endpoint\'s comparison, and a real-deployment run aborts on it'
+                . ($excluded !== []
+                    ? "\n(Excluded by BenchmarkConfig::excludedRequests(), so not required: "
+                        . implode(', ', $excluded) . ')'
+                    : '')
         );
+
+        // An exclusion must actually mean the route is absent, or the app is being
+        // timed on an endpoint the report claims it sat out.
+        foreach ($excluded as $path) {
+            self::assertSame(
+                0,
+                preg_match('~' . preg_quote($path, '~') . '(?![\w/-])~', $declarations),
+                "{$app} IS excluded from `{$path}` but still registers it — either the "
+                    . 'exclusion is stale or the route should be served and raced'
+            );
+        }
     }
 
     /**

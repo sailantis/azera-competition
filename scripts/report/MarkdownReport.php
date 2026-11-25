@@ -1327,12 +1327,25 @@ final class MarkdownReport
         // prose states only what the total IS. Naming the baseline — or
         // reprinting the closest rival — would put a view setting and a reading
         // into a sentence that no re-measure regenerates.
+        //
+        // The COUNT is stated rather than a number of medians: `speedup()` sums only
+        // `commonRequests()`, which excludes an endpoint any entrant sits out, so the
+        // total covers fewer requests than the latency table has rows. Claiming "every
+        // benchmarked endpoint" here is what let a blanked cell be counted anyway.
+        $racedCount  = count($requests);
+        $tableCount  = count($this->store->requests($mode));
+        $scopeNote   = $racedCount === $tableCount
+            ? 'one pass over every benchmarked endpoint'
+            : 'one pass over the ' . $racedCount . ' endpoints EVERY entrant races ('
+                . ($tableCount - $racedCount) . ' more are raced by only some, and are left out here '
+                . 'so no framework is charged for work it does not do)';
+
         return "## Total response times\n\n"
-            . 'Total time to serve one pass over every benchmarked endpoint — each framework\'s sum of its '
+            . 'Total time to serve ' . $scopeNote . ' — each framework\'s sum of its '
             . 'endpoint medians, not a single response time — drawn relative to the baseline, so a row '
             . 'states how many times the baseline\'s own total it needed. Each endpoint\'s median is '
             . 'boot-inclusive occupancy for this view\'s deployment model, so the total is the worker time '
-            . 'one pass over every endpoint costs. The chart orders the frameworks by that total and prints '
+            . 'one pass over those endpoints costs. The chart orders the frameworks by that total and prints '
             . "each one's multiplier beside its row.\n\n"
             . '![Total response times](' . $rel . '/' . $file . ')';
     }

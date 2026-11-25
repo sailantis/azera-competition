@@ -210,33 +210,38 @@ final class LatencyTableStatisticTest extends TestCase
     }
 
     /**
-     * An excluded endpoint stays in the TOTALS even when the entrant has no
-     * measurement for it at all.
+     * An excluded endpoint is NOT common, even when the dataset HOLDS a measurement
+     * for it.
      *
-     * The totals are compared over `commonRequests()`, and if an excluded app counted
-     * as "missing" there, the request would drop out for EVERYONE — six frameworks
-     * would be summed over a smaller workload than the seventh's feature page draws,
-     * and the totals would silently answer a different question than the tables above
-     * them.
-     *
-     * The fixture deliberately gives Phalcon NO row for `/features/aop`, which is the
-     * real situation: it is excluded from that endpoint, so nothing measured it there.
+     * This is the 2026-11-25 bug exactly. The published dataset was measured with
+     * Phalcon serving a placeholder `/features/aop`, so it carries a 2 ms row there
+     * while the table blanks the cell. `commonRequests()` therefore has to consult the
+     * exclusion itself: a fixture WITHOUT the row would pass even with the gate
+     * removed, because `ms()` would return null anyway. The row must be present for
+     * this test to be worth anything — I checked, and the first version of it passed
+     * against the bug.
      */
-    public function testAnExcludedEndpointStaysInTheCommonTotals(): void
+    public function testAnExcludedEndpointIsNotCountedInTheTotals(): void
     {
         $store = $this->store([
             'azera'   => ['trim' => 1.80, 'median' => 1.78],
             'phalcon' => ['trim' => 2.04, 'median' => 2.00],
         ], [
             'GET /'                    => ['azera' => ['trim' => 0.20, 'median' => 0.19], 'phalcon' => ['trim' => 0.21, 'median' => 0.20]],
-            'GET /features/aop'        => ['azera' => ['trim' => 1.80, 'median' => 1.78]],
+            // Phalcon HAS this row — the harness used to measure it. The report must
+            // still keep it out of the totals.
+            'GET /features/aop'        => ['azera' => ['trim' => 1.80, 'median' => 1.78], 'phalcon' => ['trim' => 2.04, 'median' => 2.00]],
             'GET /features/aop-direct' => ['azera' => ['trim' => 1.78, 'median' => 1.76], 'phalcon' => ['trim' => 1.89, 'median' => 1.85]],
         ]);
 
         $common = $store->commonRequests('php-fpm', ['azera', 'phalcon']);
 
-        self::assertContains('GET /features/aop', $common, 'an endpoint one entrant sits out is still common');
-        self::assertContains('GET /features/aop-direct', $common);
+        self::assertNotContains(
+            'GET /features/aop',
+            $common,
+            'a total must not include a row one entrant is blanked on, even though the row exists'
+        );
+        self::assertContains('GET /features/aop-direct', $common, 'the control IS raced by everyone');
         self::assertContains('GET /', $common);
     }
 

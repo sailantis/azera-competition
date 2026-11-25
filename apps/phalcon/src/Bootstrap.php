@@ -315,12 +315,13 @@ final class Bootstrap
         $router->addGet('/api/items/([0-9]+)', self::target('api', 'show', 1));
         $router->addPost('/api/items', self::target('api', 'create'));
 
-        // The /features/ endpoints are what the harness measures on every
-        // entrant and this app shipped without any of them, so a real run
-        // aborted on the first one:
-        //   2026-11-21: "[ABORT] fpm/phalcon GET /features/aop: HTTP status 404"
+        // The /features/ endpoints are what the harness measures. Phalcon is asked
+        // for all of them EXCEPT `/features/aop`: see
+        // BenchmarkConfig::excludedRequests() for why that one endpoint is not a
+        // race Phalcon can be timed on. It has no route here, and run-http.php
+        // passes a per-app endpoint list so the harness never requests it — the
+        // absence is deliberate, not a missing implementation.
         $router->addGet('/features', self::target('feature', 'index'));
-        $router->addGet('/features/aop', self::target('feature', 'aop'));
         $router->addGet('/features/aop-direct', self::target('feature', 'aopDirect'));
         $router->addGet('/features/cache', self::target('feature', 'cache'));
         $router->addGet('/features/log', self::target('feature', 'log'));

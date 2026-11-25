@@ -59,6 +59,10 @@ $outPrefix   = $opts['out'] ?? 'results/real-deployments';
 // fatal before any config is even parsed.
 require_once __DIR__ . '/deploy-lib.php';
 require_once __DIR__ . '/version-lib.php';
+// BenchmarkConfig::requestsFor() — the endpoint exclusions the MEASUREMENT must honour.
+// Loaded here rather than inside the app loop so a missing class fails before the run
+// starts rather than after the first app block.
+require_once __DIR__ . '/report/BenchmarkConfig.php';
 // budgetsByAppMode()/assertUniformBudget(), which deploy-lib.php only pulls in from
 // inside waitForServer(). Loaded here as well so this orchestrator's own budget
 // reporting does not depend on a function having been called first.
@@ -578,7 +582,22 @@ foreach ($apps as $appKey) {
                 echo "  {$prefix} written: temp/{$prefix}-{$server}-{$appKey}.json\n";
                 continue;
             }
-            runHttpBench($root, $server, $appKey, $baseUrl, $itersPerRun, $runs, $tmpJson, '', $phpCli);
+            // Measure only what this app actually races. The exclusion lives in
+            // BenchmarkConfig so the report cannot disagree with the run: without it
+            // the harness asks every app for the full list, and an entrant that does
+            // not implement one endpoint aborts the whole run with a 404 (that is why
+            // Phalcon carried a placeholder `/features/aop` action).
+            $appRequests = \AzeraCompetition\Report\BenchmarkConfig::requestsFor($appKey);
+            $reqFlag     = '--requests="' . implode(',', $appRequests) . '"';
+            if (count($appRequests) !== count(\AzeraCompetition\Report\BenchmarkConfig::requestOrder())) {
+                echo '  measuring ', count($appRequests), ' of ',
+                    count(\AzeraCompetition\Report\BenchmarkConfig::requestOrder()),
+                    " endpoints (sits out: ", implode(', ', array_diff(
+                        \AzeraCompetition\Report\BenchmarkConfig::requestOrder(),
+                        $appRequests
+                    )), ")\n";
+            }
+            runHttpBench($root, $server, $appKey, $baseUrl, $itersPerRun, $runs, $tmpJson, $reqFlag, $phpCli);
 
             $modeData = json_decode((string) file_get_contents($tmpJson), true);
             if (!is_array($modeData) || !isset($modeData['modes'][$modeOf($server)])) {

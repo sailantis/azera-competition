@@ -38,11 +38,13 @@ use Phalcon\Mvc\View\Simple as SimpleView;
  *
  * WHAT PHALCON ACTUALLY HAS. Following the CI4 and CakePHP entrants — which also
  * lack an interceptor pipeline — the endpoints are built on the primitives the
- * framework does ship, and the AOP-only rows stay excluded from the winners table
- * through adapterFeatures() in scripts/report/BenchmarkConfig.php:
+ * framework does ship. `GET /features/aop` is the one endpoint this app does NOT
+ * serve, and that is deliberate: see aopDirectAction() and
+ * BenchmarkConfig::excludedRequests(). Everything else is native:
  *
- *   aop            → the closest native write path: an upsert inside an explicit
- *                    DB transaction (no #[Transactional] interceptor exists)
+ *   aop-direct     → an upsert inside an explicit begin/commit, the hand-written
+ *                    control every entrant serves (2026-11-25: the placeholder
+ *                    `/features/aop` action was deleted; it was not the feature)
  *   log, retry,    → demonstrated with plain code + Phalcon's Logger, which is
  *   pipeline          what CI4 and Cake do for the same rows
  *   db-events      → Phalcon's own db events manager (`db:beforeQuery`,
@@ -81,7 +83,6 @@ final class FeatureController extends Controller
         $this->view->setVars([
             'title'    => 'Features',
             'features' => [
-                ['url' => '/features/aop', 'title' => 'Transactional Insert', 'desc' => 'Insert a row inside an explicit DB transaction'],
                 ['url' => '/features/cache', 'title' => 'Cache', 'desc' => 'Cache a COUNT(*) via Phalcon\'s cache adapter (10s TTL)'],
                 ['url' => '/features/log', 'title' => 'Logging', 'desc' => 'Log method entry/exit via a Phalcon Logger adapter'],
                 ['url' => '/features/retry', 'title' => 'Retry', 'desc' => 'Retry a failing operation up to N times'],
@@ -97,49 +98,23 @@ final class FeatureController extends Controller
     }
 
     /**
-     * GET /features/aop — inserted a row inside an explicit DB transaction.
+     * GET /features/aop-direct — an insert inside an explicit begin/commit.
      *
-     * Phalcon 6 has no AOP/interceptor layer, so this is the closest native
-     * write path. The `aop` row is excluded from the winners table via
-     * adapterFeatures(), but the endpoint must exist for verify.php parity.
-     */
-    public function aopAction(): string
-    {
-        $db    = $this->db();
-        $now   = date('Y-m-d H:i:s');
-        $title = $this->writeTitle('AOP Item', $now);
-
-        $db->begin();
-        try {
-            $this->upsertSentinel($db, self::FEATURE_SENTINEL_ID, $title, $now);
-            $db->commit();
-        } catch (\Throwable $e) {
-            $db->rollback();
-
-            throw $e;
-        }
-
-        return $this->json([
-            'feature'     => 'Phalcon transactional insert',
-            'description' => 'Upserted a row inside an explicit DB transaction — no interceptor available in Phalcon 6.',
-            'new_id'      => self::FEATURE_SENTINEL_ID,
-            'title'       => $title,
-        ]);
-    }
-
-    /**
-     * GET /features/aop-direct — same insert as /features/aop, explicit
-     * begin/commit.
+     * There is no `/features/aop` here, by design. That endpoint measures the cost of
+     * AOP MACHINERY — Azera's generated `#[Transactional]` proxy, Laravel's and
+     * Symfony's interceptor pipelines, Spiral's `PipelineBuilder` — and Phalcon 6 has
+     * no advice layer at all. The only row it could produce would be this same
+     * hand-written transaction under a label claiming to be about interception, which
+     * is a different workload wearing the wrong name.
      *
-     * Phalcon has no advice layer, so its `/features/aop` already writes the
-     * transaction by hand. This endpoint exists so the same-work comparison holds
-     * on BOTH sides: Azera's `/features/aop` vs `/features/aop-direct` measures
-     * what its proxy costs, and comparing this row against those two keeps the
-     * cross-framework numbers on identical work rather than on three different
-     * demonstrations.
+     * So the benchmark does not ask Phalcon for it: `BenchmarkConfig::excludedRequests()`
+     * lists it, the report shows `—` for that column, and `run-http.php` passes a
+     * per-app endpoint list to the harness so this app is never timed on it. The route
+     * and its placeholder action were removed on 2026-11-25; they had existed only to
+     * stop a `404` aborting the run.
      *
-     * Deliberately identical to aop() — same upsert, same sentinel id — minus the
-     * `eventsManager` fire, which `aop()` does not do either.
+     * The endpoint below stays because it IS comparable: every entrant serves the same
+     * hand-written insert, which is the control the AOP row is read against.
      */
     public function aopDirectAction(): string
     {
@@ -159,7 +134,7 @@ final class FeatureController extends Controller
 
         return $this->json([
             'feature'     => 'Transactional insert (explicit)',
-            'description' => 'Upserted a row inside a hand-written begin/commit — the direct twin of /features/aop.',
+            'description' => 'Upserted a row inside a hand-written begin/commit — the control every entrant serves, with no interceptor involved.',
             'new_id'      => self::FEATURE_SENTINEL_ID,
             'title'       => $title,
         ]);

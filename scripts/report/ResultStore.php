@@ -1621,13 +1621,17 @@ final class ResultStore
     }
 
     /**
-     * Requests that every app in $apps has a measurement for (fair comparison).
+     * Requests that every app in $apps actually RACES.
      *
-     * An app that is EXCLUDED from an endpoint is treated as absent from it. Without
-     * that, `GET /features/aop` would drop out of every total because Phalcon sits
-     * that one endpoint out, and six frameworks would be compared over a smaller
-     * workload than the seventh's own feature page draws — the totals would silently
-     * answer a different question than the tables above them.
+     * An endpoint one entrant is excluded from is NOT common: the totals are the sum
+     * of what a framework does on a pass over these requests, and including a row the
+     * page shows as `—` for that entrant would sum work it never did. That was the
+     * 2026-11-25 bug — the table blanked Phalcon's `/features/aop` while the totals
+     * quietly added its 2 ms, so the same page said "not competed" and "competed".
+     *
+     * The consequence is that the totals cover a smaller set than the table's rows, so
+     * every caption that quotes them states the count instead of claiming "every
+     * benchmarked endpoint". `commonRequests()` is the only place that decides it.
      *
      * @param list<string> $apps
      * @return list<string>
@@ -1639,7 +1643,8 @@ final class ResultStore
             $all = true;
             foreach ($apps as $app) {
                 if (!$this->racesOn($app, $req)) {
-                    continue; // not this app's race: the request stays common
+                    $all = false;
+                    break;
                 }
                 if ($this->ms($app, $mode, $req) === null) {
                     $all = false;
