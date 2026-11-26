@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace App\Spiral\Bootloader;
 
 use App\Spiral\Service\DbEventLog;
+use App\Spiral\Service\LogListener;
 use Spiral\Boot\Bootloader\Bootloader;
 use Spiral\Boot\FinalizerInterface;
 use Spiral\Config\ConfiguratorInterface;
@@ -31,6 +32,11 @@ final class AppBootloader extends Bootloader
         // the controller — otherwise the controller would receive a second,
         // empty instance autowired by the container.
         DbEventLog::class => [self::class, 'initDbEventLog'],
+
+        // Same reason: the /features/log listener is registered once per process
+        // on Spiral's ListenerRegistry, while the demo controller is resolved per
+        // request.
+        LogListener::class => [self::class, 'initLogListener'],
     ];
 
     public function __construct(
@@ -79,6 +85,18 @@ final class AppBootloader extends Bootloader
             ->get(\Spiral\Logger\ListenerRegistryInterface::class)
             ->addListener($dbEventLog);
 
+        // Attach the listener used by /features/log, on the same registry.
+        //
+        // This is Spiral's native readback: `LogsInterface::getLogger($channel)`
+        // returns a PSR-3 logger whose `log()` builds a `Spiral\Logger\Event\LogEvent`
+        // and hands it to every listener here. The demo therefore reads back what
+        // Spiral emitted, rather than an array the application appends to — which is
+        // what it used to do, with no logger in the path at all.
+        $logListener = $container->get(LogListener::class);
+        $container
+            ->get(\Spiral\Logger\ListenerRegistryInterface::class)
+            ->addListener($logListener);
+
         // The log records one entry per query into a container SINGLETON. In a
         // resident worker that grows without bound (measured +~750 B per
         // query-request over 5,000 requests, 2026-09-14), so wipe it after
@@ -98,10 +116,19 @@ final class AppBootloader extends Bootloader
         $finalizer->addFinalizer(static function () use ($dbEventLog): void {
             $dbEventLog->clear();
         });
+
+        $finalizer->addFinalizer(static function () use ($logListener): void {
+            $logListener->clear();
+        });
     }
 
     public static function initDbEventLog(): DbEventLog
     {
         return new DbEventLog();
+    }
+
+    public static function initLogListener(): LogListener
+    {
+        return new LogListener();
     }
 }

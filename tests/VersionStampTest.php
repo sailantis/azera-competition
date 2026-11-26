@@ -621,7 +621,7 @@ PHP);
         $manifest = self::manifest();
         $store    = self::store();
 
-        foreach (['summary-fpm', 'summary-roadrunner'] as $key) {
+        foreach (['summary-fpm', 'summary-volucer'] as $key) {
             $dir = sys_get_temp_dir() . "/tmp-ver-svg-{$key}";
             $md  = new MarkdownReport($store, $key, $manifest['views'][$key]);
             $md->render($dir, "svg/{$key}");

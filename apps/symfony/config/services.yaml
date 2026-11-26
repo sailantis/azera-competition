@@ -15,25 +15,31 @@ services:
     App\Symfony\Service\:
         resource: '../src/Service/'
 
-    # Request-scoped state: scoped services — a fresh instance per request,
-    # single instance within the request (mirrors Spiral's #[Scope('http')]
-    # and Laravel's $app->scoped()).
-    App\Symfony\Service\RequestCounter:
-        tags:
-            - { name: kernel.reset, method: resetState }
-    App\Symfony\Service\ScopeState:
-        tags:
-            - { name: kernel.reset, method: resetState }
-
     # DB event log: one entry per executed query. It records into
     # PROCESS-lifetime service state, so in a resident worker it grows without
     # bound (measured +~1.1 KB per query-request over 5,000 requests,
-    # 2026-09-14) unless cleared per request — hence the same kernel.reset
-    # hook the other request-scoped services carry (services_resetter is fired
-    # by Kernel::terminate, which SymfonyAdapter::cleanup() calls).
+    # 2026-09-14) unless cleared per request — hence the kernel.reset hook
+    # (services_resetter is fired by Kernel::terminate, which
+    # SymfonyAdapter::cleanup() calls).
     App\Symfony\Service\DbEventLog:
         tags:
             - { name: kernel.reset, method: clear }
+
+    # Logging. FrameworkBundle registers a `logger` service (HttpKernel's PSR-3
+    # Logger) by default, but it writes to stderr and its records are only
+    # inspectable when debug is on and a RequestStack is wired — neither of which a
+    # benchmark row can read back. This entry names an in-memory PSR-3 logger for
+    # the same service id, so application code keeps depending on
+    # `Psr\Log\LoggerInterface` and Symfony's container decides the sink. That is
+    # the framework's own mechanism; the alternative (a hand-built array in the
+    # controller) measures array construction, which is what `/features/log` used to
+    # do.
+    Psr\Log\LoggerInterface:
+        alias: App\Symfony\Service\MemoryLogger
+
+    App\Symfony\Service\MemoryLogger:
+        tags:
+            - { name: kernel.reset, method: resetState }
 
     # DBAL driver middleware — records query + transaction activity into
     # DbEventLog (the db-events feature race).
@@ -45,3 +51,11 @@ services:
     App\Symfony\EventListener\StampListener:
         tags:
             - { name: kernel.event_listener, event: App\Symfony\Event\ItemCreated, method: __invoke }
+
+    # Lifecycle hook for GET /features/lifecycle-hooks. Symfony has NO middleware
+    # layer — its HttpKernel dispatches kernel events — so this is the framework's own
+    # mechanism for "look at the finished response and rewrite it". The listener itself
+    # returns early on every route but its own (see the class docblock).
+    App\Symfony\EventListener\LifecycleHookListener:
+        tags:
+            - { name: kernel.event_listener, event: kernel.response, method: __invoke }

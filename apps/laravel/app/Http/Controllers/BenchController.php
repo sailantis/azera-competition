@@ -37,7 +37,12 @@ class BenchController
     }
 
     /**
-     * GET /routing/{id} — routing cost with nothing after it.
+     * GET /api/routing/{id} — routing cost with nothing after it.
+     *
+     * The path is `/api/routing/{id}`, not `/routing/{id}`: this controller's
+     * route is registered in routes/api.php, which bootstrap/app.php mounts under
+     * the `api` prefix (see the route's own comment). The docblock used to name the
+     * unprefixed path, which is the one Laravel does not serve.
      *
      * `/echo` is static, so a router that indexes literals can answer it without
      * ever walking candidates; the endpoint measures throughput, not routing.

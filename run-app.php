@@ -129,18 +129,18 @@ $requests = isset($opts['requests'])
         'POST /api/items',
         // Feature demo endpoints (each framework participates only if it
         // supports the underlying feature — see run.php $adapterFeatures)
-        'GET /features/aop',
-        'GET /features/aop-direct',
-        'GET /features/cache',
+        'GET /features/aop-tx',
+        'GET /features/aop-tx-explicit',
+    'GET /features/aop-tx-direct',
+        'GET /features/aop-cache',
+        'GET /features/aop-cache-direct',
         'GET /features/log',
-        'GET /features/retry',
-        'GET /features/pipeline',
         'GET /features/db-events',
         'GET /features/events',
         'GET /features/validation',
         'GET /features/config',
-        'GET /features/request-scoped',
         'GET /features/rate-limit',
+        'GET /features/lifecycle-hooks',
     ];
 
 $requests = array_map(function (string $r): array {

@@ -123,7 +123,7 @@ HTML;
      *
      *  1. The dashboard groups by DEPLOYMENT MODEL, which is the reader's first
      *     question, and the manifest has no reason to be ordered that way. The
-     *     two views measured on a real server (RoadRunner's resident worker,
+     *     two views measured on a real server (volucer attach's resident worker,
      *     then nginx+PHP-FPM's boot-per-request) come first; each is followed by
      *     the in-process harness view that studies the SAME model, so a reader
      *     who picks a model lands on its two views together.
@@ -139,21 +139,17 @@ HTML;
     private function cardOrder(): array
     {
         $order = [
-            'real-roadrunner', // real server, resident worker
-            'real-fpm',        // real server, boot paid per request
-            // Volucer's two arms next to the other two real servers: the same
-            // pair of models in a third server, which is what makes the
-            // boot-vs-no-boot finding about the MODEL rather than one
-            // implementation. A manifest key missing from this list is still
-            // appended below, so a view added to views.php always gets a card.
-            'real-volucer-attach',
-            'real-volucer-cgi',
+            'real-volucer-attach', // real server, resident worker
+            'real-fpm',            // real server, boot paid per request
+            // One real server per MODEL, which is what makes the boot-vs-no-boot
+            // finding about the model rather than about one implementation. A
+            // manifest key missing from this list is still appended below, so a
+            // view added to views.php always gets a card.
             'warm-start',      // harness: the resident-worker model
             'cold-start',      // harness: the boot-per-request model
             // The published summaries last: each is a SUBSET of the measured view
             // above it, so a reader who wants the headline should meet the full
             // pages first (see the summary views in views.php).
-            'summary-roadrunner',
             'summary-fpm',
             // The same resident model in a second server, right after the first
             // one: the pair is the evidence that the finding is about the MODEL.
@@ -259,7 +255,7 @@ HTML;
             // pipeline written out by hand). Both are legitimate; they are not the
             // same work. The HTML page must say so as well, or it contradicts the
             // Markdown page for the same dataset.
-            if ($feature === 'aop') {
+            if ($feature === 'aop-tx') {
                 $styles = BenchmarkConfig::aopStylesInRace();
                 $parts  = [];
                 if ($styles['transparent'] !== []) {
@@ -268,13 +264,21 @@ HTML;
                 if ($styles['direct'] !== []) {
                     $parts[] = 'direct: ' . implode(', ', $styles['direct']);
                 }
-                if ($parts !== []) {
+                // Only when BOTH styles are on the page — see the Markdown
+                // renderer's note: `aop-tx` now has a single participant, so the
+                // direct side is charted separately as `aop-tx-direct`.
+                if (count($parts) === 2) {
                     $note .= "\n  <p class=\"workload\">Read this row in two styles — "
                         . self::esc(implode('; ', $parts))
                         . '. The cross-style ranking is not a speed verdict. <code>GET '
-                        . '/features/aop-direct</code> is the control: the identical insert with the '
+                        . '/features/aop-tx-direct</code> is the control: the identical insert with the '
                         . 'transaction written by hand, so the gap between that row and this one is '
                         . 'what interception actually costs.</p>';
+                } elseif ($parts !== []) {
+                    $note .= "\n  <p class=\"workload\">This facility, and who ships it — "
+                        . self::esc(implode('; ', $parts))
+                        . '. The hand-written equivalent is charted separately as <code>GET '
+                        . '/features/aop-tx-direct</code>.</p>';
                 }
             }
 
@@ -344,10 +348,10 @@ HTML;
      * Caption for the startup figure, matching the chart actually drawn.
      *
      * A real-deployment dataset has ONE boot band, and which one it is depends
-     * on the server: php-fpm measures the per-request boot, roadrunner the
+     * on the server: php-fpm measures the per-request boot, the resident arm
      * in-worker re-init. The CLI harness draws three bands and adds teardown to
      * each. A fixed "boot + teardown (cold + warm)" caption described a chart
-     * that the FPM and RoadRunner pages do not contain.
+     * that the FPM and resident pages do not contain.
      */
     private function startupCaption(string $mode): string
     {
@@ -371,11 +375,10 @@ HTML;
     private function serverLabel(string $mode): string
     {
         return match ($mode) {
-            'roadrunner', 'warm' => 'RoadRunner',
-            'php-fpm', 'cold'    => 'PHP-FPM',
-            'volucer-attach'     => 'Volucer attach',
-            'volucer-cgi'        => 'Volucer spawn_cgi',
-            default              => $mode,
+            'warm'           => 'Resident worker',
+            'php-fpm', 'cold' => 'PHP-FPM',
+            'volucer-attach' => 'Volucer attach',
+            default          => $mode,
         };
     }
 
@@ -476,7 +479,7 @@ HTML;
             // note must not cross-reference one they do not have.
             $where = in_array('hero', $charts, true) ? 'the startup chart' : 'the full report';
             // The accessor is mode-aware: a Volucer page must describe Volucer's
-            // own recycle mechanism, not RoadRunner's max_jobs.
+            // own recycle mechanism, not another server's max_jobs.
             return match ($this->store->modeRecycleModel($mode)) {
                 'never' => ' — the worker is never recycled (' . $this->store->recycleSettingLabel($mode)
                     . '), so no boot is added to these requests; the one-time recycle is measured in ' . $where,
@@ -538,14 +541,15 @@ HTML;
                 . 'floor every row stands on. ' . $advice;
         }
 
-        if (in_array($mode, ['warm', 'roadrunner'], true)) {
-            $rr = $ms('floor-rr');
-            if ($rr === null) {
+        if (in_array($mode, ['warm', 'volucer-attach'], true)) {
+            $va = $ms('floor-volucer-attach');
+            if ($va === null) {
                 return '';
             }
-            return '<strong>Server floor</strong> — real RoadRunner over loopback: a bare resident worker that '
-                . 'renders a fixed string (<code>floor-rr</code>) measures the IPC + server floor every row '
-                . 'below also pays. Only differences larger than this floor are framework differences.';
+            return '<strong>Server floor</strong> — real volucer <code>attach</code> over loopback: a bare '
+                . 'resident worker that renders a fixed string (<code>floor-volucer-attach</code>) measures '
+                . 'the IPC + server floor every row below also pays. Only differences larger than this '
+                . 'floor are framework differences.';
         }
 
         return '';

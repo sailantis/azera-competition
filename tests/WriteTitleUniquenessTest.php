@@ -25,19 +25,19 @@ use PHPUnit\Framework\TestCase;
  *   40 upserts with a per-request unique title     -> 160 fdatasync calls
  *
  * Through a real entrant this is not a micro-optimisation either. Phalcon was the only
- * framework whose `/features/aop` and `/features/aop-direct` wrote a date-only title, and
+ * framework whose `/features/aop-tx` and `/features/aop-tx-direct` wrote a date-only title, and
  * it was also the only framework that appeared to commit for free:
  *
- *   Phalcon  /features/aop-direct, rollback-journal   date-only title   0.021 ms
- *   Phalcon  /features/aop-direct, rollback-journal   unique title      0.486 ms  (23x)
- *   Azera    /features/aop-direct, rollback-journal   unique title      0.515 ms
+ *   Phalcon  /features/aop-tx-direct, rollback-journal   date-only title   0.021 ms
+ *   Phalcon  /features/aop-tx-direct, rollback-journal   unique title      0.486 ms  (23x)
+ *   Azera    /features/aop-tx-direct, rollback-journal   unique title      0.515 ms
  *
  * So the "0.021 ms write" was a read: no page was dirtied, nothing was journaled. That
  * single asymmetry is what made a WAL-vs-rollback-journal experiment look as though
  * disabling WAL cost Azera 29% and cost Phalcon nothing — it was not the journal mode,
  * it was one entrant not writing.
  *
- * Every entrant already used a `#<random>` suffix on its `/features/aop` titles, so the
+ * Every entrant already used a `#<random>` suffix on its `/features/aop-tx` titles, so the
  * fix is to apply that same suffix to EVERY title that reaches a write. Phalcon routes
  * them through `writeTitle()`; the others append it inline.
  */

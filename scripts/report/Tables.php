@@ -35,7 +35,7 @@ final class Tables
      *
      * The headline is END-TO-END for the mode: it is the time one request
      * occupies (or blocks) a worker, boot included — in cold/FPM the measured
-     * request already pays a fresh boot, in warm/RoadRunner the worker's
+     * request already pays a fresh boot, in the resident model the worker's
      * recycle cost is added to the post-boot request. Each cell also carries
      * the lifecycle split `boot + handle + cleanup`, which sums exactly to the
      * headline, so the reader can see where the time goes instead of taking
@@ -63,8 +63,8 @@ final class Tables
                     continue;
                 }
                 // An endpoint an entrant sits out is blank for that entrant only. The
-                // FEATURE-level gate above cannot express this: `aop` covers both
-                // `/features/aop` and its hand-written control, and only the first is
+                // FEATURE-level gate above cannot express this: `aop-tx` covers both
+                // `/features/aop-tx` and its hand-written control, and only the first is
                 // not a race for Phalcon.
                 if (!$this->store->racesOn($app, $req)) {
                     $cells[$app] = ['ms' => null, 'winner' => false, 'tie' => false, 'handle' => null, 'cleanup' => null, 'boot' => null];
@@ -249,12 +249,10 @@ final class Tables
         if ($this->store->hasBoot()) {
             if ($this->store->isPerRequestMode($mode) && $this->store->coldBootIncluded()) {
                 // Named per deployment: "(FPM story)" is what this page has always
-                // said, and it stays right for PHP-FPM. A Volucer spawn_cgi page gets
-                // its own name rather than borrowing FPM's, and an unknown future
+                // said, and it stays right for PHP-FPM. An unknown future
                 // per-request arm gets the generic wording instead of a false claim.
                 $story = match ($mode) {
                     'php-fpm', 'cold' => 'FPM story',
-                    'volucer-cgi'     => 'Volucer spawn_cgi story',
                     default           => 'per-request story',
                 };
                 $sub .= ' <span class="unit">— cold rows and charts are end-to-end: each iteration pays a fresh '

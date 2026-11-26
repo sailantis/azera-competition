@@ -6,7 +6,6 @@ namespace App\Phalcon;
 
 use App\Phalcon\Support\DbEventLog;
 use App\Phalcon\Support\MemoryLoggerAdapter;
-use App\Phalcon\Support\RequestCounter;
 use Phalcon\Cache\Adapter\Memory as CacheMemory;
 use Phalcon\Cache\Cache;
 use Phalcon\Cache\CacheInterface;
@@ -202,8 +201,6 @@ final class Bootstrap
             ],
         ]));
 
-        $di->setShared('requestCounter', fn(): RequestCounter => new RequestCounter());
-
         // The db-events demos read this log, and the adapter's events manager
         // fires into it. Attached HERE, once per process, for the reason spelled
         // out in DbEventLog: setEventsManager() rejects null and detachAll()
@@ -282,6 +279,17 @@ final class Bootstrap
         $dispatcher->setDefaultNamespace(self::CONTROLLER_NAMESPACE);
         $di->setShared('dispatcher', fn(): Dispatcher => $dispatcher);
 
+        // The lifecycle row's hook (GET /features/lifecycle-hooks). Phalcon's full-MVC
+        // Application has no middleware pipeline, so `dispatch:afterExecuteRoute` is the
+        // framework's own mechanism for "run after the controller and rewrite the
+        // response". The listener scopes itself to Feature::lifecycleHooks; a global
+        // rewrite would change every row's status.
+        $dispatcher->getEventsManager() ?? $dispatcher->setEventsManager($di->getShared('eventsManager'));
+        $di->getShared('eventsManager')->attach(
+            'dispatch',
+            new \App\Phalcon\Listener\LifecycleHookListener(),
+        );
+
         // Router: the same 8 benchmark endpoints + 100 filler routes every other
         // app declares, so the route table sizes stay comparable.
         $router = new Router(false);
@@ -316,23 +324,24 @@ final class Bootstrap
         $router->addPost('/api/items', self::target('api', 'create'));
 
         // The /features/ endpoints are what the harness measures. Phalcon is asked
-        // for all of them EXCEPT `/features/aop`: see
-        // BenchmarkConfig::excludedRequests() for why that one endpoint is not a
-        // race Phalcon can be timed on. It has no route here, and run-http.php
-        // passes a per-app endpoint list so the harness never requests it — the
-        // absence is deliberate, not a missing implementation.
+        // for all of them EXCEPT `/features/aop-tx` (transparent AOP) and
+        // `/features/aop-tx-explicit` (the explicit interceptor pipeline): Phalcon 6
+        // has neither facility, so `adapterFeatures()` omits both features and
+        // `competesOn()` keeps the harness from requesting them. The absence is
+        // deliberate, not a missing implementation.
         $router->addGet('/features', self::target('feature', 'index'));
-        $router->addGet('/features/aop-direct', self::target('feature', 'aopDirect'));
-        $router->addGet('/features/cache', self::target('feature', 'cache'));
+        $router->addGet('/features/aop-tx-direct', self::target('feature', 'aopDirect'));
+        $router->addGet('/features/aop-cache-direct', self::target('feature', 'aopCacheDirect'));
         $router->addGet('/features/log', self::target('feature', 'log'));
-        $router->addGet('/features/retry', self::target('feature', 'retry'));
-        $router->addGet('/features/pipeline', self::target('feature', 'pipeline'));
         $router->addGet('/features/db-events', self::target('feature', 'dbEvents'));
         $router->addGet('/features/events', self::target('feature', 'events'));
         $router->addGet('/features/validation', self::target('feature', 'validation'));
         $router->addGet('/features/config', self::target('feature', 'config'));
-        $router->addGet('/features/request-scoped', self::target('feature', 'requestScoped'));
         $router->addGet('/features/rate-limit', self::target('feature', 'rateLimit'));
+        // The lifecycle row. Phalcon has no middleware on the full-MVC application, so
+        // its hook is `dispatch:afterExecuteRoute` (see App\Phalcon\Listener\LifecycleHookListener,
+        // attached in boot()).
+        $router->addGet('/features/lifecycle-hooks', self::target('feature', 'lifecycleHooks'));
 
         // 100 filler routes — never dispatched, they exist so the table size
         // matches the other six apps.
@@ -631,5 +640,9 @@ final class Bootstrap
         }
 
         self::di()->setShared('modelsManager', fn(): ModelsManager => new ModelsManager());
+
+        if (self::di()->has('requestCounter')) {
+            self::di()->remove('requestCounter');
+        }
     }
 }

@@ -128,6 +128,15 @@ final class CodeIgniterAdapter implements WebAppAdapter
      */
     private function bootFramework(): void
     {
+        // The COMPOSER_PATH choice below goes through the ONE resolver every boot
+        // path shares (see bench-app-autoload.php). Required here rather than left
+        // to the caller because two of the four callers — verify-app.php and
+        // smoke-app.php — do not load it, and the resulting
+        // "Call to undefined function benchAppAutoload()" fatal made both parity
+        // gates crash instead of reporting: CodeIgniter was the one entrant with no
+        // verification at all after the pruned-autoloader change.
+        require_once dirname(__DIR__) . '/bench-app-autoload.php';
+
         $root     = dirname(__DIR__) . DIRECTORY_SEPARATOR;
         $appDir   = $root . 'apps/codeigniter/';
         $sysDir   = $root . 'vendor/codeigniter4/framework/system/';

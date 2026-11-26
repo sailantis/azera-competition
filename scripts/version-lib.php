@@ -30,7 +30,7 @@ declare(strict_types=1);
  *
  * Read from vendor/composer/installed.json rather than composer.lock, because
  * installed.json is the truth about what RAN: the bench VM installs
- * RoadRunner's client as a require-dev that never reaches the committed lock,
+ * the RR client used to be a require-dev that never reaches the committed lock,
  * and a divergence between the two files is exactly the kind of silent
  * difference a version stamp exists to expose.
  *

@@ -60,18 +60,18 @@ $routes->post('/api/items', 'Api::create');
 
 // --- Feature demo endpoints ----------------------------------------------
 $routes->get('/features', 'Feature::index');
-$routes->get('/features/aop', 'Feature::aop');
-$routes->get('/features/aop-direct', 'Feature::aopDirect');
-$routes->get('/features/cache', 'Feature::cache');
+$routes->get('/features/aop-tx-direct', 'Feature::aopDirect');
+$routes->get('/features/aop-cache-direct', 'Feature::aopCacheDirect');
 $routes->get('/features/log', 'Feature::log');
-$routes->get('/features/retry', 'Feature::retry');
-$routes->get('/features/pipeline', 'Feature::pipeline');
 $routes->get('/features/db-events', 'Feature::dbEvents');
 $routes->get('/features/events', 'Feature::events');
 $routes->get('/features/validation', 'Feature::validation');
 $routes->get('/features/config', 'Feature::config');
-$routes->get('/features/request-scoped', 'Feature::requestScoped');
 $routes->get('/features/rate-limit', 'Feature::rateLimit');
+// The lifecycle row. Its hook is an `after` FILTER, not a route-level callback: CI4
+// attaches filters by URI pattern in Config\Filters::$filters, which is why the route
+// itself looks like any other.
+$routes->get('/features/lifecycle-hooks', 'Feature::lifecycleHooks');
 
 // --- Filler routes (route-table size parity) -----------------------------
 foreach (range(1, 100) as $i) {

@@ -6,15 +6,6 @@ echo:
     controller: App\Symfony\Controller\BenchController::echo
     methods: GET
 
-# Routing cost with a typed parameter and no ORM: the only endpoint whose
-# measured time is route matching. See BenchController::routing().
-routing:
-    path: /routing/{id}
-    controller: App\Symfony\Controller\BenchController::routing
-    methods: GET
-    requirements:
-        id: \d+
-
 home:
     path: /
     controller: App\Symfony\Controller\BenchController::index
@@ -59,10 +50,15 @@ items_qb_create:
     methods: POST
 
 # --- REST API ---------------------------------------------------------------
-# Routing cost in the deep 'api' bucket with a constant handler and no ORM: the
-# only endpoint whose measured time is route matching. Declared before
-# api_items_show so the literal segment is not swallowed by the {id} requirement.
-# See BenchController::routing().
+# Routing cost with a typed parameter and no ORM: the only endpoint whose
+# measured time is route matching. See BenchController::routing().
+#
+# NOT registered at `/routing/{id}` as well. It once was, and that second path was
+# measured by nothing: the harness asks only for `GET /api/routing/1`
+# (BenchmarkConfig::featureMap()), so the duplicate was dead surface that made
+# Symfony the only entrant advertising a route nobody timed — and, because the
+# docblocks named `/routing/{id}`, it made the unprefixed path look like the
+# benchmark's canonical one while six of seven apps serve only `/api/...`.
 api_routing:
     path: /api/routing/{id}
     controller: App\Symfony\Controller\BenchController::routing
@@ -96,29 +92,17 @@ features_index:
     path: /features
     controller: App\Symfony\Controller\FeatureController::index
     methods: GET
-feature_aop:
-    path: /features/aop
-    controller: App\Symfony\Controller\FeatureController::aop
-    methods: GET
 feature_aop_direct:
-    path: /features/aop-direct
+    path: /features/aop-tx-direct
     controller: App\Symfony\Controller\FeatureController::aopDirect
     methods: GET
-feature_cache:
-    path: /features/cache
-    controller: App\Symfony\Controller\FeatureController::cache
+feature_aop_cache_direct:
+    path: /features/aop-cache-direct
+    controller: App\Symfony\Controller\FeatureController::aopCacheDirect
     methods: GET
 feature_log:
     path: /features/log
     controller: App\Symfony\Controller\FeatureController::log
-    methods: GET
-feature_retry:
-    path: /features/retry
-    controller: App\Symfony\Controller\FeatureController::retry
-    methods: GET
-feature_pipeline:
-    path: /features/pipeline
-    controller: App\Symfony\Controller\FeatureController::pipeline
     methods: GET
 feature_events:
     path: /features/events
@@ -136,13 +120,15 @@ feature_db_events:
     path: /features/db-events
     controller: App\Symfony\Controller\FeatureController::dbEvents
     methods: GET
-feature_request_scoped:
-    path: /features/request-scoped
-    controller: App\Symfony\Controller\FeatureController::requestScoped
-    methods: GET
 feature_rate_limit:
     path: /features/rate-limit
     controller: App\Symfony\Controller\FeatureController::rateLimit
+    methods: GET
+# The lifecycle row. The hook is a kernel.response listener registered in
+# services.yaml; the route name is what the listener matches on, so the two must agree.
+feature_lifecycle_hooks:
+    path: /features/lifecycle-hooks
+    controller: App\Symfony\Controller\FeatureController::lifecycleHooks
     methods: GET
 
 # --- Filler routes (route-table size parity with the other apps) -----------

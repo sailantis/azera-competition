@@ -159,18 +159,27 @@ $requests  = isset($opts['requests'])
         'POST /api/items',
         // Feature demo endpoints (each framework participates only if it
         // supports the underlying feature — see $adapterFeatures)
-        'GET /features/aop',
-        'GET /features/aop-direct',
-        'GET /features/cache',
+        'GET /features/aop-tx',
+        'GET /features/aop-tx-direct',
+        // Second real AOP mode: explicit interceptor pipeline. Only Azera and
+        // Spiral ship such an abstraction, so only they are raced here.
+        'GET /features/aop-tx-explicit',
+        // The attribute-applied cache (Azera only) and its same-work control, which
+        // every entrant can serve.
+        'GET /features/aop-cache',
+        'GET /features/aop-cache-direct',
         'GET /features/log',
-        'GET /features/retry',
-        'GET /features/pipeline',
         'GET /features/db-events',
         'GET /features/events',
         'GET /features/validation',
         'GET /features/config',
-        'GET /features/request-scoped',
         'GET /features/rate-limit',
+        // Request lifecycle: a hook before/after the handler that can rewrite the
+        // response. Each entrant uses its own mechanism (middleware, filters, kernel
+        // listeners, events-manager hooks), so all seven compete — the row is named
+        // for what is measured, not for the abstraction, because only five of the
+        // seven have a middleware layer at all.
+        'GET /features/lifecycle-hooks',
     ];
 
 // Normalize requests to [method, uri] pairs
@@ -748,6 +757,9 @@ $modes = array_keys(array_filter([
 ]));
 
 // Serialize the request list once for the child processes ("METHOD URI" CSV).
+// Per-app exclusions are applied inside the app loop (see $appRequestArg): the
+// list below is the full request set, which is also what EndpointParityTest
+// matches against these files.
 $requestArg = implode(',', array_map(fn($r) => "{$r[0]} {$r[1]}", $requests));
 
 foreach ($apps as $key) {
@@ -758,6 +770,27 @@ foreach ($apps as $key) {
     }
 
     echo "\n=== App: {$key}\n";
+
+    // Measure only what THIS app actually races — the same map run-http.php
+    // passes to the real-deployment harness. Without it the in-process run asks
+    // every app for the full list, so a documented exclusion (Phalcon's
+    // `GET /features/aop-tx`) aborts the whole run with a 404: the exclusion existed
+    // only in the reporting path, and `run.php --apps=phalcon` died on an
+    // endpoint the report had already declared uncounted.
+    $appRequests = array_values(array_filter(
+        $requests,
+        static fn(array $pair): bool => \AzeraCompetition\Report\BenchmarkConfig::competesOn($key, "{$pair[0]} {$pair[1]}")
+    ));
+
+    if (count($appRequests) !== count($requests)) {
+        echo '  measuring ', count($appRequests), ' of ', count($requests), ' endpoints (sits out: ',
+            implode(', ', array_diff(
+                array_map(static fn(array $p): string => "{$p[0]} {$p[1]}", $requests),
+                array_map(static fn(array $p): string => "{$p[0]} {$p[1]}", $appRequests)
+            )), ")\n";
+    }
+
+    $appRequestArg = implode(',', array_map(static fn(array $p): string => "{$p[0]} {$p[1]}", $appRequests));
 
     $appResult = [
         'app'   => $key,
@@ -801,7 +834,7 @@ foreach ($apps as $key) {
             escapeshellarg($modeName),
             $itersForMode,
             $runs,
-            escapeshellarg($requestArg),
+            escapeshellarg($appRequestArg),
             escapeshellarg($tmpJson),
             $seedArgs,
         );

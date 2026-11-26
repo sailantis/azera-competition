@@ -18,6 +18,15 @@
  * render the layout (see Bootstrap::boot() for the group definition and why it is
  * route-scoped). The parsing it delegates is now the same code every entrant runs.
  *
+ * WHY IT MUST BE PER REQUEST, NOT A BOOT STEP. It briefly ran from
+ * `Bootstrap::buildRequestContext()`, copying Laravel's `View::share()` in
+ * `AppServiceProvider::boot()`. At boot no request exists yet, so `$ctx->request()`
+ * resolves the container's empty default and the resident arms stamped the values
+ * `$_SERVER` happened to hold at process start — every client got `en_US` while the
+ * FPM arm, whose entry script re-runs per request, got the real header. Here the
+ * request is the live one: `Kernel::handle()` publishes it into the context before
+ * the middleware chain runs.
+ *
  * Modeled after the sailantis-homepage GeoCurrencyMiddleware but without external
  * API calls or session dependency, so it is self-contained and deterministic.
  */
@@ -28,11 +37,8 @@ use Azera\AppContext;
 use Azera\Core\MiddlewareInterface;
 use Azera\Http\Response;
 
-class RequestContextMiddleware implements MiddlewareInterface
+final class RequestContextMiddleware implements MiddlewareInterface
 {
-    /** @var int Request counter, used to simulate per-request state */
-    private static int $requestCount = 0;
-
     public function process(AppContext $ctx, callable $next): ?Response
     {
         $request = $ctx->request();
@@ -47,23 +53,14 @@ class RequestContextMiddleware implements MiddlewareInterface
             $request->userAgent(),
         );
 
-        // Increment request counter (simulates per-request tracking)
-        self::$requestCount++;
-
-        // Stamp into view vars so templates can use them
+        // Only the two vars a template actually reads. A third, `requestCount`, used to
+        // be written here for the since-removed request-scoped demo; no template ever
+        // rendered it, so it was per-request work whose only product was an unused
+        // array entry.
         $ctx->view()
             ->setVar('locale', $globals['locale'])
-            ->setVar('platform', $globals['platform'])
-            ->setVar('requestCount', self::$requestCount);
+            ->setVar('platform', $globals['platform']);
 
         return $next();
-    }
-
-    /**
-     * Reset the request counter (called on bootstrap for cold mode).
-     */
-    public static function reset(): void
-    {
-        self::$requestCount = 0;
     }
 }

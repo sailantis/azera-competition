@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Feature demo controller — interceptors (AOP), cache, events, validation,
- * config, db-events, request-scoped, rate-limit.
+ * config, db-events, rate-limit.
  *
  * Mirrors the azera/Spiral/Laravel response shapes exactly.
  */
@@ -16,8 +16,6 @@ use App\Symfony\Event\ItemCreated;
 use App\Symfony\Service\AopService;
 use App\Symfony\Service\DbEventLog;
 use App\Symfony\Service\RateLimiter;
-use App\Symfony\Service\RequestCounter;
-use App\Symfony\Service\ScopeState;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
@@ -42,8 +40,6 @@ class FeatureController extends AbstractController
         private readonly EventDispatcherInterface $events,
         private readonly ValidatorInterface $validator,
         private readonly EntityManagerInterface $em,
-        private readonly RequestCounter $counter,
-        private readonly ScopeState $state,
         private readonly RateLimiter $limiter,
         private readonly \Doctrine\DBAL\Connection $connection,
     ) {}
@@ -55,42 +51,45 @@ class FeatureController extends AbstractController
     {
         return $this->render('features.html.twig', \array_merge(self::viewGlobals($request), [
             'features' => [
-                ['url' => '/features/aop', 'title' => 'AOP Interceptors', 'desc' => 'Insert a row inside an interceptor-managed DB transaction'],
-                ['url' => '/features/cache', 'title' => 'Cache', 'desc' => 'Cache a method result via Symfony\'s PSR-6 cache'],
-                ['url' => '/features/log', 'title' => 'Pipeline Logging', 'desc' => 'Log method entry/exit via the LogInterceptor'],
-                ['url' => '/features/retry', 'title' => 'Pipeline Retry', 'desc' => 'Retry a failing method up to N times via the RetryInterceptor'],
-                ['url' => '/features/pipeline', 'title' => 'Pipeline (direct)', 'desc' => 'Explicit interceptor pipeline — no proxy generation'],
+                ['url' => '/features/aop-cache-direct', 'title' => 'Cache (hand-written control)', 'desc' => 'The same cached COUNT with the cache lookup written in application code (PSR-6)'],
+                ['url' => '/features/log', 'title' => 'Pipeline Logging', 'desc' => 'Entry/exit records written by Symfony\'s PSR-3 logger'],
                 ['url' => '/features/db-events', 'title' => 'Db Events (query log)', 'desc' => 'Observe queries + transactions via Doctrine DBAL'],
                 ['url' => '/features/events', 'title' => 'Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate input via Symfony\'s Validator'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Configuration access through Symfony\'s container parameters'],
-                ['url' => '/features/request-scoped', 'title' => 'RequestScoped (container)', 'desc' => 'Per-request state via Symfony\'s scoped services'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'Cache-backed fixed-window rate limiter'],
+                ['url' => '/features/lifecycle-hooks', 'title' => 'Request Lifecycle Hooks', 'desc' => 'A kernel.response listener wraps the handler: it stamps a header and sets 203'],
             ],
         ]));
     }
 
     /**
-     * GET /features/aop — create an item through an interceptor pipeline.
+     * GET /features/lifecycle-hooks — a kernel.response listener rewrites the response.
+     *
+     * The work is on the LISTENER, not here: App\Symfony\EventListener\LifecycleHookListener
+     * runs on `kernel.response` and sets the marker header plus status 203. The handler
+     * is constant, so the row measures the interception and not the handler.
+     *
+     * Symfony has no middleware layer — its HttpKernel dispatches kernel events — which
+     * is why this demo uses a listener where Laravel and Azera use middleware. The row
+     * is named for the lifecycle for exactly that reason. See
+     * BenchmarkConfig::featureMap().
      */
-    public function aop(): JsonResponse
+    public function lifecycleHooks(): JsonResponse
     {
-        $title = 'AOP Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
-        [$id, $log] = $this->aopService->createItem($title);
-
-        return $this->json([
-            'feature'     => 'AOP interceptors',
-            'description' => 'Inserted a row inside a transaction managed by Symfony\'s interceptor pipeline — no manual begin/commit/rollback.',
-            'new_id'      => $id,
-            'title'       => $title,
-            'log_entries' => $log,
+        return new JsonResponse([
+            'feature'     => 'Request Lifecycle Hooks',
+            'description' => 'A kernel.response listener wraps the handler, stamps a header and sets 203. Symfony uses HttpKernel events.',
+            'lifecycle'   => ['handler' => 'ran'],
         ]);
     }
 
     /**
-     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     * GET /features/aop-tx-direct — the same upsert with no interceptor pipeline.
      *
-     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     * Control for the `aop-tx` row, which Symfony does not serve: it has no
+     * attribute-to-advice layer. `aop-tx-direct` is a feature of its own, raced by
+     * all seven (see BenchmarkConfig::adapterFeatures()).
      */
     public function aopDirect(): JsonResponse
     {
@@ -99,7 +98,7 @@ class FeatureController extends AbstractController
 
         return $this->json([
             'feature'     => 'Direct transaction (no pipeline)',
-            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'description' => 'An upsert on an autocommit connection with no interceptor around it — the hand-written control. Symfony has no attribute-to-advice layer, so it does not serve `/features/aop-tx` at all.',
             'new_id'      => $id,
             'title'       => $title,
             'log_entries' => [],
@@ -107,15 +106,22 @@ class FeatureController extends AbstractController
     }
 
     /**
-     * GET /features/cache — demonstrate Symfony's PSR-6 cache.
+     * GET /features/aop-cache-direct — demonstrate Symfony's PSR-6 cache.
+     *
+     * The hand-written CONTROL for the `aop-cache` feature: Symfony ships no
+     * attribute-to-advice layer (its lazy proxies only wrap services; they do
+     * not apply caching to a method), so the cache read, the miss decision and
+     * the store are written out here. Azera serves the same work through a
+     * generated `#[Cache]` proxy.
      */
-    public function cache(): JsonResponse
+    public function aopCacheDirect(): JsonResponse
     {
         $key = 'items_count';
 
         $start = \microtime(true);
         $item  = $this->cache->getItem($key);
-        if (!$item->isHit()) {
+        $firstHit = $item->isHit();
+        if (!$firstHit) {
             $count = (int) $this->em->createQueryBuilder()
                 ->select('COUNT(i.id)')
                 ->from(Item::class, 'i')
@@ -136,9 +142,12 @@ class FeatureController extends AbstractController
         $elapsedMs2 = \round((\microtime(true) - $start2) * 1000, 2);
 
         return $this->json([
-            'feature'        => 'Cache',
-            'description'    => 'First call runs the COUNT query (cache miss); second call hits the PSR-6 cache.',
+            'feature'        => 'Cache control (hand-written)',
+            // Not "first call is a miss": in a resident worker both calls hit,
+            // and `first_hit` reports which of the two this request saw.
+            'description'    => 'The same COUNT and 10-second TTL with the cache lookup written in application code — no interceptor, no generated proxy.',
             'item_count'     => $count,
+            'first_hit'      => $firstHit,
             'first_call_ms'  => $elapsedMs,
             'second_call_ms' => $elapsedMs2,
             'same_result'    => $count === $count2,
@@ -146,7 +155,16 @@ class FeatureController extends AbstractController
     }
 
     /**
-     * GET /features/log — pipeline logging interceptor demo.
+     * GET /features/log — Symfony's PSR-3 logger behind a pipeline interceptor.
+     *
+     * `LogInterceptor` writes through `Psr\Log\LoggerInterface`, which Symfony's
+     * container resolves to the in-memory logger named in `services.yaml`. The
+     * records come back from that logger, so this reports what was logged rather
+     * than rebuilding it in the controller.
+     *
+     * This used to be an interceptor appending strings to an array the
+     * application owned: no logger was involved at all, and the report's
+     * "PSR-3 everywhere" sentence was false for this entrant.
      */
     public function log(): JsonResponse
     {
@@ -156,61 +174,9 @@ class FeatureController extends AbstractController
 
         return $this->json([
             'feature'     => 'Pipeline Logging',
-            'description' => 'LogInterceptor wrapped a plain callable via Symfony\'s interceptor pipeline.',
+            'description' => 'LogInterceptor wrote entry and exit records through Symfony\'s PSR-3 logger, read back from it.',
             'result'      => $result,
-            'log_entries' => $this->aopService->logEntries(),
-        ]);
-    }
-
-    /**
-     * GET /features/retry — pipeline retry interceptor demo.
-     */
-    public function retry(): JsonResponse
-    {
-        $attempts = 0;
-        $result   = $this->aopService->retryCall(
-            function () use (&$attempts): string {
-                $attempts++;
-                if ($attempts < 3) {
-                    throw new \RuntimeException('transient failure');
-                }
-                return "succeeded after {$attempts} attempts";
-            },
-        );
-
-        return $this->json([
-            'feature'     => 'Pipeline Retry',
-            'description' => 'RetryInterceptor retried a failing callable until it succeeded.',
-            'result'      => $result,
-            'attempts'    => $attempts,
-            'log_entries' => $this->aopService->logEntries(),
-        ]);
-    }
-
-    /**
-     * GET /features/pipeline — direct interceptor pipeline (no proxy).
-     */
-    public function pipeline(): JsonResponse
-    {
-        $entries = [];
-
-        $pipeline = static function (callable $destination) use (&$entries): mixed {
-            $log   = new \App\Symfony\Service\Interceptor\LogInterceptor($entries);
-            $retry = new \App\Symfony\Service\Interceptor\RetryInterceptor($entries, 3, 0);
-            $next  = $destination;
-            foreach (\array_reverse([$retry, $log]) as $interceptor) {
-                $next = static fn(mixed $payload = null) => $interceptor($next, $payload);
-            }
-            return $next();
-        };
-
-        $result = $pipeline(static fn(): string => 'direct pipeline result');
-
-        return $this->json([
-            'feature'     => 'Pipeline (direct)',
-            'description' => 'Explicit interceptor pipeline around a plain callable — no proxy generation. The technique Symfony uses.',
-            'result'      => $result,
-            'log_entries' => $entries,
+            'log_entries' => $this->aopService->logRecords(),
         ]);
     }
 
@@ -335,35 +301,10 @@ class FeatureController extends AbstractController
 
         return $this->json([
             'feature'     => 'Db Events (query log)',
-            'description' => 'Doctrine DBAL logs every query and transaction lifecycle; the DbEventLog service records them.',
+            'description' => 'Doctrine DBAL\'s PSR-3 query logger records every executed statement as it passes through the driver middleware. This write runs on an autocommit connection, so no transaction events fire here.',
             'new_id'      => $id,
             'item_count'  => $count,
             'events'      => $this->dbLog->all(),
-        ]);
-    }
-
-    /**
-     * GET /features/request-scoped — container scope lifecycle demo.
-     *
-     * Symfony's equivalent of azera's RequestScoped reset is the scoped
-     * container: RequestCounter is a scoped service — a fresh instance per
-     * request, single instance within the request, and the container resets
-     * scoped services after each request.
-     */
-    public function requestScoped(): JsonResponse
-    {
-        $this->state->touch('request-scoped endpoint hit');
-
-        $before = $this->counter->count();
-        $after  = $this->counter->increment();
-
-        return $this->json([
-            'feature'           => 'RequestScoped (container scopes)',
-            'description'       => 'RequestCounter is a scoped service resolved per request; the container resets scoped services after each request so state cannot leak.',
-            'count_before'      => $before,
-            'count_after'       => $after,
-            'count_after_reset' => 0,
-            'scope_trace'       => $this->state->trace(),
         ]);
     }
 

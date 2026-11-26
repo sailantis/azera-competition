@@ -37,13 +37,10 @@ final class IndexDashboardTest extends TestCase
      * @var list<string>
      */
     private const EXPECTED = [
-        'view-real-roadrunner.html',
-        'view-real-fpm.html',
         'view-real-volucer-attach.html',
-        'view-real-volucer-cgi.html',
+        'view-real-fpm.html',
         'view-warm-start.html',
         'view-cold-start.html',
-        'view-summary-roadrunner.html',
         'view-summary-fpm.html',
         'view-summary-volucer.html',
     ];
@@ -136,11 +133,11 @@ final class IndexDashboardTest extends TestCase
         $store    = ResultStore::load(dirname(__DIR__) . self::DATASET);
 
         $html = (new HtmlReport($store, $manifest))->index(
-            ['real-roadrunner' => 'view-real-roadrunner.html'],
+            ['real-volucer-attach' => 'view-real-volucer-attach.html'],
             sys_get_temp_dir()
         );
 
-        self::assertSame(['view-real-roadrunner.html'], self::cardHrefs($html));
+        self::assertSame(['view-real-volucer-attach.html'], self::cardHrefs($html));
     }
 
     /**

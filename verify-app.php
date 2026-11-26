@@ -12,6 +12,7 @@
 require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/bench-view-globals.php';
 require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
+require_once __DIR__ . '/scripts/report/BenchmarkConfig.php';
 
 $opts   = getopt('', ['app::', 'out-json::']);
 $appKey = trim((string) ($opts['app'] ?? 'azera'));
@@ -58,18 +59,23 @@ $expect = [
     // 'GET /items-orm'             => '<table>',
     // 'GET /items-orm/1'           => 'Item 1',
     // 'POST /items-orm'            => 'flash',
-    'GET /features/aop'            => '"new_id"',
-    'GET /features/aop-direct'     => '"new_id"',
-    'GET /features/cache'          => '"item_count"',
+    'GET /features/aop-tx'            => '"new_id"',
+    // The second real AOP mode (explicit interceptor pipeline). Only Azera and
+    // Spiral ship the abstraction, so the other five skip it — the exclusion is
+    // expressed in BenchmarkConfig::adapterFeatures(), which this gate honours
+    // below, rather than by leaving the expectation out.
+    'GET /features/aop-tx-explicit'   => '"new_id"',
+    'GET /features/aop-tx-direct'     => '"new_id"',
+    'GET /features/aop-cache'          => '"item_count"',
+    // Same-work control: every entrant serves it, because it needs no facility.
+    'GET /features/aop-cache-direct'   => '"item_count"',
     'GET /features/log'            => '"log_entries"',
-    'GET /features/retry'          => '"result"',
-    'GET /features/pipeline'       => '"log_entries"',
     'GET /features/events'         => '"listener_log"',
     'GET /features/validation'     => '"valid_payload"',
     'GET /features/config'         => '"feature"',
     'GET /features/db-events'      => '"events"',
-    'GET /features/request-scoped' => '"count_after"',
     'GET /features/rate-limit'     => '"allowed"',
+    'GET /features/lifecycle-hooks' => '"lifecycle"',
 ];
 
 $key         = trim((string) ($opts['app'] ?? 'azera'));
@@ -96,6 +102,19 @@ $adapter = new $class();
 $adapter->bootstrap();
 
 foreach ($expect as $req => $needle) {
+    // An endpoint an entrant deliberately sits out must not be demanded of it.
+    // The exclusion is the single source of truth the MEASUREMENT also honours
+    // (run-http.php passes requestsFor() to http-bench), so asking an excluded
+    // app for it here reports a failure the harness was explicitly told not to
+    // produce — Phalcon's 404 on `GET /features/aop-tx` was that false failure.
+    if (!\AzeraCompetition\Report\BenchmarkConfig::competesOn($key, $req)) {
+        $reason = !\AzeraCompetition\Report\BenchmarkConfig::racesOn($key, $req)
+            ? 'this endpoint is excluded for this app (BenchmarkConfig::excludedRequests())'
+            : 'this app does not claim the feature (BenchmarkConfig::adapterFeatures())';
+        echo "  [SKIP] {$req} — {$reason}\n";
+        continue;
+    }
+
     [$method, $uri] = explode(' ', $req, 2);
     try {
         $body   = $adapter->dispatch($method, $uri);

@@ -22,7 +22,7 @@ Post-response teardown is the third term of each row's sub-line below — the wo
 
 ## Total response times
 
-Total time to serve one pass over every benchmarked endpoint — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over every endpoint costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
+Total time to serve one pass over every benchmarked endpoint — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over those endpoints costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
 
 ![Total response times](svg/cold-start/speedup.svg)
 
@@ -50,35 +50,13 @@ One race per framework feature, each run as a real request against a real databa
 
 ![REST API (JSON)](svg/cold-start/feature-rest-api.svg)
 
-### AOP (Aspect-Oriented)
- `GET /features/aop` — runs a request through interceptor machinery — logging, retry and transaction advice wrapped around the handler. The entrants split into two styles, and this row means different work on each side. TRANSPARENT interception — advice declared on the method and applied by generated code, handler body untouched — is what Azera does (`#[Advised]`, `#[Transactional]`, `#[Cache]`, `#[Log]`, `#[Retry]`). DIRECT interception — the pipeline written out in the code — is what everyone else does: Laravel composes an Illuminate Pipeline and Symfony chains invokable interceptor classes, both documenting that they have no proxy-based AOP; Spiral builds a `PipelineBuilder` pipeline; CodeIgniter, CakePHP and Phalcon have no interceptor layer at all and write the transactional insert by hand. Do NOT read the ranking across styles as a speed verdict: the two sides pay for different machinery, and the same caution applies to `cache`, `log` and `retry`, which on Azera also route through generated proxies while every other entrant implements them plainly. `GET /features/aop-direct` is the control: the identical insert with the transaction written by hand, served by every entrant, so the pair prices the abstraction on the same work. Phalcon sits the aop race out; it competes in logging, retry and pipeline.
-
-*Read this row in two styles.* **transparent** (advice declared on the method, applied by generated code): Azera. **direct** (the pipeline is written out in the code): Laravel, Symfony, Spiral, CodeIgniter, CakePHP. The two styles pay for different machinery, and the cross-style ranking is not a speed verdict.
-
-![AOP (Aspect-Oriented)](svg/cold-start/feature-aop.svg)
-
 ### Logging
- `GET /features/log` — logs a method entry and exit through the framework's own logger — PSR-3 everywhere. On Azera the call goes through a generated `#[Log]` proxy, so this row includes interception cost the other entrants do not pay here.
+ `GET /features/log` — logs a method entry and exit through the framework's own logger, and reports the records that logger captured. Every entrant uses the sink its own stack provides and every one of those sinks is in-process, so the row measures the logging path rather than disk or stderr I/O: Azera its PSR-3 `MemoryLogger`, Laravel `Log` → `LogManager` → Monolog's in-memory `TestHandler`, Symfony a PSR-3 logger registered as the `logger` service, Spiral `LogsInterface::getLogger()` feeding its `ListenerRegistry`, CakePHP `Log::write()` into an `ArrayLog` engine, CodeIgniter `log_message()` into a buffering handler, and Phalcon its own `Phalcon\Logger\Logger` with an in-memory adapter. NONE of them declares the logging as advice: Azera has `#[Log]`, but this row calls the logger directly so that all seven measure the same work — intercepting a logger would charge proxy cost to a chart about logging, which is what the `aop-*` rows exist to isolate. Phalcon's logger is not a PSR-3 implementation — it is the framework's own logger API — so the row demonstrates Phalcon logging, not interchangeable PSR-3 logging.
 
 ![Logging](svg/cold-start/feature-logging.svg)
 
-### Retry
- `GET /features/retry` — runs a deliberately flaky operation through a retry policy of up to three attempts — an explicit loop or interceptor everywhere, and on Azera a generated `#[Retry]` proxy, so this row includes interception cost the others do not pay here.
-
-![Retry](svg/cold-start/feature-retry.svg)
-
-### Pipeline (explicit)
- `GET /features/pipeline` — composes the handler with explicit interceptor steps — no proxy generation, so this row separates "the pipeline mechanism" from "the advice declaration mechanism".
-
-![Pipeline (explicit)](svg/cold-start/feature-pipeline.svg)
-
-### Cache
- `GET /features/cache` — reads a COUNT(*) over the 1,000 rows through the framework's cache with a 10-second TTL, so a hit costs no database work and a miss runs the query. On Azera the read goes through a generated `#[Cache]` proxy, so this row includes interception cost the other entrants do not pay here.
-
-![Cache](svg/cold-start/feature-cache.svg)
-
 ### Database Events
- `GET /features/db-events` — inserts one event row per request and lets the framework's database events fire around that write. On Azera the insert goes through a generated `#[Transactional]` proxy, so this row includes interception cost the other entrants do not pay here.
+ `GET /features/db-events` — writes one row and reads one COUNT on an autocommit connection, so the framework's own database-observation hook can be read back: Azera's PSR-14 `DatabaseEvent` classes, Laravel's `DB::listen()`, the PSR-3 logger Doctrine DBAL and Cycle DBAL route through the driver, CodeIgniter's `DBQuery` event, CakePHP's driver query logger, and Phalcon's `db:` events manager. Every listener is attached once per process, so what the row prices is the hook, not its registration. Statements that describe the CONNECTION or the SCHEMA rather than the work — `PRAGMA` setup, `pragma_table_info`/`table_xinfo`/`index_list` reflection and `sqlite_master` lookups — are filtered out of the reported payload on every entrant, because whether a hook sees them depends on when it was attached relative to connection setup and how much introspection the ORM does per operation. Neither is the feature. All seven therefore report one entry per real statement: the upsert and the COUNT. Phalcon's `db:beginTransaction` / `db:commitTransaction` capability is real but is exercised by `/features/aop-tx-direct`, the control row that does open a transaction; wrapping this row's write in one charged it for something the feature is not about and reported two events no other entrant produces.
 
 ![Database Events](svg/cold-start/feature-db-events.svg)
 
@@ -96,11 +74,6 @@ One race per framework feature, each run as a real request against a real databa
  `GET /features/config` — resolves a value from the framework's config repository.
 
 ![Config](svg/cold-start/feature-config.svg)
-
-### Request-Scoped Services
- `GET /features/request-scoped` — resolves a service scoped to the request from the container.
-
-![Request-Scoped Services](svg/cold-start/feature-request-scoped.svg)
 
 ### Rate Limiter
  `GET /features/rate-limit` — checks a cache-backed rate limiter, which has long since denied the caller.
@@ -131,18 +104,18 @@ This dataset times cold requests END-TO-END: every iteration pays a fresh framew
 | `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | — | — | — | — | — | — |
 | `GET /api/items/1` | 1 item by id as JSON | **3.14 <sub>0.06+3.07+0.01</sub>** | 9.15 <sub>4.12+5.03+0.00</sub> | 5.37 <sub>1.63+3.74+0.00</sub> | 8.83 <sub>4.38+4.43+0.02</sub> | 4.46 <sub>0.03+4.41+0.02</sub> | 5.86 <sub>0.42+5.44+0.00</sub> |
 | `POST /api/items` | 1 row upserted (sentinel #999998) | **3.23 <sub>0.06+3.16+0.01</sub>** | 7.86 <sub>3.99+3.87+0.00</sub> | 6.89 <sub>1.65+5.23+0.01</sub> | 8.86 <sub>4.46+4.38+0.02</sub> | 4.61 <sub>0.03+4.56+0.02</sub> | 5.92 <sub>0.41+5.51+0.00</sub> |
-| `GET /features/aop` | 1 row upserted (sentinel #888800) | **5.28 <sub>0.06+5.22+0.00</sub>** | 8.89 <sub>4.19+4.70+0.00</sub> | 6.30 <sub>1.62+4.67+0.01</sub> | 11.1 <sub>4.5+6.6+0.0</sub> | 5.99 <sub>0.03+5.94+0.02</sub> | 5.81 <sub>0.41+5.40+0.00</sub> |
-| `GET /features/aop-direct` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — |
-| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **3.70 <sub>0.05+3.65+0.00</sub>** | 8.08 <sub>4.05+4.03+0.00</sub> | 5.67 <sub>1.60+4.07+0.00</sub> | 9.46 <sub>4.50+4.94+0.02</sub> | 4.24 <sub>0.03+4.19+0.02</sub> | 4.99 <sub>0.39+4.60+0.00</sub> |
-| `GET /features/log` | no DB — buffered log handlers | **3.08 <sub>0.05+3.03+0.00</sub>** | 6.94 <sub>4.01+2.93+0.00</sub> | 4.08 <sub>1.64+2.44+0.00</sub> | 8.55 <sub>4.34+4.19+0.02</sub> | 3.38 <sub>0.03+3.33+0.02</sub> | 3.33 <sub>0.39+2.94+0.00</sub> |
-| `GET /features/retry` | no DB — retry policy | **3.05 <sub>0.06+2.99+0.00</sub>** | 6.97 <sub>4.01+2.96+0.00</sub> | 4.09 <sub>1.61+2.48+0.00</sub> | 8.51 <sub>4.31+4.18+0.02</sub> | 3.32 <sub>0.03+3.27+0.02</sub> | 3.29 <sub>0.39+2.90+0.00</sub> |
-| `GET /features/pipeline` | no DB — middleware pipeline | **2.39 <sub>0.06+2.33+0.00</sub>** | 6.99 <sub>4.00+2.99+0.00</sub> | 4.05 <sub>1.61+2.44+0.00</sub> | 8.52 <sub>4.32+4.18+0.02</sub> | 3.35 <sub>0.03+3.30+0.02</sub> | 3.32 <sub>0.40+2.92+0.00</sub> |
+| `GET /features/aop-tx` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — |
+| `GET /features/aop-tx-direct` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — |
+| `GET /features/aop-tx-explicit` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — |
+| `GET /features/aop-cache` | COUNT(*) of 1000 rows, cached 10s by #[Cache] (miss = query) | — | — | — | — | — | — |
+| `GET /features/aop-cache-direct` | COUNT(*) of 1000 rows, cached 10s by hand (miss = query) | — | — | — | — | — | — |
+| `GET /features/log` | no DB — one in-memory log sink per entrant | **3.08 <sub>0.05+3.03+0.00</sub>** | 6.94 <sub>4.01+2.93+0.00</sub> | 4.08 <sub>1.64+2.44+0.00</sub> | 8.55 <sub>4.34+4.19+0.02</sub> | 3.38 <sub>0.03+3.33+0.02</sub> | 3.33 <sub>0.39+2.94+0.00</sub> |
 | `GET /features/db-events` | 1 row upserted (sentinel #888800) + COUNT(*), events collected | **3.79 <sub>0.05+3.74+0.00</sub>** | 7.98 <sub>3.99+3.99+0.00</sub> | 6.02 <sub>1.62+4.39+0.01</sub> | 9.57 <sub>4.47+5.08+0.02</sub> | 4.57 <sub>0.03+4.52+0.02</sub> | 5.31 <sub>0.41+4.90+0.00</sub> |
 | `GET /features/events` | no DB — in-process listeners | **3.73 <sub>0.06+3.67+0.00</sub>** | 7.65 <sub>4.02+3.63+0.00</sub> | 4.89 <sub>1.61+3.28+0.00</sub> | 9.25 <sub>4.46+4.77+0.02</sub> | 4.43 <sub>0.03+4.38+0.02</sub> | 4.18 <sub>0.40+3.78+0.00</sub> |
 | `GET /features/validation` | no DB — validator run | **2.99 <sub>0.06+2.93+0.00</sub>** | 8.52 <sub>4.14+4.38+0.00</sub> | 4.75 <sub>1.61+3.14+0.00</sub> | 8.71 <sub>4.32+4.37+0.02</sub> | 4.65 <sub>0.03+4.60+0.02</sub> | 4.50 <sub>0.40+4.10+0.00</sub> |
 | `GET /features/config` | no DB — config lookup | **2.26 <sub>0.06+2.20+0.00</sub>** | 7.10 <sub>4.08+3.02+0.00</sub> | 4.08 <sub>1.61+2.47+0.00</sub> | 8.50 <sub>4.32+4.16+0.02</sub> | 3.43 <sub>0.03+3.38+0.02</sub> | 3.38 <sub>0.40+2.98+0.00</sub> |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **2.31 <sub>0.06+2.25+0.00</sub>** | 7.09 <sub>4.07+3.02+0.00</sub> | 4.11 <sub>1.62+2.49+0.00</sub> | 8.46 <sub>4.28+4.16+0.02</sub> | 3.38 <sub>0.03+3.33+0.02</sub> | 3.34 <sub>0.40+2.94+0.00</sub> |
 | `GET /features/rate-limit` | no DB — cache-backed limiter | **2.41 <sub>0.07+2.34+0.00</sub>** | 7.28 <sub>4.02+3.26+0.00</sub> | 4.11 <sub>1.62+2.49+0.00</sub> | 8.68 <sub>4.30+4.36+0.02</sub> | 3.40 <sub>0.03+3.35+0.02</sub> | 3.56 <sub>0.41+3.15+0.00</sub> |
+| `GET /features/lifecycle-hooks` | no DB — a request/response hook stamps a header and sets 203, via each framework's own mechanism | — | — | — | — | — | — |
 
 ---
 

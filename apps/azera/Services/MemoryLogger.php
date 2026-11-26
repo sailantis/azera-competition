@@ -3,9 +3,9 @@
  * In-memory PSR-3 logger.
  *
  * Records every log message into an array so the demo controller can
- * surface what the #[Log] AOP interceptor wrote.  Swappable with any
- * real PSR-3 logger (e.g. Monolog) — the AOP interceptors only depend
- * on the LoggerInterface.
+ * surface what was logged, and the /features/log demo reads it back.
+ * Swappable with any real PSR-3 logger (e.g. Monolog) — the application and
+ * the AOP interceptors both depend only on the LoggerInterface.
  */
 
 namespace App\Azera\Services;

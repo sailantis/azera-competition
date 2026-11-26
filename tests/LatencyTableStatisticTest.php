@@ -171,14 +171,14 @@ final class LatencyTableStatisticTest extends TestCase
     /**
      * An endpoint-level exclusion blanks ONE cell, not the whole feature.
      *
-     * This is the 2026-11-25 shape: Phalcon cannot be raced on `GET /features/aop`
+     * This is the 2026-11-25 shape: Phalcon cannot be raced on `GET /features/aop-tx`
      * (no interceptor layer, so its row would compare hand-written code against
-     * generated proxies), but it must still appear on `GET /features/aop-direct` —
+     * generated proxies), but it must still appear on `GET /features/aop-tx-direct` —
      * the hand-written control that prices exactly the abstraction in question, and
-     * the one row Phalcon reads best because its `/features/aop` is already that code.
+     * the one row Phalcon reads best because its `/features/aop-tx` is already that code.
      *
      * The feature-level gate alone cannot express this: `featureMap()` maps both
-     * endpoints to `aop`, so dropping the feature hid both.
+     * endpoints to `aop-tx`, so dropping the feature hid both.
      */
     public function testAnExcludedEndpointBlanksOnlyThatCell(): void
     {
@@ -186,17 +186,17 @@ final class LatencyTableStatisticTest extends TestCase
             'azera'   => ['trim' => 1.80, 'median' => 1.78],
             'phalcon' => ['trim' => 2.04, 'median' => 2.00],
         ], [
-            'GET /features/aop'        => ['azera' => ['trim' => 1.80, 'median' => 1.78], 'phalcon' => ['trim' => 2.04, 'median' => 2.00]],
-            'GET /features/aop-direct' => ['azera' => ['trim' => 1.78, 'median' => 1.76], 'phalcon' => ['trim' => 1.89, 'median' => 1.85]],
+            'GET /features/aop-tx'        => ['azera' => ['trim' => 1.80, 'median' => 1.78], 'phalcon' => ['trim' => 2.04, 'median' => 2.00]],
+            'GET /features/aop-tx-direct' => ['azera' => ['trim' => 1.78, 'median' => 1.76], 'phalcon' => ['trim' => 1.89, 'median' => 1.85]],
         ]);
 
         $matrix = (new Tables($store))->latencyMatrix('php-fpm', ['azera', 'phalcon']);
 
-        $aop = $this->rowFor($matrix, 'GET /features/aop');
+        $aop = $this->rowFor($matrix, 'GET /features/aop-tx');
         self::assertNotNull($aop['cells']['azera']['ms'], 'the other entrants still race it');
         self::assertNull($aop['cells']['phalcon']['ms'], 'the excluded cell is blank, not zero');
 
-        $direct = $this->rowFor($matrix, 'GET /features/aop-direct');
+        $direct = $this->rowFor($matrix, 'GET /features/aop-tx-direct');
         self::assertNotNull(
             $direct['cells']['phalcon']['ms'],
             'the CONTROL endpoint must be published for every entrant, Phalcon included'
@@ -214,7 +214,7 @@ final class LatencyTableStatisticTest extends TestCase
      * for it.
      *
      * This is the 2026-11-25 bug exactly. The published dataset was measured with
-     * Phalcon serving a placeholder `/features/aop`, so it carries a 2 ms row there
+     * Phalcon serving a placeholder `/features/aop-tx`, so it carries a 2 ms row there
      * while the table blanks the cell. `commonRequests()` therefore has to consult the
      * exclusion itself: a fixture WITHOUT the row would pass even with the gate
      * removed, because `ms()` would return null anyway. The row must be present for
@@ -230,18 +230,18 @@ final class LatencyTableStatisticTest extends TestCase
             'GET /'                    => ['azera' => ['trim' => 0.20, 'median' => 0.19], 'phalcon' => ['trim' => 0.21, 'median' => 0.20]],
             // Phalcon HAS this row — the harness used to measure it. The report must
             // still keep it out of the totals.
-            'GET /features/aop'        => ['azera' => ['trim' => 1.80, 'median' => 1.78], 'phalcon' => ['trim' => 2.04, 'median' => 2.00]],
-            'GET /features/aop-direct' => ['azera' => ['trim' => 1.78, 'median' => 1.76], 'phalcon' => ['trim' => 1.89, 'median' => 1.85]],
+            'GET /features/aop-tx'        => ['azera' => ['trim' => 1.80, 'median' => 1.78], 'phalcon' => ['trim' => 2.04, 'median' => 2.00]],
+            'GET /features/aop-tx-direct' => ['azera' => ['trim' => 1.78, 'median' => 1.76], 'phalcon' => ['trim' => 1.89, 'median' => 1.85]],
         ]);
 
         $common = $store->commonRequests('php-fpm', ['azera', 'phalcon']);
 
         self::assertNotContains(
-            'GET /features/aop',
+            'GET /features/aop-tx',
             $common,
             'a total must not include a row one entrant is blanked on, even though the row exists'
         );
-        self::assertContains('GET /features/aop-direct', $common, 'the control IS raced by everyone');
+        self::assertContains('GET /features/aop-tx-direct', $common, 'the control IS raced by everyone');
         self::assertContains('GET /', $common);
     }
 
@@ -283,13 +283,13 @@ final class LatencyTableStatisticTest extends TestCase
             } else {
                 foreach ([
                     'GET /'                    => 'routing',
-                    'GET /features/aop'        => 'aop',
-                    'GET /features/aop-direct' => 'aop',
+                    'GET /features/aop-tx'        => 'aop-tx',
+                    'GET /features/aop-tx-direct' => 'aop-tx',
                 ] as $request => $_feature) {
                     // NO fallback to $cells when $requests is given: the whole point of
                     // that form is that some (request, app) pairs have NO measurement,
                     // which is the situation an endpoint exclusion creates. Falling back
-                    // made Phalcon carry a `/features/aop` row it should not have, and
+                    // made Phalcon carry a `/features/aop-tx` row it should not have, and
                     // the totals test then passed with the gate removed.
                     $spec = $requests[$request][$app] ?? null;
                     if ($spec === null) {

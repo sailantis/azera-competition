@@ -46,7 +46,7 @@ param(
     #
     # A separate mode rather than a -Suite switch on the same path, because the
     # two measure different things and share almost no machinery: this one
-    # boots no server, needs no nginx/RoadRunner pool, and finishes in minutes.
+    # boots no server, needs no nginx/volucer pool, and finishes in minutes.
     # It is the same `-Run`/`-Fetch` pairing so the sync and fetch conventions
     # (host-path leak check, no-host-.git rule, LF-only payload) are reused
     # rather than reinvented.
@@ -91,22 +91,22 @@ param(
     # spliced locally by merge-app.php / merge-modes.php.
     [string]$Out = '',
     [string]$Apps = 'azera,laravel,symfony,spiral,codeigniter,cakephp,phalcon',
-    # Comma-separated. PowerShell binds an actual array (`-Servers rr,fpm,volucer`) to a
+    # Comma-separated. PowerShell binds an actual array (`-Servers fpm,volucer-attach`) to a
     # [string] parameter by joining the elements with SPACES, giving "rr fpm volucer";
     # `explode(',')` then sees ONE unknown server, run-http.php rejects it, and because
     # the launcher only checks that the tmux session started, the failure surfaced as a
     # log from the PREVIOUS invocation. So the join is normalised back here instead of
-    # relying on the caller to quote it: both "rr,fpm,volucer" and "rr fpm volucer" work.
-    [string]$Servers = 'rr,fpm',
+    # relying on the caller to quote it: both "fpm,volucer-attach" and "fpm volucer-attach" work.
+    [string]$Servers = 'fpm,volucer-attach',
     # The PHP the run measures, stated rather than inherited from the VM's PATH.
     #
     # These two must agree in MAJOR.MINOR: run-http.php refuses the run otherwise.
     # They are one decision made twice because the two servers are different
-    # binaries - nginx talks to the packaged `php-fpm<X.Y>`, RoadRunner spawns the
+    # binaries - nginx talks to the packaged `php-fpm<X.Y>`, volucer spawns the
     # CLI interpreter - and nothing on the host keeps them in step. The VM's
     # default `php` was moved to 8.5 on 2026-10-19 while its FPM pools stayed under
     # /etc/php/8.3, so relying on PATH would have published 8.3 FPM numbers beside
-    # 8.5 RoadRunner numbers under one version stamp.
+    # 8.5 worker numbers under one version stamp.
     [string]$PhpCli = 'php8.5',
     [string]$PhpFpm = 'php-fpm8.5',
     [string]$SshTarget = $(if ($env:BENCH_SSH) { $env:BENCH_SSH } else { 'competition@192.168.9.138' }),
@@ -151,14 +151,14 @@ $OutName = Split-Path -Leaf $OutPrefix
 #
 # FRAGMENT, NOT DIFFERENCE. The test is whether the run is a SUBSET of the
 # canonical experiment: all six apps, and both of the servers the published
-# RoadRunner and FPM pages read. Extra servers do not make a run partial -- every
+# and volucer-attach pages read. Extra servers do not make a run partial -- every
 # canonical number in it was re-measured by that same run, so the file is a
 # superset and the pages it feeds stay true. Requiring the server list to be
 # exactly {rr, fpm} refused a full run that merely added Volucer's arms, which is
 # a different thing from a fragment and should not be blocked by this guard.
 $AppsList = @($Apps -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
 $ServerList = @($Servers -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
-$MissingServers = @(@('rr', 'fpm') | Where-Object { $ServerList -notcontains $_ })
+$MissingServers = @(@('fpm', 'volucer-attach') | Where-Object { $ServerList -notcontains $_ })
 $IsPartial = $AppsList.Count -lt 6 -or $MissingServers.Count -gt 0
 if ($IsPartial -and -not ($Quick -or $BootOnly -or $MemOnly) -and $OutPrefix -eq 'results/real-deployments') {
     $why = if ($MissingServers.Count -gt 0) { "missing servers: $($MissingServers -join ',')" } else { "only $($AppsList.Count) of 6 apps" }
@@ -578,10 +578,8 @@ function Invoke-RemoteRun {
     ssh $SshTarget "export PATH=`"$homeBin`$PATH`"; cd $RemoteDir && composer install --no-interaction 2>&1 | tail -5"
     if ($LASTEXITCODE -ne 0) { throw 'composer install failed' }
 
-    # The RR binary lives in ~/bin on the VM (see run-http.php's $homeBinRr default),
-    # so it is addressed through the same PATH prefix rather than vendor/bin.
-    Write-Host "==> fetching RoadRunner binary (rr)..." -ForegroundColor Cyan
-    ssh $SshTarget "export PATH=`"$homeBin`$PATH`"; cd $RemoteDir && test -x `$HOME/bin/rr || php `$HOME/spiral/rr get-binary 2>&1 | tail -3; `$HOME/bin/rr --version | head -1"
+    # The volucer binary lives outside vendor/ on the VM; a run never downloads it.
+    # Its absence is reported by the run itself, not guessed at here.
 
     # The budget is stated, not inherited: the defaults live in run-http.php and
     # a silent default change must not silently change what a run measured.
@@ -606,7 +604,7 @@ function Invoke-RemoteRun {
     # accepts `php_admin_value[opcache.jit]` silently and the worker still reports
     # `disable` (verified 2026-11-11 by serving a request through the pool). Every
     # SAPI the benchmark runs - fpm for nginx, cgi for volucer's spawn_cgi arm, cli
-    # for the RoadRunner/attach workers - therefore needs the setting in its own
+    # for the volucer attach workers - therefore needs the setting in its own
     # conf.d, which is what this does. Doing it here rather than by hand means a
     # fresh VM, or a reimaged one, cannot silently measure without JIT while the
     # dataset says otherwise: deploymentJit() probes the live interpreter, so a
@@ -718,7 +716,7 @@ function Get-Results {
 # Shape differs from Invoke-RemoteRun in three ways, and all three are the point
 # of having a separate path:
 #
-#  1. NO server. Nothing is installed, no nginx/RoadRunner pool starts - the
+#  1. NO server. Nothing is installed, no nginx/volucer pool starts - the
 #     harness renders in-process, so there is no readiness wait and no deploy
 #     stamping to get wrong.
 #  2. The PARITY gate runs first. verify.php proves all five engines still

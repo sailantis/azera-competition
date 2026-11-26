@@ -6,20 +6,19 @@ declare(strict_types=1);
  * Feature demo controller — the enterprise-feature endpoints.
  *
  * CodeIgniter 4.7 participates in the features it genuinely supports:
- *  - cache          → CodeIgniter cache (array handler, PSR-16-ish API)
+ *  - aop-cache-direct → CodeIgniter cache (array handler) with the cache
+ *                     lookup written by hand; there is no attribute-to-advice
+ *                     layer, so the AOP form of this row is not CI4's to serve
  *  - db-events      → the native `DBQuery` event (Events::on)
  *  - events         → CodeIgniter Events (its own observer/static system)
  *  - validation     → CodeIgniter Validation service
  *  - config         → CodeIgniter Config objects (dot-notation equivalent:
  *                     config(class)->prop, no nested dot paths — we expose
  *                     the page size + sentinel ids from a dedicated config)
- *  - request-scoped → per-request state via Services (shared instances are
- *                     process-wide in CI4 — we reset the counter per request
- *                     the way a worker-mode unmount would)
  *  - rate-limiter   → the built-in Throttler (token bucket) behind a thin
  *                     fixed-window facade to mirror azera's contract
  *
- * AOP (#[Transactional]/#[Cache]/#[Log]/#[Retry]/pipeline) has no native
+ * AOP (#[Transactional]/#[Cache]/#[Log]) has no native
  * CI4 equivalent (no annotation/interceptor pipeline) — those rows will be
  * excluded via $adapterFeatures in run.php.
  */
@@ -29,8 +28,8 @@ namespace Ci4App\Controllers;
 use Ci4App\Support\DbEventLog;
 use Ci4App\Support\DbEventLogInstance;
 use Ci4App\Support\EventsReceiver;
+use Ci4App\Support\MemoryLogHandler;
 use Ci4App\Support\RateLimiter;
-use Ci4App\Support\RequestCounter;
 
 final class Feature extends BaseController
 {
@@ -52,57 +51,47 @@ final class Feature extends BaseController
         return view('features', [
             'title'    => 'Features',
             'features' => [
-                ['url' => '/features/aop', 'title' => 'Transactional Insert', 'desc' => 'Insert a row inside an explicit DB transaction'],
-                ['url' => '/features/cache', 'title' => 'Cache', 'desc' => 'Cache a method result via the CI4 cache service (10s TTL)'],
-                ['url' => '/features/log', 'title' => 'Logging', 'desc' => 'Log method entry/exit/duration via PSR-3 log_message()'],
-                ['url' => '/features/retry', 'title' => 'Retry', 'desc' => 'Retry a failing operation up to N times (manual loop)'],
-                ['url' => '/features/pipeline', 'title' => 'Pipeline (direct)', 'desc' => 'Explicit middleware/handler pipeline — closure composition'],
+                ['url' => '/features/aop-cache-direct', 'title' => 'Cache (hand-written control)', 'desc' => 'The same cached COUNT with the cache lookup written in application code (10s TTL)'],
+                ['url' => '/features/log', 'title' => 'Logging', 'desc' => 'Entry/exit records written by and read back from CI4\'s Logger handler'],
                 ['url' => '/features/db-events', 'title' => 'Db Events (DBQuery)', 'desc' => 'Observe queries via the native DBQuery event tap'],
                 ['url' => '/features/events', 'title' => 'CodeIgniter Events', 'desc' => 'Dispatch an event via Events::trigger and show listener output'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate and coerce input via the Validation service'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Configuration access via CI4 config classes'],
-                ['url' => '/features/request-scoped', 'title' => 'RequestScoped', 'desc' => 'Per-request state with explicit worker-style reset'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'Cache-backed fixed-window rate limiter (max 5 per 60s)'],
+                ['url' => '/features/lifecycle-hooks', 'title' => 'Request Lifecycle Hooks', 'desc' => 'An after-filter wraps the handler: it stamps a header and sets 203'],
             ]
         ] + $this->viewGlobals());
     }
 
     /**
-     * GET /features/aop — closest native CI4 write path: a transactional
-     * model insert.  No interceptor pipeline exists, so this runs the row
-     * insert inside Database Transactions via the connection API and
-     * reports the outcome (the "aop" feature row is excluded from the
-     * winners table via $adapterFeatures, but the endpoint must exist for
-     * verify.php parity).
+     * GET /features/lifecycle-hooks — an `after` filter rewrites the response.
+     *
+     * The work is on the FILTER, not here:
+     * App\CodeIgniter\Filters\LifecycleHookFilter runs after this controller and sets the
+     * marker header plus status 203 (registered per-route in Config\Filters). The handler
+     * is constant, so the row measures the interception and not the handler.
+     *
+     * A filter, not middleware: CI4 has no middleware layer, its filter pipeline
+     * (`before`/`after`) is the analogue. See BenchmarkConfig::featureMap().
      */
-    public function aop(): \CodeIgniter\HTTP\ResponseInterface|string
+    public function lifecycleHooks(): \CodeIgniter\HTTP\ResponseInterface
     {
-        $db   = \Config\Database::connect();
-        $now  = date('Y-m-d H:i:s');
-        $rand = random_int(1000, 9999);
-
-        // Fixed feature sentinel row (upsert, not a fresh INSERT per
-        // request) — the row count must stay stable across benchmark runs.
-        $db->transBegin();
-        $db->table('items')->upsert([
-            'id'         => self::FEATURE_SENTINEL_ID,
-            'title'      => 'AOP Item ' . $now . ' #' . $rand,
-            'created_at' => $now,
-        ]);
-        $id = self::FEATURE_SENTINEL_ID;
-        $db->transCommit();
-
         return $this->response->setJSON([
-            'feature' => 'CI4 transactional insert',
-            'new_id'  => $id,
-            'title'   => 'AOP Item ' . $now . ' #' . $rand,
+            'feature'     => 'Request Lifecycle Hooks',
+            'description' => 'An after-filter wraps the handler, stamps a header and sets 203. CodeIgniter uses its filter pipeline.',
+            'lifecycle'   => ['handler' => 'ran'],
         ]);
     }
 
     /**
-     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     * GET /features/aop-tx-direct — the same upsert inside the same transaction.
      *
-     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     * This is the control for the `aop-tx` row, which CI4 does not serve: it ships
+     * no attribute-to-advice layer, so there is no generated-proxy row to compare
+     * against here. `aop-tx-direct` is a feature of its own, raced by all seven (see
+     * BenchmarkConfig::adapterFeatures()). The upsert runs inside a real
+     * begin/commit; it used to run with NO transaction, which would have made this
+     * row cheaper than the work it is supposed to represent.
      */
     public function aopDirect(): \CodeIgniter\HTTP\ResponseInterface|string
     {
@@ -110,15 +99,17 @@ final class Feature extends BaseController
         $now  = date('Y-m-d H:i:s');
         $rand = random_int(1000, 9999);
 
+        $db->transBegin();
         $db->table('items')->upsert([
             'id'         => self::FEATURE_SENTINEL_ID,
             'title'      => 'AOP Item ' . $now . ' #' . $rand,
             'created_at' => $now,
         ]);
+        $db->transCommit();
 
         return $this->response->setJSON([
             'feature'     => 'Direct transaction (no pipeline)',
-            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'description' => 'An upsert inside an explicit begin/commit — the hand-written control. CI4 has no attribute-to-advice layer, so it does not serve `/features/aop-tx` at all.',
             'new_id'      => self::FEATURE_SENTINEL_ID,
             'title'       => 'AOP Item ' . $now . ' #' . $rand,
             'log_entries' => [],
@@ -126,16 +117,26 @@ final class Feature extends BaseController
     }
 
     /**
-     * GET /features/cache — cached DB count (array handler, 10s TTL).
+     * GET /features/aop-cache-direct — cached DB count (array handler, 10s TTL).
+     *
+     * The hand-written CONTROL for the `aop-cache` feature: the cache read, the
+     * miss decision and the store are written out here, because CI4 has no
+     * attribute-to-advice layer that could apply them. Azera serves the same
+     * work through a generated `#[Cache]` proxy on `/features/aop-cache`.
      */
-    public function cache(): \CodeIgniter\HTTP\ResponseInterface|string
+    public function aopCacheDirect(): \CodeIgniter\HTTP\ResponseInterface|string
     {
         $cache = \Config\Services::cache();
         $key   = 'items-count';
-        $count = $cache->get($key);
 
+        // The clock starts BEFORE the lookup: the cache read is the work this
+        // row prices, so leaving it out made `first_call_ms` report 0 on a hit
+        // while the other entrants reported the lookup. Every entrant now times
+        // the same span.
         $start = microtime(true);
-        if ($count === null) {
+        $count = $cache->get($key);
+        $firstHit = $count !== null;
+        if (!$firstHit) {
             $count = (new \Ci4App\Models\Item())->countAll();
             $cache->save($key, $count, 10);
         }
@@ -146,8 +147,12 @@ final class Feature extends BaseController
         $elapsedMs2 = round((microtime(true) - $start2) * 1000, 2);
 
         return $this->response->setJSON([
-            'feature'        => 'Cache (CI4 cache service)',
+            'feature'        => 'Cache control (hand-written)',
+            // Not "first call is a miss": in a resident worker both calls hit,
+            // and `first_hit` reports which of the two this request saw.
+            'description'    => 'The same COUNT and 10-second TTL with the cache lookup written in application code — no interceptor, no generated proxy.',
             'item_count'     => $count,
+            'first_hit'      => $firstHit,
             'first_call_ms'  => $elapsedMs,
             'second_call_ms' => $elapsedMs2,
             'same_result'    => $count === $count2,
@@ -155,81 +160,68 @@ final class Feature extends BaseController
     }
 
     /**
-     * GET /features/log — method-level logging demo.
+     * GET /features/log — method-level logging through CI4's own logger.
      *
-     * CI4 has no AOP; the closest native hook is log_message() through its
-     * PSR-3 logger.  We log explicitly and echo into the same shape azera
-     * produces.
+     * CI4 has no AOP, so this is manual instrumentation: `log_message()` before
+     * the call and after, which is what a CI4 developer writes for entry/exit
+     * logging. The records are read back from the handler the Logger config
+     * registers — not rebuilt here.
+     *
+     * WHY THE READBACK MATTERS. This action used to call `log_message('info', …)`
+     * while `Config\Logger::$threshold` was `0`, which CI4 resolves to no
+     * loggable levels at all: `Logger::log()` returned before reaching a handler,
+     * the message was discarded, and the endpoint returned a hand-built array
+     * literal containing a `microtime()` delta measured across the no-op. It
+     * reported a log entry the logger never saw, and `elapsed_ms` timed the array
+     * construction.
+     *
+     * `elapsed_ms` now brackets the logged operation itself and travels in the
+     * exit record's context, which is where a reader expects the duration of the
+     * call it describes.
      */
     public function log(): \CodeIgniter\HTTP\ResponseInterface|string
     {
-        $start  = microtime(true);
+        $handler = $this->memoryLogHandler();
+
+        if ($handler === null) {
+            return $this->response->setJSON([
+                'feature'     => 'Logging (PSR-3, log_message)',
+                'description' => 'No in-memory log handler was registered, so nothing was logged.',
+                'result'      => null,
+                'log_entries' => [],
+            ]);
+        }
+
+        $handler->clear();
+
+        log_message('info', 'Entering ' . __METHOD__);
+
+        $start  = hrtime(true);
         $result = 'logged call result';
-        log_message('info', 'Ci4App logged call', ['result' => $result]);
+        $elapsedMs = (hrtime(true) - $start) / 1e6;
+
+        log_message('info', 'Completed ' . __METHOD__ . ' elapsed_ms=' . round($elapsedMs, 4));
 
         return $this->response->setJSON([
             'feature'     => 'Logging (PSR-3, log_message)',
+            'description' => 'Two log_message() calls through CI4\'s Logger, read back from the registered handler.',
             'result'      => $result,
-            'log_entries' => [
-                ['level' => 'info', 'message' => 'Ci4App logged call', 'elapsed_ms' => round((microtime(true) - $start) * 1000, 2)],
-            ],
+            'log_entries' => $handler->records(),
         ]);
     }
 
     /**
-     * GET /features/retry — manual retry loop (no AOP in CI4).
-     */
-    public function retry(): \CodeIgniter\HTTP\ResponseInterface|string
-    {
-        $attempts = 0;
-        $result   = null;
-        $maxTries = 3;
-
-        while ($attempts < $maxTries) {
-            $attempts++;
-            try {
-                if ($attempts < 3) {
-                    throw new \RuntimeException('transient failure');
-                }
-                $result = "succeeded after {$attempts} attempts";
-                break;
-            } catch (\RuntimeException) {
-                continue;
-            }
-        }
-
-        return $this->response->setJSON([
-            'feature' => 'Retry (manual loop)',
-            'result'  => $result,
-        ]);
-    }
-
-    /**
-     * GET /features/pipeline — direct handler composition via closures.
+     * The buffering handler from `Config\Logger::handlers`.
      *
-     * CI4's equivalent of an interceptor pipeline is nested middleware /
-     * event observers.  We time a wrapped callable the same way azera's
-     * direct Pipeline demo does.
+     * Resolved from the live Logger (see `MemoryLogHandler::resolve()`), so in
+     * worker mode the demo reads the handler of the CURRENT request's logger
+     * rather than one from a previous request. Returns null when the config no
+     * longer registers one — the honest answer, instead of printing entries
+     * nothing wrote.
      */
-    public function pipeline(): \CodeIgniter\HTTP\ResponseInterface|string
+    private function memoryLogHandler(): ?MemoryLogHandler
     {
-        $entries = [];
-        $inner   = static fn(): string => 'direct pipeline result';
-
-        $logger = function () use ($inner, &$entries) {
-            $t0     = microtime(true);
-            $result = $inner();
-            $entries[] = 'log: handled in ' . round((microtime(true) - $t0) * 1000, 3) . 'ms';
-            return $result;
-        };
-
-        $result = $logger();
-
-        return $this->response->setJSON([
-            'feature'     => 'Pipeline (closure composition)',
-            'result'      => $result,
-            'log_entries' => $entries,
-        ]);
+        return MemoryLogHandler::resolve();
     }
 
     /**
@@ -253,9 +245,10 @@ final class Feature extends BaseController
         $count = (new \Ci4App\Models\Item())->countAll();
 
         return $this->response->setJSON([
-            'feature'    => 'Db Events (CI4 DBQuery event)',
-            'item_count' => $count,
-            'events'     => $log->all(),
+            'feature'     => 'Db Events (CI4 DBQuery event)',
+            'description' => 'CodeIgniter triggers a DBQuery event per executed statement; the listener records the SQL and its duration. This write runs on an autocommit connection, so the log holds queries only.',
+            'item_count'  => $count,
+            'events'      => $log->all(),
         ]);
     }
 
@@ -347,32 +340,6 @@ final class Feature extends BaseController
             'page_size'   => $config->pageSize,
             'missing'     => property_exists($config, 'doesNotExist') ? $config->doesNotExist : 'fallback',
             'all'         => get_object_vars($config),
-        ]);
-    }
-
-    /**
-     * GET /features/request-scoped — per-request state demo.
-     *
-     * CI4 is FPM-style: every request bootstraps a fresh process, so
-     * per-request state is the default.  In worker mode the framework
-     * calls CodeIgniter::resetForWorkerMode(); a shared counter service
-     * would serialize per request.  We expose the same contract as the
-     * other frameworks: increment then show reset-to-zero semantics.
-     */
-    public function requestScoped(): \CodeIgniter\HTTP\ResponseInterface|string
-    {
-        $counter = RequestCounter::instance();
-
-        $before = $counter->count();
-        $after  = $counter->increment();
-        $counter->reset();
-        $afterReset = $counter->count();
-
-        return $this->response->setJSON([
-            'feature'           => 'RequestScoped (per-request process in FPM)',
-            'count_before'      => $before,
-            'count_after'       => $after,
-            'count_after_reset' => $afterReset,
         ]);
     }
 

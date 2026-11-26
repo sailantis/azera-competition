@@ -240,7 +240,7 @@ final class ModeModelTest extends TestCase
         // on this list for the provenance reason above, not as a loophole.
         $canonical = ['free-for-all', 'deployments', 'real-deployments', 'real-0.5.0'];
 
-        foreach (['real-volucer-attach', 'real-volucer-cgi'] as $key) {
+        foreach (['real-volucer-attach'] as $key) {
             $dataset = $manifest['views'][$key]['dataset'] ?? null;
 
             self::assertContains(

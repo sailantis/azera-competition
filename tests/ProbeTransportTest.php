@@ -36,15 +36,10 @@ final class ProbeTransportTest extends TestCase
     public function testResidentArmsAreDistinguishedFromPerRequestArms(): void
     {
         // Resident: one PHP process lives for the whole block.
-        self::assertTrue(probeUsesHeaders('rr'), 'RoadRunner holds a resident worker');
         self::assertTrue(probeUsesHeaders('volucer'), 'the volucer attach arm is resident');
 
         // Per-request: the entry script re-runs for every request.
         self::assertFalse(probeUsesHeaders('fpm'), 'php-fpm re-runs the entry script');
-        self::assertFalse(
-            probeUsesHeaders('volucer-cgi'),
-            'the volucer spawn_cgi arm re-runs the entry script, so it must use the file transport'
-        );
     }
 
     /**
@@ -53,7 +48,7 @@ final class ProbeTransportTest extends TestCase
      * Both defaults are wrong in a way nothing catches: true makes the harness wait for
      * headers that never arrive (zeros), false makes it wait for a file nobody writes
      * (also zeros). Returning false for unknown input is the smaller lie — it is the
-     * historical behaviour for anything that is not RoadRunner — but the mapping
+     * historical behaviour for anything that is not resident — but the mapping
      * functions upstream are what prevent an unknown name reaching here at all, and
      * those throw.
      */
@@ -76,10 +71,8 @@ final class ProbeTransportTest extends TestCase
         $httpBench = (string) file_get_contents(dirname(__DIR__) . '/scripts/http-bench.php');
 
         $expected = [
-            'rr'             => 'rr',
             'fpm'            => 'fpm',
             'volucer-attach' => 'volucer',
-            'volucer-cgi'    => 'volucer-cgi',
         ];
 
         foreach ($expected as $server => $kind) {

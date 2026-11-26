@@ -79,7 +79,7 @@ final class MergeMemTest extends TestCase
                 [
                     'app'   => 'azera',
                     'modes' => [
-                        'roadrunner' => ['requests' => [$row('GET /', 0.267), $row('GET /items', 0.487)]],
+                        'volucer-attach' => ['requests' => [$row('GET /', 0.267), $row('GET /items', 0.487)]],
                         'php-fpm'    => ['requests' => [$row('GET /', 0.782), $row('GET /items', 1.50)]],
                     ],
                 ],
@@ -140,8 +140,8 @@ final class MergeMemTest extends TestCase
 
         // RoadRunner rows had zeros and must STILL have zeros — the two servers
         // were measured separately and a cross-write would silently mix them.
-        self::assertSame(0, $modes['roadrunner']['requests'][0]['mem_peak_heap']);
-        self::assertSame(0, $modes['roadrunner']['requests'][0]['mem_samples']);
+        self::assertSame(0, $modes['volucer-attach']['requests'][0]['mem_peak_heap']);
+        self::assertSame(0, $modes['volucer-attach']['requests'][0]['mem_samples']);
     }
 
     /**
@@ -162,12 +162,12 @@ final class MergeMemTest extends TestCase
 
         // The full run's cumulative state, which a merge must not disturb.
         $data = $this->read($ds);
-        $data['apps'][0]['modes']['roadrunner']['requests'][0]['mem_heap']      = 5555555;
-        $data['apps'][0]['modes']['roadrunner']['requests'][0]['mem_rss']       = 6666666;
-        $data['apps'][0]['modes']['roadrunner']['requests'][0]['mem_boot_heap'] = 4444444;
+        $data['apps'][0]['modes']['volucer-attach']['requests'][0]['mem_heap']      = 5555555;
+        $data['apps'][0]['modes']['volucer-attach']['requests'][0]['mem_rss']       = 6666666;
+        $data['apps'][0]['modes']['volucer-attach']['requests'][0]['mem_boot_heap'] = 4444444;
         file_put_contents($ds, json_encode($data, JSON_PRETTY_PRINT));
 
-        $rr = $this->write('rr.json', $this->memPayload('azera', 'rr', [
+        $rr = $this->write('rr.json', $this->memPayload('azera', 'volucer-attach', [
             'GET /' => [
                 'mem_boot_heap' => 111,
                 'mem_peak_heap' => 999,
@@ -182,10 +182,10 @@ final class MergeMemTest extends TestCase
         // must not have to filter.
         self::assertSame(0, $r['code'], $r['out']);
         self::assertStringContainsString('Skipped', $r['out'], 'a skip must be reported');
-        self::assertStringContainsString('roadrunner', $r['out']);
+        self::assertStringContainsString('volucer-attach', $r['out']);
         self::assertStringContainsString('not reproducible', $r['out'], 'the reason must be stated');
 
-        $row = $this->read($ds)['apps'][0]['modes']['roadrunner']['requests'][0];
+        $row = $this->read($ds)['apps'][0]['modes']['volucer-attach']['requests'][0];
         self::assertSame(0, $row['mem_peak_heap'], 'no peak may be grafted onto roadrunner');
         self::assertSame(0, $row['mem_samples']);
         // Untouched: everything the full run owns.
@@ -247,7 +247,7 @@ final class MergeMemTest extends TestCase
 
         self::assertSame(0.782, $data['apps'][0]['modes']['php-fpm']['requests'][0]['trimmed_mean_ms']);
         self::assertSame(1.50, $data['apps'][0]['modes']['php-fpm']['requests'][1]['trimmed_mean_ms']);
-        self::assertSame(0.267, $data['apps'][0]['modes']['roadrunner']['requests'][0]['trimmed_mean_ms']);
+        self::assertSame(0.267, $data['apps'][0]['modes']['volucer-attach']['requests'][0]['trimmed_mean_ms']);
     }
 
     public function testUnmatchedEndpointIsRefusedRatherThanSilentlyDropped(): void
@@ -340,7 +340,7 @@ final class MergeMemTest extends TestCase
         // php-fpm, which would silently publish worker numbers as request
         // numbers on the wrong page.
         $ds = $this->write('ds.json', $this->dataset());
-        $rr = $this->write('rr.json', $this->memPayload('azera', 'rr', [
+        $rr = $this->write('rr.json', $this->memPayload('azera', 'volucer-attach', [
             'GET /'      => ['mem_boot_heap' => 111, 'mem_peak_heap' => 222, 'mem_samples' => 10],
             'GET /items' => ['mem_boot_heap' => 111, 'mem_peak_heap' => 333, 'mem_samples' => 10],
         ]));
@@ -354,7 +354,7 @@ final class MergeMemTest extends TestCase
             $data['apps'][0]['modes']['php-fpm']['requests'][0]['mem_peak_heap'],
             'an rr payload must never land on php-fpm'
         );
-        self::assertSame(0, $data['apps'][0]['modes']['roadrunner']['requests'][0]['mem_peak_heap']);
+        self::assertSame(0, $data['apps'][0]['modes']['volucer-attach']['requests'][0]['mem_peak_heap']);
         self::assertStringContainsString('Skipped', $r['out']);
     }
 }

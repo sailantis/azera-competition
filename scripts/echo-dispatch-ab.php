@@ -56,6 +56,11 @@ require_once $root . '/vendor/autoload.php';
 require_once $root . '/WebAppAdapter.php';
 require_once $root . '/adapters/BenchmarkAutoloader.php';
 require_once $root . '/response-guard.php';
+// The apps call benchViewGlobals() from Bootstrap::boot() (Phalcon) and from the
+// request-context middleware (Azera), so this probe has to load it or the boot
+// dies with "Call to undefined function". Same require list as every other
+// harness entry point (see run.php).
+require_once $root . '/bench-view-globals.php';
 
 $opts   = getopt('', ['rounds::', 'iters::', 'uri::']);
 $rounds = (int) ($opts['rounds'] ?? 40);

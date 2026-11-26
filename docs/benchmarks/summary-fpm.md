@@ -10,7 +10,7 @@ _Measured 2026-11-24T18:27:42+00:00_
 
 ## Total response times
 
-Total time to serve one pass over every benchmarked endpoint — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over every endpoint costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
+Total time to serve one pass over every benchmarked endpoint — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over those endpoints costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
 
 ![Total response times](svg/summary-fpm/speedup.svg)
 
@@ -67,18 +67,18 @@ Median in milliseconds, lower is better. **Bold** = fastest for that endpoint; a
 | `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | **0.865** | 4.68 | 2.52 | 7.88 | 2.21 | 2.31 | 1.54 |
 | `GET /api/items/1` | 1 item by id as JSON | **0.915** | 4.85 | 2.34 | 7.97 | 2.24 | 2.34 | 1.46 |
 | `POST /api/items` | 1 row upserted (sentinel #999998) | **1.83** | 5.57 | 3.34 | 9.21 | 3.18 | 3.42 | 2.51 |
-| `GET /features/aop` | 1 row upserted (sentinel #888800) | **1.78** | 5.19 | 2.93 | 9.66 | 3.20 | 2.69 | — |
-| `GET /features/aop-direct` | 1 row upserted (sentinel #888800) | **1.76** | 5.20 | 2.94 | 9.54 | 3.20 | 2.69 | 1.85 |
-| `GET /features/cache` | COUNT(*) of 1000 rows, cached 10s (miss = query) | **0.856** | 4.52 | 2.54 | 8.63 | 2.21 | 2.23 | 1.12 |
-| `GET /features/log` | no DB — buffered log handlers | **0.379** | 3.73 | 1.87 | 8.30 | 1.62 | 1.25 | 0.651 |
-| `GET /features/retry` | no DB — retry policy | **0.385** | 3.76 | 1.89 | 8.30 | 1.61 | 1.23 | 0.551 |
-| `GET /features/pipeline` | no DB — middleware pipeline | **0.290** | 3.75 | 1.88 | 8.28 | 1.62 | 1.25 | 0.667 |
+| `GET /features/aop-tx` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — | — |
+| `GET /features/aop-tx-direct` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — | — |
+| `GET /features/aop-tx-explicit` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — | — |
+| `GET /features/aop-cache` | COUNT(*) of 1000 rows, cached 10s by #[Cache] (miss = query) | — | — | — | — | — | — | — |
+| `GET /features/aop-cache-direct` | COUNT(*) of 1000 rows, cached 10s by hand (miss = query) | — | — | — | — | — | — | — |
+| `GET /features/log` | no DB — one in-memory log sink per entrant | **0.379** | 3.73 | 1.87 | 8.30 | 1.62 | 1.25 | 0.651 |
 | `GET /features/db-events` | 1 row upserted (sentinel #888800) + COUNT(*), events collected | **1.83** | 5.54 | 3.66 | 9.83 | 3.39 | 3.39 | 1.99 |
 | `GET /features/events` | no DB — in-process listeners | **1.75** | 5.22 | 2.97 | 9.54 | 3.30 | 2.70 | 1.97 |
 | `GET /features/validation` | no DB — validator run | **0.289** | 4.66 | 2.20 | 8.35 | 1.96 | 1.64 | 0.719 |
 | `GET /features/config` | no DB — config lookup | **0.258** | 3.74 | 1.86 | 8.23 | 1.63 | 1.23 | 0.599 |
-| `GET /features/request-scoped` | no DB — scoped service resolve | **0.264** | 3.72 | 1.86 | 8.26 | 1.60 | 1.23 | 0.557 |
 | `GET /features/rate-limit` | no DB — cache-backed limiter | **0.272** | 3.89 | 1.90 | 8.35 | 1.61 | 1.34 | 0.632 |
+| `GET /features/lifecycle-hooks` | no DB — a request/response hook stamps a header and sets 203, via each framework's own mechanism | — | — | — | — | — | — | — |
 
 **Full comparison** — this page is a summary. The complete report, with every feature chart and the endpoint table for all six frameworks, is published at:
 

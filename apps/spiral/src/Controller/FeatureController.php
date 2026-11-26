@@ -5,20 +5,19 @@ declare(strict_types=1);
 /**
  * Feature demo controller — AOP (interceptors), cache, events, validation,
  * and config endpoints. Spiral only participates in the features it
- * genuinely supports (see run.php $adapterFeatures).
+ * genuinely supports (see BenchmarkConfig::$adapterFeatures). Its cache row is
+ * the hand-written control `aop-cache-direct`: Spiral ships no
+ * attribute-to-advice layer, so the `aop-cache` row itself is Azera's alone.
  */
 
 namespace App\Spiral\Controller;
 
 use App\Spiral\Entity\Item;
 use App\Spiral\Event\ItemCreated;
-use App\Spiral\Interceptor\LogInterceptor;
-use App\Spiral\Interceptor\RetryInterceptor;
+use App\Spiral\Interceptor\TransactionalInterceptor;
 use App\Spiral\Service\AopService;
 use App\Spiral\Service\DbEventLog;
 use App\Spiral\Service\RateLimiter;
-use App\Spiral\Service\RequestCounter;
-use App\Spiral\Service\ScopeState;
 use Cycle\ORM\EntityManagerInterface;
 use Cycle\ORM\ORMInterface;
 use Cycle\ORM\Select;
@@ -61,17 +60,15 @@ class FeatureController
             'locale'   => 'en_US',
             'platform' => 'desktop',
             'features' => [
-                ['url' => '/features/aop', 'title' => 'AOP Interceptors', 'desc' => 'Insert a row inside an interceptor-managed DB transaction'],
-                ['url' => '/features/cache', 'title' => 'Cache (PSR-16)', 'desc' => 'Cache a method result via Spiral\'s PSR-16 cache storage'],
-                ['url' => '/features/log', 'title' => 'AOP Logging', 'desc' => 'Log method entry/exit via the LogInterceptor'],
-                ['url' => '/features/retry', 'title' => 'AOP Retry', 'desc' => 'Retry a failing method up to N times via the RetryInterceptor'],
-                ['url' => '/features/pipeline', 'title' => 'AOP Pipeline (direct)', 'desc' => 'Explicit interceptor pipeline — no proxy generation'],
+                ['url' => '/features/aop-tx-explicit', 'title' => 'AOP explicit Pipeline', 'desc' => 'PipelineBuilder composing a TransactionalInterceptor around the handler'],
+                ['url' => '/features/aop-cache-direct', 'title' => 'Cache (hand-written control)', 'desc' => 'The same cached COUNT with the cache lookup written in application code (PSR-16, 10s TTL)'],
+                ['url' => '/features/log', 'title' => 'AOP Logging', 'desc' => 'Entry/exit records written by Spiral\'s PSR-3 logger and captured by its log listeners'],
                 ['url' => '/features/db-events', 'title' => 'Db Events (driver logger)', 'desc' => 'Observe queries + transactions via Cycle DBAL\'s PSR-3 driver logger'],
                 ['url' => '/features/events', 'title' => 'PSR-14 Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate input via spiral/validator'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Configuration access through Spiral\'s Config service'],
-                ['url' => '/features/request-scoped', 'title' => 'RequestScoped (scopes)', 'desc' => 'Per-request state via Spiral\'s container scopes'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'PSR-16 cache-backed fixed-window rate limiter'],
+                ['url' => '/features/lifecycle-hooks', 'title' => 'Request Lifecycle Hooks', 'desc' => 'A PSR-15 middleware wraps the handler: it stamps a header and sets 203'],
             ],
         ]);
 
@@ -79,29 +76,67 @@ class FeatureController
     }
 
     /**
-     * GET /features/aop — create an item through an interceptor pipeline.
+     * GET /features/lifecycle-hooks — a PSR-15 middleware wraps this handler.
      *
-     * Uses Spiral's real AOP technique: PipelineBuilder composing
-     * InterceptorInterface implementations around a handler.
+     * The work is on the ROUTE, not here: App\Spiral\Middleware\LifecycleHookMiddleware is
+     * attached with `Route::withMiddleware()` and sets the marker header plus status 203.
+     * The handler is constant, so the row measures the interception and not the handler.
+     *
+     * PSR-15 middleware, not Spiral's interceptor layer: this row is about the request
+     * lifecycle and PSR-15 is the framework's own mechanism for wrapping a handler. The
+     * interceptor layer is what `aop-tx-explicit` exercises. See
+     * BenchmarkConfig::featureMap().
      */
-    public function aop(): Response
+    public function lifecycleHooks(): Response
     {
-        $title = 'AOP Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
-        [$id, $log] = $this->aopService->createItem($title);
-
         return $this->response->json([
-            'feature'     => 'AOP interceptors',
-            'description' => 'Inserted a row inside a transaction managed by Spiral interceptor pipeline — no manual begin/commit/rollback.',
-            'new_id'      => $id,
-            'title'       => $title,
-            'log_entries' => $log,
+            'feature'     => 'Request Lifecycle Hooks',
+            'description' => 'A PSR-15 middleware wraps the handler, stamps a header and sets 203. Spiral uses its middleware pipeline.',
+            'lifecycle'   => ['handler' => 'ran'],
         ]);
     }
 
     /**
-     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     * GET /features/aop-tx-explicit — AOP through Spiral's explicit interceptor
+     * pipeline, the mode `PipelineBuilder` exists for.
      *
-     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     * Spiral does not serve `/features/aop-tx`: it ships no attribute-to-advice
+     * layer, so it cannot answer the TRANSPARENT row. What it does ship is the
+     * interceptor abstraction, and this endpoint composes a real
+     * {@see \App\Spiral\Interceptor\TransactionalInterceptor} through
+     * `PipelineBuilder`, so the BEGIN/COMMIT on the measured path is executed by
+     * Spiral's own pipeline. Spiral ships the abstraction but no transaction
+     * interceptor, so the class is application code — the same split a Spiral app
+     * has.
+     *
+     * Only Azera and Spiral are raced here: they are the two entrants with a
+     * dedicated interceptor abstraction. See
+     * BenchmarkConfig::adapterFeatures().
+     */
+    public function aopExplicit(): Response
+    {
+        $title = 'Explicit AOP Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
+
+        $id = $this->aopService->runThrough(
+            fn(): int => $this->aopService->createItemUnmanaged($title),
+            new TransactionalInterceptor($this->db),
+        );
+
+        return $this->response->json([
+            'feature'     => 'AOP explicit Pipeline',
+            'description' => 'Inserted through Spiral\Interceptors\PipelineBuilder with a TransactionalInterceptor — Spiral ships the interceptor abstraction, the application supplies the transaction interceptor.',
+            'new_id'      => $id,
+            'title'       => $title,
+            'log_entries' => [],
+        ]);
+    }
+
+    /**
+     * GET /features/aop-tx-direct — the same upsert with no interceptor pipeline.
+     *
+     * Control for the `aop-tx` row, which Spiral does not serve: it has no
+     * attribute-to-advice layer. `aop-tx-direct` is a feature of its own, raced by
+     * all seven (see BenchmarkConfig::adapterFeatures()).
      */
     public function aopDirect(): Response
     {
@@ -110,7 +145,7 @@ class FeatureController
 
         return $this->response->json([
             'feature'     => 'Direct transaction (no pipeline)',
-            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'description' => 'An upsert on an autocommit connection with no interceptor around it — the hand-written control. Spiral has no attribute-to-advice layer, so it does not serve `/features/aop-tx` at all.',
             'new_id'      => $id,
             'title'       => $title,
             'log_entries' => [],
@@ -118,16 +153,22 @@ class FeatureController
     }
 
     /**
-     * GET /features/cache — demonstrate Spiral's PSR-16 cache.
+     * GET /features/aop-cache-direct — demonstrate Spiral's PSR-16 cache.
+     *
+     * The hand-written CONTROL for the `aop-cache` feature. Spiral has no
+     * attribute-to-advice layer that applies caching to a service method, so the
+     * cache read, the miss decision and the store are written out here; Azera
+     * serves the same work through a generated `#[Cache]` proxy.
      */
-    public function cache(): Response
+    public function aopCacheDirect(): Response
     {
         $cache = $this->cache->storage('array');
         $key   = 'items:count';
 
         $start = \microtime(true);
         $count = $cache->get($key);
-        if ($count === null) {
+        $firstHit = $count !== null;
+        if (!$firstHit) {
             $count = (new Select($this->orm, Item::class))->count();
             $cache->set($key, $count, 10);
         }
@@ -139,9 +180,12 @@ class FeatureController
         $elapsedMs2 = \round((\microtime(true) - $start2) * 1000, 2);
 
         return $this->response->json([
-            'feature'        => 'Cache',
-            'description'    => 'First call runs the COUNT query (cache miss); second call hits the PSR-16 cache.',
+            'feature'        => 'Cache control (hand-written)',
+            // Not "first call is a miss": in a resident worker both calls hit,
+            // and `first_hit` reports which of the two this request saw.
+            'description'    => 'The same COUNT and 10-second TTL with the cache lookup written in application code — no interceptor, no generated proxy.',
             'item_count'     => $count,
+            'first_hit'      => $firstHit,
             'first_call_ms'  => $elapsedMs,
             'second_call_ms' => $elapsedMs2,
             'same_result'    => $count === $count2,
@@ -149,7 +193,17 @@ class FeatureController
     }
 
     /**
-     * GET /features/log — AOP logging interceptor demo.
+     * GET /features/log — Spiral's logger behind an interceptor.
+     *
+     * `LogInterceptor` writes through `Psr\Log\LoggerInterface`, which comes from
+     * Spiral's own log factory (`LogsInterface::getLogger('bench')`). That logger
+     * turns each call into a `Spiral\Logger\Event\LogEvent` and hands it to the
+     * listeners on `ListenerRegistryInterface`; the records below are what those
+     * listeners captured.
+     *
+     * This used to be an interceptor appending strings to an array the
+     * application owned: no logger was involved at all, and the report's
+     * "PSR-3 everywhere" sentence was false for this entrant.
      */
     public function log(): Response
     {
@@ -159,66 +213,9 @@ class FeatureController
 
         return $this->response->json([
             'feature'     => 'AOP Logging',
-            'description' => 'LogInterceptor wrapped a plain callable via Spiral\'s interceptor pipeline.',
+            'description' => 'LogInterceptor wrote entry and exit records through Spiral\'s PSR-3 logger (LogsInterface → ListenerRegistry), read back from the listeners.',
             'result'      => $result,
-            'log_entries' => $this->aopService->logEntries(),
-        ]);
-    }
-
-    /**
-     * GET /features/retry — AOP retry interceptor demo.
-     */
-    public function retry(): Response
-    {
-        $attempts = 0;
-        $result   = $this->aopService->retryCall(
-            function () use (&$attempts): string {
-                $attempts++;
-                if ($attempts < 3) {
-                    throw new \RuntimeException('transient failure');
-                }
-                return "succeeded after {$attempts} attempts";
-            },
-        );
-
-        return $this->response->json([
-            'feature'     => 'AOP Retry',
-            'description' => 'RetryInterceptor retried a failing callable until it succeeded.',
-            'result'      => $result,
-            'attempts'    => $attempts,
-            'log_entries' => $this->aopService->logEntries(),
-        ]);
-    }
-
-    /**
-     * GET /features/pipeline — direct interceptor pipeline (no proxy).
-     *
-     * This is the apples-to-apples comparison against azera's Pipeline:
-     * explicit interceptors around a plain callable.
-     */
-    public function pipeline(): Response
-    {
-        $entries = [];
-        $handler = (new \Spiral\Interceptors\PipelineBuilder())
-            ->withInterceptors(
-                new RetryInterceptor($entries, 3, 0),
-                new LogInterceptor($entries),
-            )
-            ->build(new \Spiral\Interceptors\Handler\CallableHandler());
-
-        $result = $handler->handle(
-            new \Spiral\Interceptors\Context\CallContext(
-                \Spiral\Interceptors\Context\Target::fromClosure(
-                    static fn(): string => 'direct pipeline result',
-                ),
-            ),
-        );
-
-        return $this->response->json([
-            'feature'     => 'AOP Pipeline (direct)',
-            'description' => 'Explicit interceptor pipeline around a plain callable — no proxy generation. The technique Spiral uses.',
-            'result'      => $result,
-            'log_entries' => $entries,
+            'log_entries' => $this->aopService->logRecords(),
         ]);
     }
 
@@ -325,35 +322,10 @@ class FeatureController
 
         return $this->response->json([
             'feature'     => 'Db Events (Cycle DBAL driver logger)',
-            'description' => 'Cycle DBAL logs every query ({elapsed, rowCount} context) and transaction lifecycle via PSR-3 into the driver channel; Spiral routes those LogEvents to listeners.',
+            'description' => 'Cycle DBAL logs every executed query with {elapsed, rowCount} context to the driver channel; Spiral routes those LogEvents to listeners. This write runs on an autocommit connection, so no transaction events fire here.',
             'new_id'      => $id,
             'item_count'  => $count,
             'events'      => $log->all(),
-        ]);
-    }
-
-    /**
-     * GET /features/request-scoped — container scope lifecycle demo.
-     *
-     * Spiral's equivalent of azera's RequestScoped reset is the named
-     * container scope: #[Scope('http')] services are resolved inside the
-     * per-request `http` scope (scoped singleton), so per-request state
-     * cannot leak between requests.
-     */
-    public function requestScoped(RequestCounter $counter, ScopeState $state): Response
-    {
-        $state->touch('request-scoped endpoint hit');
-
-        $before = $counter->count();
-        $after  = $counter->increment();
-
-        return $this->response->json([
-            'feature'           => 'RequestScoped (container scopes)',
-            'description'       => 'RequestCounter is a scoped singleton resolved inside the per-request `http` scope; a fresh instance is created per request so state cannot leak.',
-            'count_before'      => $before,
-            'count_after'       => $after,
-            'count_after_reset' => 0,
-            'scope_trace'       => $state->trace(),
         ]);
     }
 

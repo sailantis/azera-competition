@@ -7,7 +7,7 @@
 #
 # That inversion is why scripts/deploy-lib.php must start attach.php BEFORE volucer.
 #
-# The other Volucer arm in the dataset is spawn-cgi.template.toml, which boots the
+# The per-request deployment model is nginx + PHP-FPM, which boots the
 # framework per request. Volucer's third backend, `worker` (volucer spawns the PHP
 # process itself), is runnable by hand via pool.template.toml + worker.php but is NOT
 # part of the benchmark dataset: it is resident like this arm, boots the same shared
@@ -54,7 +54,7 @@ relay = "{{RELAY_ADDRESS}}"
 workers = 1
 
 # 0 = never recycle, like `pm.max_requests = 0` in the FPM pool and `max_jobs = 0` in
-# the RoadRunner config. Recycling is cheap here (a reconnect plus handshake, no
+# the retired RoadRunner config. Recycling is cheap here (a reconnect plus handshake, no
 # framework boot) but it would still put a different amount of connection setup into
 # each row than the other arms carry.
 max_requests = 0

@@ -54,24 +54,26 @@ The harness dispatches synthetic requests **in-process** (no real HTTP socket) s
 | **Phalcon 6**     | Volt                  | Phalcon Model / DataMapper  |
 
 All seven ship built-in template engines and model/DB layers, so the comparison is
-apples-to-apples for a full-stack workload. Phalcon is the one entrant that sits out a
-single feature race (`GET /features/aop`, which compares generated proxies against
-hand-written calls) because Phalcon 6 has no interceptor layer — see
-`BenchmarkConfig::adapterFeatures()`.
+apples-to-apples for a full-stack workload. Two AOP facilities are not universal, so
+those races are narrower: **`aop-tx` (transparent, proxy-applied advice) is Azera only**,
+**`aop-cache` (that same facility applied to caching) is Azera only**, and
+**`aop-tx-explicit` (a dedicated interceptor pipeline) is Azera and Spiral**. Every entrant
+races **`aop-tx-direct`** and **`aop-cache-direct`**, the hand-written controls, because they
+need no framework facility at all — see `BenchmarkConfig::adapterFeatures()`.
 
 ## Cold vs Warm
 
 Results are reported in two modes:
 
 - **Cold** — fresh framework bootstrap per iteration (mirrors PHP-FPM per-request bootstrap). Reveals bootstrap / DI-container / autoloader cost.
-- **Warm** — bootstrap once, reuse the app across iterations (mirrors long-running runtimes like Swoole / RoadRunner). Reveals steady-state throughput.
+- **Warm** — bootstrap once, reuse the app across iterations (mirrors long-running runtimes like Swoole / Octane / Volucer attach). Reveals steady-state throughput.
 
 Both are reported; **warm** is the default.
 
 ## Quick start
 
 ```bash
-# 1. Install dependencies (Azera + all 5 frameworks)
+# 1. Install dependencies (Azera + all 6 frameworks)
 composer install
 
 # 2. Seed the SQLite database (1000 rows by default)
@@ -82,7 +84,7 @@ php verify.php
 
 # 4. Run the benchmark (warm mode, 1000 iterations × 30 runs)
 php -d opcache.enable_cli=1 run.php \
-  --apps=azera,laravel,symfony,spiral,codeigniter,cakephp \
+  --apps=azera,laravel,symfony,spiral,codeigniter,cakephp,phalcon \
   --iterations-per-run=1000 \
   --runs=30 \
   --warm \
@@ -90,6 +92,37 @@ php -d opcache.enable_cli=1 run.php \
 ```
 
 Run `php run.php --help` for all options.
+
+### Datasets: what goes in git, and what does not
+
+`results/` holds **only the four datasets a view reads** — `views.php` is the
+authority, and every other file there is ignored:
+
+| dataset | read by |
+|---|---|
+| `free-for-all-opcache-iso.json` | `warm-start` |
+| `free-for-all-opcache-iso-deployments.json` | `cold-start` (derived: `scripts/derive-fpm.php`) |
+| `real-deployments.json` | the seven real-deployment views |
+| `real-0.5.0.json` | none today; kept as a provenance record (see `views.php`) |
+
+Splice inputs (`merge-modes.php`, `merge-app.php`) and dated snapshots are *not*
+datasets — their numbers live on inside the canonical file, and git already
+holds every historical version. `.gitignore` whitelists the four above so a new
+file has to be added deliberately.
+
+The `.csv`/`.md` companions are **derived and not committed**. Re-emit them from
+the `.json` at any time — this measures nothing:
+
+```bash
+php run.php --export=results/real-deployments   # writes .csv + .md, leaves .json untouched
+```
+
+Keep them that way: a committed copy is a second copy of a dataset that can
+silently disagree with its source. It did — `real-deployments.csv` still
+described the 2026-11-16 run beside a 2026-11-24 JSON.
+
+Run the benchmark with `--report` and the report reads the dataset you just
+measured, so nothing needs exporting in the normal flow.
 
 ## Adding a framework
 
@@ -100,46 +133,148 @@ Run `php run.php --help` for all options.
 4. Add the adapter key to `run.php`'s adapter map.
 5. Run `php verify.php` to confirm your adapter produces the expected output for all benchmark endpoints.
 
-**All 25 measured endpoints are mandatory, including the 11 `GET /features/*` demos.**
-An adapter may *lack* a feature, but it may not *omit* the route:
-the harness requests every endpoint from every app, so a missing route is a row that
-cannot exist. It fails in the worst possible way — the framework silently vanishes
-from that endpoint's comparison, which looks like a framework that did not compete.
-This is not hypothetical: Phalcon 6 shipped with 14 of the 25 routes and the first
-real run aborted on `GET /features/aop`.
-`tests/FeatureRouteParityTest.php` now checks the route tables, and
-`tests/EndpointParityTest.php` keeps the three request lists in step.
+**Every endpoint an entrant competes on is mandatory — 28 measured endpoints, including
+the 14 `GET /features/*` demos — and an app may not *omit* a route it claims.**
+The harness asks each app only for the endpoints it competes on
+(`BenchmarkConfig::competesOn()`), so a route missing from an app that claims the feature
+is a row that cannot exist. It fails in the worst possible way — the framework silently
+vanishes from that endpoint's comparison, which looks like a framework that did not
+compete. This is not hypothetical: Phalcon 6 shipped with 14 of the 25 routes it then had
+and the first real run aborted on `GET /features/aop-tx`.
+`tests/FeatureRouteParityTest.php` now checks the route tables against the same
+participation map the measurement uses, and `tests/EndpointParityTest.php` keeps the
+three request lists in step.
 
 **A feature exclusion means "this framework has no such facility", not "we did not
 write the endpoint".** `BenchmarkConfig::adapterFeatures()` is what removes an app
 from a feature's winners table and chart, so listing a feature there *is* the claim
-that the app competes in it. Phalcon is the only current example, and sits out
-exactly one: AOP (`GET /features/aop`), because Phalcon 6 has no interceptor layer —
-comparing generated proxies against hand-written calls would measure the machinery,
-not the speed. Its other features run on native Phalcon subsystems, so it competes.
-Note that `logging`, `retry` and `pipeline` are **separate features**, not part of the
-AOP race: they used to map to `aop`, which meant the AOP exclusion also hid three
-measurable rows from every entrant that lacks proxy AOP. `tests/AdapterFeaturesTest.php`
-pins all of this.
+that the app competes in it. There are three current examples, and they are different
+kinds of gap:
 
-**Interception comes in two styles, and the AOP row ranks both.** `aopStyle()` records
-the distinction, verified per entrant: **transparent** means the advice is declared on
-the method and applied by generated code (only Azera: `#[Advised]`, `#[Transactional]`,
-`#[Cache]`, `#[Log]`, `#[Retry]` — no other app contains an advice attribute);
-**direct** means the pipeline is written out in the code (Laravel's Illuminate Pipeline
-and Symfony's invokable interceptors, both documenting that they have no proxy-based
-AOP; Spiral's `PipelineBuilder`; and hand-written `begin`/`commit` on CodeIgniter,
-CakePHP and Phalcon). Both pages state the split beside the chart.
+- **A whole feature: `aop-tx`.** Transparent AOP — advice declared on a method and applied
+  by generated code — is shipped by **Azera alone**. The other six do not serve
+  `/features/aop-tx` at all, so there is no row and no workaround row. This was previously
+  six entrants racing a row that meant "a pipeline someone wrote by hand", compared
+  against Azera's proxy as if the two were the same facility.
+- **A whole feature: `aop-tx-explicit`.** A dedicated interceptor abstraction is shipped by
+  **Azera and Spiral**; the other five have nothing to compete with.
+- **A whole feature: `aop-cache`.** The cache row was called simply `cache` while Azera
+  answered it through a generated `#[Cache]` proxy and the other six wrote the lookup by
+  hand — one word for two different facilities, the same mislabelling the `aop-tx` split
+  fixed. `aop-cache` is now the attribute-applied facility (**Azera alone**), and the six
+  others compete in `aop-cache-direct`, the same-work control every entrant can serve.
+- **One endpoint of a feature.** Phalcon also sits out `GET /features/aop-tx` by
+  `excludedRequests()`, which is kept because it is the narrower statement — the
+  feature-level rule above would cover it, but the per-endpoint map documents the
+  original 2026-11-21 abort.
 
-**`GET /features/aop-direct` prices the abstraction.** It is the same-work control:
-identical upsert, identical sentinel and identical event dispatch, with the transaction
-written by hand instead of applied by the proxy. Every entrant serves both rows, so the
-gap is what interception costs rather than the difference between two demonstrations.
-Measured 2026-11-22 (php-fpm): Azera `aop` **2.3693 ms** vs `aop-direct` **2.3435 ms** —
-**+0.0259 ms, +1.1%**, and the other six land inside ±2% too, which is the noise floor.
-So transparent interception is not what makes those rows slow. Anyone tempted to read
-"Azera is 2× slower at AOP than Phalcon" off the cross-entrant table should look at this
-pair first.
+**`aop-tx-direct` is a feature of its own, and all seven race it.** It asks what the same
+write costs implemented **directly** — `begin`/`commit`/`rollback` in application code,
+no interceptor and no proxy — so it needs no framework facility and every entrant can
+answer it. It used to share the `aop-tx` feature key, which would now take the control away
+from exactly the six entrants that can serve it: the same silent-vanish failure this
+section exists to prevent.
+
+Note that `logging` is a **separate feature**, not part of the AOP race: it used to map to
+`aop-tx`, which meant the AOP exclusion also hid a measurable row from every entrant that
+lacks proxy AOP. `tests/AdapterFeaturesTest.php` pins this, and
+`BenchmarkConfig::competesOn()` combines both reasons so the harness never asks an app for
+a route it does not have.
+
+Two rows have been **removed** since:
+
+- `pipeline` (`GET /features/pipeline`) raced a hand-composed interceptor chain around a
+  constant closure — the same mechanism `aop-tx-explicit` already measures, but on a
+  workload that did no work. Two rows asked one question; the survivor is the one that
+  wraps a real insert in a real transaction.
+- `retry` (`GET /features/retry`) meant three different things under one label — a
+  generated `#[Retry]` proxy on Azera, an explicit interceptor pipeline on
+  Laravel/Symfony/Spiral, and a bare `while`/`try` loop on CodeIgniter/CakePHP/Phalcon. It
+  also measured nothing: two in-process exceptions cost microseconds, so every entrant's
+  retry row landed within ~3% of its own `config` row. The chart
+  ranked bootstrap, not retry. Retry-as-advice is still exercised by the `aop-*` rows.
+ - `request-scoped` (`GET /features/request-scoped`) went the same way, for the same
+  reason plus a correctness one. It resolved a counter service from the container,
+  incremented it and reported the reset — but the seven entrants meant three different
+  things by that: a facility invoked in-band on Azera (`clearRequestScope()`), a framework
+  teardown that happens *outside* the measured request and is merely asserted in the
+  payload on Laravel/Symfony/Spiral, and a hand-written `reset()` with no scoping facility
+  at all on CodeIgniter/CakePHP/Phalcon. Spiral's docblocks and payload claimed
+  `#[Scope('http')]` services; no such attribute existed in the app, and two resolves
+  inside one `http` scope returned two different objects. The measurement settled it:
+  every entrant's row landed within ±7% of its own `config` row in both arms — the
+  flattest row in the suite, pricing a container resolve plus two increments rather than a
+  scoping facility.
+
+`logging` is deliberately **direct on all seven**, Azera included: `logSomething()` no
+longer carries `#[Log]`, so every entrant writes its entry/exit records in the method
+body and reports what its own logger captured. Azera's row used to go through the
+generated proxy, which made that chart compare a proxy dispatch against a plain call —
+the very confusion the `aop-*` rows exist to isolate. `tests/LoggingFacilityTest.php`
+pins both halves: that no entrant routes `log` through advice, and that each one's
+records come back from its own logger rather than a hand-built literal.
+
+**Four AOP features, four different questions.** These are deliberately separate —
+conflating them was a real defect:
+
+- **`aop-tx` — transparent AOP.** Advice declared on a method by an attribute and applied
+  by generated code, with the handler untouched. **Azera only** (`#[Advised]` plus
+  `#[Transactional]` / `#[Cache]`, compiled into a proxy by
+  `Azera\Aop\ProxyFactory`). No other vendor ships an attribute-to-advice layer, and no
+  other app contains an advice attribute.
+- **`aop-tx-explicit` — the interceptor abstraction.** The framework's own pipeline, with
+  the advice composed by hand. **Azera** (`Azera\Aop\Pipeline`) and **Spiral**
+  (`Spiral\Interceptors\PipelineBuilder`). A hand-written `begin`/`commit` is not this
+  feature, so the other five are not raced.
+- **`aop-tx-direct` — what the work costs implemented directly.** No AOP at all: plain
+  `begin`/`commit`/`rollback`. **All seven**, because it needs nothing from the framework.
+- **`aop-cache` — transparent AOP applied to caching.** `#[Cache(ttl: 10, key: …)]` on
+  `countItems()`, with the lookup, the miss decision and the store performed by the
+  generated proxy. **Azera only**, for the same reason as `aop-tx`: no other entrant has an
+  attribute-to-advice layer. The six others write that lookup by hand, which is what
+  **`aop-cache-direct`** measures — same COUNT, same key, same 10-second TTL, **all
+  seven**. The pair differs by one generated method override plus one interceptor frame,
+  exactly like `aop-tx`/`aop-tx-direct`.
+
+`aopStyle()` still records the transparent/direct split per entrant, and both pages state
+it beside the chart. What changed is that the split no longer decides who competes: the
+facility does.
+
+`aop-tx` and `aop-tx-direct` are read as a pair — the same insert, with the proxy
+supplying the transaction on one side and application code on the other — but they are
+charted as two features because only Azera competes in `aop-tx`. `aop-cache` and
+`aop-cache-direct` are the same pair on a different workload: the same cached COUNT, with
+the proxy supplying the lookup and TTL on one side and application code on the other.
+
+Read the Azera pair narrowly. The generated proxy overrides exactly two methods —
+`createItemTransactional` and `countItems` — and **does not
+override `createItemDirect`**, so `aop-tx` vs `aop-tx-direct` differs by *one interceptor frame
+and one generated method override*, not by proxy construction: both routes resolve
+`FeatureService` as the same proxy instance. A local A/B (400 warm dispatches, median of one
+process) puts that difference at **+0.020 ms**, against **+0.048 ms** for `aop-tx-explicit -
+aop-tx-direct`; the explicit pipeline allocates a `Pipeline`, an `Invocation` and a closure per
+request, which is why it is the slower of the two AOP modes while still being far cheaper
+than the write it wraps. The headline finding is therefore the one `aop-tx-direct` was built to
+show: **the abstraction is cheap relative to the work**, and these microsecond deltas are
+inside the run-to-run spread of the published rows.
+
+Measured 2026-11-22 (php-fpm): Azera `aop-tx` **2.3693 ms** vs `aop-tx-direct` **2.3435 ms** —
+**+0.0259 ms, +1.1%**, and the other six land inside ±2% between their own two AOP rows,
+which is the noise floor. So transparent interception is not what makes those rows slow.
+`aop-tx` vs `aop-tx-explicit` is the pair to read when the question is "what does the
+abstraction cost": generated interception against hand-composed interception on
+identical work.
+
+The cache pair is the same question on a lighter workload, and it is the sharper
+measurement of the overhead itself. A local run of both pairs in one process (400 warm
+dispatches each, 4 runs) gives `aop-tx` ≈ 0.179 ms vs `aop-tx-direct` ≈ 0.163 ms — **+0.016 ms**
+— and `aop-cache` ≈ 0.091 ms vs `aop-cache-direct` ≈ 0.0735 ms — **+0.017 ms**. The
+absolute cost is the same on both workloads, which is what an interception mechanism should
+look like: one generated override plus one interceptor frame, independent of what the
+method does. What differs is the *fraction*: about 10% of the write row and about 23% of
+the cache row, because the cache row is a single indexed `COUNT(*)` and the overhead is
+not. Read that as **the row's size, not a verdict on the abstraction** — on a cheaper
+workload a fixed cost is a larger share.
 
 The per-query event machinery is likewise negligible — `new QueryExecuted` 0.18 µs,
 `dispatch()` with listener resolution 1.26 µs, `DbEventLog::record()` 0.25 µs, so ~1.7 µs
@@ -166,7 +301,7 @@ WAL).
 Through a real framework endpoint the difference is diluted to nothing for the slower
 entrants, because their own DB layer costs hundreds of microseconds and the commit is lost
 inside it. Removing WAL and converting the file to rollback-journal, measured through each
-app's real `/features/aop-direct` endpoint, moved CakePHP by 2% and Laravel by 4%, and
+app's real `/features/aop-tx-direct` endpoint, moved CakePHP by 2% and Laravel by 4%, and
 moved Azera far more — which is precisely why WAL stays on: it is not paid equally.
 
 > **Correction.** An earlier revision of this section claimed "WAL is worth 55×" and that
@@ -198,7 +333,7 @@ mode, where a real commit costs ~0.5 ms: 40 identical upserts produced **4** `fd
 calls, 40 unique ones produced **160**.
 
 This was silently distorting a published comparison. Phalcon was the only entrant whose
-`/features/aop` and `/features/aop-direct` wrote a date-only title, and it was the only one
+`/features/aop-tx` and `/features/aop-tx-direct` wrote a date-only title, and it was the only one
 that appeared to commit for free: 0.021 ms versus 0.486 ms for the same endpoint once it
 wrote a unique title — 23×, and equal to Azera's 0.515 ms. The "0.021 ms write" was a read.
 Every sentinel title now carries a per-request `#<random>` suffix, enforced by
@@ -254,10 +389,14 @@ cause.
   framework, and normalising it away would delete a mechanism one entrant has and the rest do not.
   See `tests/ViewGlobalsTest.php`.
 - **Every server has a floor probe, and the floor is usually most of the row.** Each mode in the
-  dataset carries a `floor-*` pseudo-app: one `GET /` to the same server, through the same arm, with
-  no framework in it (`floor-http` static file via nginx, `floor-php` a bare PHP file via FPM,
-  `floor-rr` a hello-world RoadRunner worker, and since 2026-11-24 `floor-volucer-attach` /
-  `floor-volucer-cgi`). `apps[] − floors[]` is the framework; `floors[]` alone is the server. The
+  dataset carries a `floor-*` pseudo-app: one `GET /echo` to the same server, through the same arm,
+  with no framework in it (`floor-http` static file via nginx, `floor-php` a bare PHP file via FPM,
+  and `floor-volucer-attach` a hello-world resident worker). `apps[] − floors[]` is the
+  framework; `floors[]` alone is the server. The
+  probe URI is `/echo` rather than `/` because the floor is subtracted from the `/echo` row: on the
+  apps `/` renders a template, which the floor can never do, so a `/` floor was a reference for a
+  request nobody compared it against.
+  The
   two Volucer arms went a full release without one, which made their rows the hardest to read: a
   `/echo` on volucer-attach prints ~150 us while the entire framework layer on that route is ~4 us.
   That gap is why `/echo` must not be read across servers as a framework comparison — see the
@@ -285,8 +424,8 @@ cause.
 - **SQLite** — a single-file embedded database keeps the DB cost comparable across frameworks and avoids external server variance. It favours frameworks with thin DB abstraction layers.
 - **Closure handlers** — where a framework allows, routes use closure/anonymous handlers to isolate routing+render+model cost from userland controller-class instantiation. Documented per adapter. This caveat no longer applies to Phalcon: its routes resolve to controller classes through the dispatcher, like every other entrant's.
 - **OPcache** — always run with `opcache.enable_cli=1` for fair bytecode-cache parity.
-- **A fixed-id upsert only costs a write if the row content actually changes** — `POST /items`, `POST /items-qb` and `POST /api/items` all upsert a fixed id (`999999`, `999997`, `999998`) with a title of `'Created Item ' . date('Y-m-d H:i:s')`, in **all seven** apps. `created_at` has one-second resolution and the id never changes, so two requests inside the same second propose identical rows and SQLite skips the commit instead of dirtying a page. Measured in rollback-journal mode: 40 identical upserts produced 4 `fdatasync` calls, 40 unique ones produced 160. Because every entrant does this identically, it does not distort the ranking — but it means those three rows under-report the cost of a real insert for everyone, and they measure "upsert an unchanged row" more often than "write". The feature-demo write endpoints (`/features/aop`, `/features/aop-direct`, `/features/events`, `/features/db-events`) must **not** do this, because there the write is the thing being measured; `tests/WriteTitleUniquenessTest.php` enforces a per-request suffix there. Phalcon was violating it alone, which made one entrant look 23× faster at a write it was not performing.
-- **Resident-worker memory is our instrumentation, not the framework's** — every adapter records one entry per executed query into a `DbEventLog`. In a process that stays alive (the warm/RoadRunner modes) that store must be wiped per request, or the harness's own bookkeeping grows without bound and the memory chart reports _it_ instead of the framework. Azera and CodeIgniter always did this; Laravel, Symfony and Spiral did not until the `Benchmark apps: wipe the DB event log per request` commit, which had inflated their published warm peak by up to 5× (Symfony 42 MB → 6 MB, Laravel 40 MB → 8 MB). If you add an adapter, make your log request-scoped.
+- **A fixed-id upsert only costs a write if the row content actually changes** — `POST /items`, `POST /items-qb` and `POST /api/items` all upsert a fixed id (`999999`, `999997`, `999998`) with a title of `'Created Item ' . date('Y-m-d H:i:s')`, in **all seven** apps. `created_at` has one-second resolution and the id never changes, so two requests inside the same second propose identical rows and SQLite skips the commit instead of dirtying a page. Measured in rollback-journal mode: 40 identical upserts produced 4 `fdatasync` calls, 40 unique ones produced 160. Because every entrant does this identically, it does not distort the ranking — but it means those three rows under-report the cost of a real insert for everyone, and they measure "upsert an unchanged row" more often than "write". The feature-demo write endpoints (`/features/aop-tx`, `/features/aop-tx-direct`, `/features/events`, `/features/db-events`) must **not** do this, because there the write is the thing being measured; `tests/WriteTitleUniquenessTest.php` enforces a per-request suffix there. Phalcon was violating it alone, which made one entrant look 23× faster at a write it was not performing.
+- **Resident-worker memory is our instrumentation, not the framework's** — every adapter records one entry per executed query into a `DbEventLog`. In a process that stays alive (the warm / resident modes) that store must be wiped per request, or the harness's own bookkeeping grows without bound and the memory chart reports _it_ instead of the framework. Azera and CodeIgniter always did this; Laravel, Symfony and Spiral did not until the `Benchmark apps: wipe the DB event log per request` commit, which had inflated their published warm peak by up to 5× (Symfony 42 MB → 6 MB, Laravel 40 MB → 8 MB). If you add an adapter, make your log request-scoped.
 - **CakePHP's resident-worker growth is root-caused, fixed and re-measured** — the resident-memory chart draws each framework as a _range_ because a worker has three different moments worth showing: the left cap is the boot footprint, the dot the heap after the last endpoint, and the right cap the worst endpoint. CakePHP is _not_ the heaviest to boot — it has the **lightest** resident footprint of all six (0.92 MB) — yet its 2026-09-15 run reached 40.6 MB at the worst endpoint against 1.7–9.0 MB for the other five. That was an accumulation of ~186 bytes per request, and the cause was _not_ the framework's own state: `ServerRequestFactory::fromGlobals()` — the documented way to build a request — constructs a fresh `Cake\Http\Session` on every call, and `Session::__construct()` ends with `session_register_shutdown()`, which appends to a process-level handler list that PHP only frees at exit. Nothing in userland can see or collect it (it is unreachable from every class static, static local, `$GLOBALS` entry and closure, and `gc_collect_cycles()` does not touch it), which is why it survived the earlier logger/DB/registry investigation. The adapter now builds requests through `App\Cake\Support\WorkerRequestFactory`, which reuses one Session per worker and clears `$_SESSION` between requests.
   **Re-measured on the bench VM (2026-09-18, same `1000x10` budget):** CakePHP now reads **0.923 → 5.96 MB** end state with an 8.14 MB worst endpoint — growth **5.0 MB**, down from 39.7 MB and inside the 0.7–1.5 MB band the others occupy. The shape is the stronger evidence: pre-fix the series rose monotonically (+~2.4 MB per endpoint, never released); post-fix it oscillates and returns to baseline, so each endpoint's state is released rather than retained. CakePHP is the only entrant affected: Symfony's `NativeSessionStorage` calls the same function but is only constructed when a session is _started_, which the bench app never does, and the other frameworks' request factories have no session at all. See `tests/CakeWorkerSessionLeakTest.php`.
 
@@ -294,8 +433,8 @@ cause.
 
 Results JSON includes the PHP version, OS, and (for Azera) the git ref of the local `azera-framework` path repo, since Azera is not yet published. Pin to a specific git ref for reproducible comparisons.
 
-Both deployment models are always measured with **one budget** (currently `1000x10`). RoadRunner and PHP-FPM are two ways of running the same request, so comparing them is only meaningful when both were sampled equally — the assembler and the single-app splice both refuse to write a dataset where they disagree.
-
+Both deployment models are always measured with **one budget** (currently `1000x10`). Volucer attach
+and PHP-FPM are two ways of running the same request, so comparing them is only meaningful when both were
 ## The homepage section
 
 `scripts/homepage-report.php` generates the benchmark section of the Azera
@@ -414,8 +553,6 @@ Two consequences:
 | SAPI | Serves | How it gets the JIT |
 | --- | --- | --- |
 | `fpm` | nginx + PHP-FPM (`php-fpm` mode) | `/etc/php/<series>/fpm/conf.d/99-jit.ini` |
-| `cgi` | volucer's `spawn_cgi` arm (`volucer-cgi` mode) | its own `conf.d`, plus `-d` flags in the generated wrapper |
-| `cli` | RoadRunner and volucer `attach` workers | its own `conf.d`, plus `-d` flags in the spawned command |
 
 `scripts/run-remote.ps1` and `scripts/run-http.php` both install the drop-in
 (`jitIniContent()` / `installJitIni()`), so a fresh VM cannot silently measure

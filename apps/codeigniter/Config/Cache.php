@@ -9,10 +9,10 @@ declare(strict_types=1);
  * store, matching the cache semantics of the other five benchmark apps
  * (azera ArrayCache, Symfony ArrayAdapter, Laravel array store, ...).
  * Entries survive between warm/worker requests but die with each fresh
- * boot — so cold mode pays the 50ms simulated cache-miss on every
- * iteration, exactly like every other framework. (The previous file
- * handler survived re-boots from disk, letting CI4 skip the miss that
- * dominates the cold /features/cache + /features/db-events rows.)
+ * boot — so cold mode pays the COUNT again on every iteration, exactly
+ * like every other framework. (The previous file handler survived
+ * re-boots from disk, letting CI4 skip the miss that dominates the cold
+ * /features/aop-cache-direct + /features/db-events rows.)
  */
 
 namespace Config;

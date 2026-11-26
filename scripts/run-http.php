@@ -3,28 +3,36 @@
 declare(strict_types=1);
 
 /**
- * Real-deployment benchmark orchestrator — RUNS ON THE BENCHMARK VM.
+ * Real-deployment benchmark orchestrator -- RUNS ON THE BENCHMARK VM.
  *
  * Benchmarks every app under real servers, one block per (server, app):
  *
- *   server rr  → RoadRunner resident worker (deploy/rr/worker.php,
- *                BENCH_APP=<app>, config stamped from deploy/rr/) → warm model
- *   server fpm → nginx vhost + php-fpm pool (pm.max_requests=0, i.e. the
- *                worker is NOT recycled; the app's entry script still runs
- *                per request, so its boot stays inside the clock)
+ *   server fpm            -> nginx vhost + php-fpm pool (pm.max_requests=0, i.e. the
+ *                            worker is NOT recycled; the app's entry script still runs
+ *                            per request, so its boot stays inside the clock)
+ *   server volucer-attach -> volucer `attach` supervisor owns the worker: the
+ *                            framework boots ONCE and every connection is served from
+ *                            that already-built state (deploy/volucer/attach.php)
  *
- * Per block: seed SQLite → stamp configs → start server → readiness poll →
- * run scripts/http-bench.php → stop server. Floor pseudo-apps (static file
- * through nginx, hello-world through FPM) are measured once per server so
- * the constant webserver overhead lands in the dataset as context.
+ * Per block: seed SQLite -> stamp configs -> start server -> readiness poll ->
+ * run scripts/http-bench.php -> stop server. Floor pseudo-apps (static file through
+ * nginx, hello-world through FPM) are measured once per server so the constant
+ * webserver overhead lands in the dataset as context.
  *
- * Output: results/real-deployments.json — same JSON shape as run.php's
- * dataset (env + apps[].modes.<mode>.requests[]), mode names already
- * "roadrunner"/"php-fpm", so report.php consumes it unchanged.
+ * Output: results/real-deployments.json -- same JSON shape as run.php's dataset
+ * (env + apps[].modes.<mode>.requests[]), mode names already "php-fpm" and
+ * "volucer-attach", so report.php consumes it unchanged.
  *
  * Usage:
- *   php scripts/run-http.php --servers=rr,fpm --out=results/real-deployments
- *   php scripts/run-http.php --apps=azera --servers=rr --quick --out=temp/smoke
+ *   php scripts/run-http.php --servers=fpm,volucer-attach --out=results/real-deployments
+ *   php scripts/run-http.php --apps=azera --servers=fpm --quick --out=temp/smoke
+ *   php scripts/run-http.php --rotate --out=results/real-deployments-reversed
+ *
+ * `--rotate` reverses the app measurement order. Run the suite twice, once in each
+ * order, to separate a drift artefact from a real difference: a gap that follows
+ * POSITION is drift; one that follows the APP is a finding. See the flag's own
+ * comment for the full rationale -- a fixed order attaches monotonic machine drift
+ * to a named app, which is how it comes to reproduce on every run.
  */
 
 $opts = getopt('', [
@@ -39,10 +47,8 @@ $opts = getopt('', [
     'mem-only',
     'floors-only',
     'mem-repeats::',
-    'rr-binary::',
     'php-fpm::',
     'php-cli::',
-    'php-cgi::',
     'volucer-binary::',
     'bench-user::',
 ]);
@@ -68,34 +74,19 @@ require_once __DIR__ . '/report/BenchmarkConfig.php';
 // reporting does not depend on a function having been called first.
 require_once __DIR__ . '/bench-lib.php';
 
-// RR binary lives OUTSIDE vendor/ on the bench VM: composer install prunes
-// vendor/bin/rr because it is not owned by any installed package (only the
-// roadrunner-cli proxy knows it). Default order: explicit --rr-binary wins,
-// then ~/bin/rr (stable home on the VM), then the legacy vendor path.
-// NOTE: getenv('HOME') — $_SERVER['HOME'] is NOT populated in PHP CLI on
-// Ubuntu 24.04, the fallback below silently picked the dead vendor path.
-$homeBinRr = rtrim((string) (getenv('HOME') ?: ($_SERVER['USERPROFILE'] ?? '')), "/\\") . '/bin/rr';
-$rrBinary  = $opts['rr-binary'] ?? (is_file($homeBinRr) ? $homeBinRr : (__DIR__ . '/../vendor/bin/rr'));
 $phpFpmBin = $opts['php-fpm'] ?? 'php-fpm8.5';
-// The CLI interpreter the RoadRunner workers (and every helper this script
-// shells out to) run under. Defaults to the sibling of $phpFpmBin, so the two
-// servers share ONE PHP installation instead of the FPM half being pinned by
-// this script while the worker half silently follows PATH.
+// The CLI interpreter every helper this script shells out to runs under, and the one
+// the worker inherits. Defaults to the sibling of $phpFpmBin, so the two servers share
+// ONE PHP installation instead of the FPM half being pinned by this script while the
+// worker half silently follows PATH.
 $phpCli    = $opts['php-cli'] ?? phpCliForFpm($phpFpmBin);
-// The php-cgi binary the volucer `spawn_cgi` (cold) arm runs. Derived from the same
-// series as the other two so all three volucer-backed PHP processes share one install;
-// php-cgi is a separate package from php-fpm and php-cli, so a host can easily have one
-// and not the other — the block fails loudly on start rather than measuring nothing.
-$phpCgiBin = $opts['php-cgi'] ?? ('php-cgi' . (phpSeriesFromFpmBin($phpFpmBin) ?? '8.5'));
-// The volucer binary. Resolution order mirrors $rrBinary's, with one extra candidate:
-// the Rust build tree. Unlike RoadRunner there is NO vendor/bin/volucer to fall back
-// on — volucer is not a composer package — and cargo is not installed on the bench VM,
-// so the binary has to be one that was already built there.
+// The volucer binary. Candidates in order: ~/bin/volucer, then the Rust build tree.
+// There is NO vendor/bin/volucer to fall back on -- volucer is not a composer package,
+// and cargo is not installed on the bench VM, so the binary has to be one that was
+// already built there. The VM keeps the only from-source build at ~/volucer-bench.
 $homeBinVolucer = rtrim((string) (getenv('HOME') ?: ''), "/\\") . '/bin/volucer';
 $volucerCandidates = array_filter([
     $homeBinVolucer,
-    // `cargo build --release` in a checkout of the volucer repo. The bench VM keeps one
-    // at ~/volucer-bench, and this is the only location a from-source build ever lands.
     rtrim((string) (getenv('HOME') ?: ''), "/\\") . '/volucer-bench/target/release/volucer',
 ]);
 $volucerBin = $opts['volucer-binary'] ?? 'volucer';
@@ -106,41 +97,55 @@ if (!isset($opts['volucer-binary'])) {
             break;
         }
     }
-}
-$benchUser = $opts['bench-user'] ?? getenv('BENCH_USER') ?: get_current_user();
+}$benchUser = $opts['bench-user'] ?? getenv('BENCH_USER') ?: get_current_user();
 
-// The servers this run measures. A list, not a set of booleans: four of them can be
-// asked for now, the report has two modes today, and the loop below must not carry a
-// branch per server name.
+// The servers this run measures. A list, not a set of booleans: the loop below must
+// not carry a branch per server name.
 //
-//   rr              RoadRunner resident worker            -> mode roadrunner
-//   fpm             nginx + php-fpm pool                   -> mode php-fpm
+//   fpm             nginx + php-fpm pool                    -> mode php-fpm
 //   volucer-attach  volucer `attach`, deployment owns them  -> mode volucer-attach
-//   volucer-cgi     volucer `spawn_cgi`, php-cgi per request-> mode volucer-cgi
 //
-// The two volucer arms are SEPARATE modes rather than one "volucer" bucket because
-// they are different deployment models: `attach` is resident (the framework boots
-// once and every connection reuses it) while `spawn_cgi` boots per request like FPM.
-// Collapsing them would make the report average a resident arm with a cold one.
+// TWO SERVERS, ONE PER DEPLOYMENT MODEL. `fpm` boots the framework for every request
+// and `volucer-attach` serves from a process that already booted, so this pair is the
+// whole "restart per request vs stay resident" comparison; nothing is lost by having
+// exactly one implementation of each shape.
 //
-// volucer's `worker` backend is deliberately NOT one of them. It is resident exactly
-// like `attach` and boots the same shared handler (deploy/volucer/app.php), so it
-// measures the same thing and differs only in who owns the process - two rows that
-// must agree, which is a sanity check, not a measurement. It is still runnable by
-// hand; only the dataset dropped it.
-$validServers = ['rr', 'fpm', 'volucer-attach', 'volucer-cgi'];
+// WHAT WAS REMOVED, AND WHY (2026-11-26). Two more arms existed:
+//
+//   rr           RoadRunner resident worker              -> mode roadrunner
+//   volucer-cgi  volucer `spawn_cgi`, php-cgi per request -> mode volucer-cgi
+//
+// Both were REDUNDANT SHAPES. `rr` is the resident model that `volucer-attach` now
+// implements, and `volucer-cgi` is the per-request model nginx+php-fpm already
+// implements. Keeping them meant the report drew four pages describing two deployment
+// models, and a reader comparing `rr` against `volucer-attach` was reading a difference
+// between two servers rather than between two models.
+//
+// Deleting them removes no claim: every figure the pages made is still made, by the
+// surviving arm with the same deployment shape. What it DOES change is that RoadRunner
+// was Spiral's native runtime, so the Spiral app now competes on exactly the servers
+// every other entrant does -- see tests/ServerParityTest.php.
+//
+// volucer's `worker` backend stays outside the list for its original reason: it is
+// resident exactly like `attach` and boots the same shared handler
+// (deploy/volucer/app.php), so it measures the same thing and differs only in who owns
+// the process. It is still runnable by hand.
+$validServers = ['fpm', 'volucer-attach'];
 // Split on comma OR whitespace: a launcher that hands an array to a string parameter
-// gets a space-joined value ("rr fpm volucer"), and treating that as one unknown server
-// would reject a list the operator clearly intended. Both forms mean the same thing.
+// gets a space-joined value ("fpm volucer-attach"), and treating that as one unknown
+// server would reject a list the operator clearly intended. Both forms mean the same
+// thing.
 $serversArg = array_values(array_filter(
-    preg_split('/[,\s]+/', (string) ($opts['servers'] ?? 'rr,fpm')) ?: [],
+    preg_split('/[,\s]+/', (string) ($opts['servers'] ?? 'fpm,volucer-attach')) ?: [],
     static fn(string $s): bool => $s !== ''
 ));
 
 $unknown = array_diff($serversArg, $validServers);
 if ($unknown !== []) {
     fwrite(STDERR, '[run-http] unknown server(s): ' . implode(', ', $unknown)
-        . '. Valid: ' . implode(', ', $validServers) . "\n");
+        . '. Valid: ' . implode(', ', $validServers) . "\n"
+        . "[run-http] NOTE: 'rr' and 'volucer-cgi' were removed on 2026-11-26 - they\n"
+        . "  implemented the same two deployment models as 'volucer-attach' and 'fpm'.\n");
     exit(1);
 }
 if ($serversArg === []) {
@@ -153,15 +158,14 @@ $servers = $serversArg;
 /**
  * The report mode name for one server key.
  *
- * The report's mode vocabulary is its own — 'roadrunner' and 'php-fpm' are already
- * spelled that way in six files — so this is the ONE place that translates a CLI
- * server name into it. Both the block loop and http-bench.php call it, which is what
- * keeps the dataset's mode keys and the report's lookups from drifting.
+ * The report's mode vocabulary is its own -- 'php-fpm' is already spelled that way in
+ * several files -- so this is the ONE place that translates a CLI server name into it.
+ * Both the block loop and http-bench.php call it, which is what keeps the dataset's
+ * mode keys and the report's lookups from drifting.
  */
 function modeNameFor(string $server): string
 {
     return match ($server) {
-        'rr'             => 'roadrunner',
         'fpm'            => 'php-fpm',
         // Already mode-shaped: the arm name IS the deployment model, and a reader of
         // the dataset should see `volucer-attach` rather than a second translation.
@@ -174,30 +178,22 @@ function modeNameFor(string $server): string
  *
  * Must agree with the code that WRITES the sample, on both sides:
  *
- *   rr              hardcoded 'rr'           in deploy/rr/worker.php
- *   fpm             hardcoded 'fpm'          in the public/index-*.php entry scripts
- *   volucer-attach  hardcoded 'volucer'      in deploy/volucer/app.php
- *   volucer-cgi     'volucer-cgi' via BENCH_PROBE_KIND, because it re-runs the FPM
- *                   entry scripts and they must not write into FPM's files
+ *   fpm             hardcoded 'fpm'      in the public/index-*.php entry scripts
+ *   volucer-attach  hardcoded 'volucer'  in deploy/volucer/app.php
  *
- * Only the spawn_cgi arm needs the environment variable, and it needs it because it
- * shares the entry scripts with FPM. The resident arm keeps the fixed kind 'volucer',
- * which is also what the hand-runnable `worker` backend writes — so if that one is
- * ever added back to $validServers it needs no new kind, and its samples land beside
- * attach's exactly as they should.
+ * The kinds are historical strings and are deliberately NOT renamed with the arms:
+ * every dataset written before this pair existed stores its samples under 'rr' and
+ * 'volucer-cgi', and a merge tool reading an old file must still find them.
  */
 function probeKindFor(string $server): string
 {
     return match ($server) {
-        'rr'             => 'rr',
         'fpm'            => 'fpm',
         'volucer-attach' => 'volucer',
-        'volucer-cgi'    => 'volucer-cgi',
         default          => throw new RuntimeException("no probe kind for server '{$server}'"),
     };
 }
 
-$useRr  = in_array('rr', $servers, true);
 $useFpm = in_array('fpm', $servers, true);
 $volucerArms = array_values(array_filter($servers, static fn(string $s): bool => str_starts_with($s, 'volucer')));
 
@@ -232,9 +228,9 @@ $memRepeats = max(1, (int) ($opts['mem-repeats'] ?? 10));
 // framework in it), so unlike a boot or memory probe they can come from a later run.
 $floorsOnly = isset($opts['floors-only']);
 
-// ONE budget for every server. RoadRunner and FPM are two ways of running the
+// ONE budget for every server. Volucer-attach and FPM are two ways of running the
 // same request, so the only meaningful comparison measures both with the same
-// sample; an asymmetry (the historical RR 1000x10 vs FPM 300x5) makes every
+// sample; an asymmetry (the historical resident 1000x10 vs FPM 300x5) makes every
 // cross-model caption branch on the mismatch and leaves the reader comparing
 // rows with different confidence. There is deliberately no per-server
 // override: a budget knob that only one server honours is the bug, not the
@@ -250,17 +246,17 @@ echo "Servers: " . implode(', ', $servers) . "\n";
 echo "Iterations/run: {$itersPerRun}, Runs: {$runs}\n";
 echo "Budget (all servers): {$budget}\n";
 echo "Bench user (FPM pool owner): {$benchUser}\n";
-echo "PHP CLI (RoadRunner worker + harness): {$phpCli}\n";
+echo "PHP CLI (volucer worker + harness):   {$phpCli}\n";
 echo "PHP FPM:                              {$phpFpmBin}\n\n";
 
 // --- Interpreter coherence ------------------------------------------------------
 //
 // The dataset carries ONE `env.php_version`, so the two servers must run the same
 // PHP. Nothing in the harness links them: nginx talks to the packaged
-// `php-fpm<X.Y>` binary while RoadRunner spawns the CLI interpreter. On
+// `php-fpm<X.Y>` binary while the volucer worker inherits the CLI interpreter. On
 // 2026-10-19 the bench VM's default `php` was moved to 8.5 while its FPM pools
 // stayed under /etc/php/8.3, and the pre-existing code — hardcoded `php-fpm8.3`,
-// bare `php` for the worker — would have produced a dataset of 8.5.11 RoadRunner
+// bare `php` for the worker — would have produced a dataset of 8.5.11 worker
 // numbers beside 8.3.35 FPM numbers under a single 8.5.11 stamp.
 //
 // This is checked rather than assumed because a mismatch is SILENT: the run
@@ -297,11 +293,11 @@ if ($cliSeries !== $fpmSeries) {
     fwrite(STDERR, <<<MSG
 [run-http] REFUSING TO RUN: the two servers use different PHP versions.
 
-    RoadRunner worker : {$phpCli}  -> {$cliVersion}
+    volucer worker    : {$phpCli}  -> {$cliVersion}
     nginx -> php-fpm  : {$phpFpmBin}  -> {$fpmVersion}
 
 The dataset records one env.php_version, so this run would publish one runtime's
-numbers under the other's name, and every RoadRunner-vs-FPM ratio would compare
+numbers under the other's name, and every resident-vs-FPM ratio would compare
 two different engines. Pass a matching pair, e.g.:
 
     --php-cli=php8.5 --php-fpm=php-fpm8.5
@@ -381,19 +377,14 @@ $results = [
         // The FPM deployment model as actually configured. The report reads
         // this to describe what it measured instead of assuming a value.
         'fpm_max_requests' => fpmMaxRequestsFromTemplate($root),
-        // The RoadRunner pool's recycle setting, from the same template that
-        // generated the .rr-<app>.yaml files. The report divides the worker's
-        // boot by this to turn "recycle cost" into "boot share a request
-        // carries": at 0 (no limit — the value benchmarked here) the worker is
-        // never recycled, so no request pays a boot at all.
-        'rr_max_jobs' => rrMaxJobsFromTemplate($root),
         // Volucer's equivalent knobs, per arm. Only stamped when that arm is
         // measured, and null means "this arm does not have that setting" rather
         // than "unknown".
         //
         // Why they must be stamped rather than inferred: the report describes what
         // a request's boot contains from the POOL SETTING, and it used to read the
-        // RoadRunner value for any resident arm. On a Volucer page that was a claim
+        // value from the old RoadRunner arm for any resident entrant. On a Volucer
+        // page that was a claim
         // about a knob Volucer does not read (max_jobs) to describe recycling
         // Volucer performed by a different mechanism (`max_requests`, and for
         // `attach` the supervisor's fork-per-connection). The numbers happened to
@@ -432,7 +423,6 @@ $results = [
         // Also stamped on the CLI side (run.php) through the same helper.
         'frameworks' => frameworkVersions($root),
         'servers'    => [
-            'roadrunner' => trim((string) shellProcessOutput("{$rrBinary} --version")),
             'nginx'      => trim((string) shellProcessOutput('nginx -v 2>&1')),
             'php_fpm'    => trim((string) shellProcessOutput("{$phpFpmBin} -v")),
             // Only when a volucer arm is actually measured: a stamp for a server that
@@ -454,9 +444,8 @@ $results = [
 
 // --- Server + seed setup -------------------------------------------------------
 
-$rrPort    = 8983;
 $fpmPort   = 8883;
-// A third bank, well clear of the other two: an overlap here would put two servers on
+// A second bank, well clear of the FPM one: an overlap here would put two servers on
 // one port and the harness would benchmark whichever bound first (the failure
 // stampPort() documents for apps).
 $volucerPortBase = 8800;
@@ -464,19 +453,15 @@ $deployDir = "{$root}/temp/deploy";
 $ports     = [];
 
 // FPM pools + nginx vhosts are stamped ONCE per app up front and kept
-// running; per-block the orchestrator only starts/stops RoadRunner. The
+// running; per-block the orchestrator only starts/stops volucer. The
 // pools never recycle (pm.max_requests=0), so one long-lived pool serves the
 // whole run — no per-block start/stop is needed or wanted.
-stampAllDeployConfigs($root, $deployDir, $apps, $fpmPort, $rrPort, $ports, $benchUser, $phpCli);
+stampAllDeployConfigs($root, $deployDir, $apps, $fpmPort, $ports, $benchUser, $phpCli);
 
 // Volucer configs are stamped separately (see stampVolucerConfigs) because each arm
 // needs a different placeholder set.
-stampVolucerConfigs($root, $deployDir, $apps, $volucerArms, $phpCli, $phpCgiBin, $volucerPortBase, $ports);
+stampVolucerConfigs($root, $deployDir, $apps, $volucerArms, $phpCli, $volucerPortBase, $ports);
 
-// A benchmark RoadRunner left behind by an earlier invocation would hold its
-// port, silently absorb the new server's bind failure, and get benchmarked
-// under the wrong app's name (2026-09-14). Clear them before the first block.
-killAllBenchRoadRunners($deployDir);
 // The same hazard for volucer, and worse for the attach arm: an orphaned supervisor
 // still holds its relay, so the next block's volucer would connect to the PREVIOUS
 // app's worker and serve that app's pages under this app's name.
@@ -524,36 +509,26 @@ foreach ($apps as $appKey) {
             warmRouteCaches($root, $appKey, $phpCli);
         }
 
-        // Start the boot probe from an EMPTY file, and do it BEFORE the
-        // server starts. A RoadRunner worker records its samples while
-        // `rr serve` comes up (deploy/rr/worker.php records once, before the
-        // request loop), so clearing the file after waitForServer() deleted
-        // the very samples this block had just produced — every run reported
-        // "boot probe: no samples ... missing" for rr while fpm worked
-        // (2026-09-16). Clearing first also keeps a file left by an earlier
-        // block from contributing samples to this one.
+        // Start the boot probe from an EMPTY file, and do it BEFORE the server starts.
+        // The resident worker records its sample while the server is coming up, so
+        // clearing the file after waitForServer() deleted the very samples this block
+        // had just produced -- every run reported "boot probe: no samples ... missing"
+        // while the other arm worked (2026-09-16). Clearing first also keeps a file
+        // left by an earlier block from contributing samples to this one.
         //
-        // THE KIND IS PER SERVER, not a two-way rr/fpm choice. It must match what the
-        // arm's processes write: the FPM and RoadRunner workers hardcode their own
-        // kind, the resident volucer arm writes 'volucer', and the volucer spawn_cgi
-        // arm takes its kind from BENCH_PROBE_KIND in the process environment (see
-        // bench_probe_kind()). Getting this wrong is silent: the second arm would read
-        // the first arm's leftover samples and report them as its own.
-        $bootKind = probeKindFor($server);
+        // THE KIND IS PER SERVER, not a two-way choice. It must match what the arm's
+        // processes write: the FPM entry scripts hardcode 'fpm', and the resident
+        // volucer arm hardcodes 'volucer' (deploy/volucer/app.php). Getting this wrong
+        // is silent: the second arm would read the first arm's leftover samples and
+        // report them as its own.        $bootKind = probeKindFor($server);
         $bootFile = "{$root}/temp/boot-{$bootKind}-{$appKey}.jsonl";
         @unlink($bootFile);
-        // The RR worker also records its COLD process-start boot under a
-        // separate kind (one sample, not the reported number) — clear it too,
-        // or it accumulates across runs and confuses the next reader.
-        @unlink("{$root}/temp/boot-rr-cold-{$appKey}.jsonl");
         // The memory-probe file is per kind for the same reason; clear it so a
         // previous run's samples cannot be attributed to this block.
         @unlink("{$root}/temp/mem-{$bootKind}-{$appKey}.jsonl");
 
         $proc = null;
-        if ($server === 'rr') {
-            $proc = startRoadRunner($root, $deployDir, $appKey, $rrBinary, $port);
-        } elseif ($server === 'fpm') {
+        if ($server === 'fpm') {
             $proc = ensureFpmRunning($root, $phpFpmBin, $deployDir);
         } else {
             $proc = startVolucer($root, $deployDir, $appKey, $server, $volucerBin, $phpCli, $port);
@@ -605,38 +580,37 @@ foreach ($apps as $appKey) {
             }
             $appResult['modes'] += $modeData['modes'];
 
-            // Boot probe. Keyed BY MODE, not stored once per app: this loop
-            // runs once per server for the same app, so a single
-            // $appResult['boot'] would be silently overwritten by the second
-            // server — and the report would then show RoadRunner's worker boot
-            // in the PHP-FPM view (or vice versa) with no error anywhere.
-            // The semantics differ per mode, which is exactly why they cannot
-            // share one field:
-            //   php-fpm    -> the entry script re-runs per request, so this
-            //                 boot IS inside every timed row (boot_ms too).
-            //   roadrunner -> the worker boots once before serving anything,
-            //                 so it is NOT inside the timed rows.
+            // Boot probe. Keyed BY MODE, not stored once per app: this loop runs once
+            // per server for the same app, so a single $appResult['boot'] would be
+            // silently overwritten by the second server -- and the report would then
+            // show the resident worker's boot in the PHP-FPM view (or vice versa) with
+            // no error anywhere.
+            //
+            // The semantics differ per mode, which is exactly why they cannot share one
+            // field:
+            //   php-fpm         -> the entry script re-runs per request, so this boot IS
+            //                      inside every timed row (boot_ms too).
+            //   volucer-attach  -> the worker boots once before serving anything, so it
+            //                      is NOT inside the timed rows.
             //
             // The legacy scalar is emitted BESIDE the map for old readers, and
-            // deliberately NOT overwritten per server: with the server loop
-            // [rr, fpm] an unconditional assignment left it holding the
-            // php-fpm boot, and any reader that looked at the scalar charged
-            // that to the RoadRunner view (2026-09-17).
+            // deliberately NOT overwritten per server: an unconditional assignment left
+            // it holding whichever server ran last, and any reader that looked at the
+            // scalar charged that to the wrong view (2026-09-17).
             if (isset($modeData['boot'])) {
                 $modeOfServer = $modeOf($server);
                 $appResult['boot_by_mode'][$modeOfServer] = $modeData['boot'];
-                if (!isset($appResult['boot']) || $modeOfServer === 'roadrunner') {
+                if (!isset($appResult['boot']) || $modeOfServer !== 'php-fpm') {
                     $appResult['boot'] = $modeData['boot']; // legacy shape
                 }
             }
             if (isset($modeData['boot_samples'])) {
                 $modeOfServer = $modeOf($server);
                 $appResult['boot_samples_by_mode'][$modeOfServer] = $modeData['boot_samples'];
-                if (!isset($appResult['boot_samples']) || $modeOfServer === 'roadrunner') {
+                if (!isset($appResult['boot_samples']) || $modeOfServer !== 'php-fpm') {
                     $appResult['boot_samples'] = $modeData['boot_samples'];
                 }
-            }
-            // WHAT KIND of boot this band measured. Without it the report can only guess
+            }            // WHAT KIND of boot this band measured. Without it the report can only guess
             // from the field name, and once more than one resident arm exists that guess
             // has to be made from the mode string — which is exactly the coupling
             // merge-boot.php already avoids by carrying this through. 'warm_recycle'
@@ -648,18 +622,16 @@ foreach ($apps as $appKey) {
             unlink($tmpJson);
         } catch (RuntimeException $e) {
             // The finally below tears the server down BEFORE we abort —
-            // aborting inside the try skipped teardown and leaked the RR
-            // worker still holding the port (2026-09-14).
+            // aborting inside the try skipped teardown and leaked the worker
+            // still holding the port (2026-09-14).
             $failure = $e;
         } finally {
             // EVERY server this loop can start must be torn down here. A missing branch
             // is not a leak of one process — it is the next block silently measuring the
             // PREVIOUS app, because the survivor still holds the port and answers
             // happily. (The 2026-09-14 incident this comment block descends from was
-            // exactly that, for RoadRunner.)
-            if ($server === 'rr') {
-                stopRoadRunner($proc);
-            } elseif (str_starts_with($server, 'volucer')) {
+            // exactly that, for the resident worker.)
+            if (str_starts_with($server, 'volucer')) {
                 stopVolucer($proc);
             }
         }
@@ -696,7 +668,7 @@ if ($bootOnly || $memOnly) {
 // run whose latency rows it sits beside.
 if ($floorsOnly) {
     echo "\n=== Floors only (webserver overhead) ===\n";
-    $results['floors'] = measureFloors($root, $deployDir, $useRr, $useFpm, $rrPort, $fpmPort, $itersPerRun, $runs, $rrBinary, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase, $phpCgiBin);
+    $results['floors'] = measureFloors($root, $deployDir, $useFpm, $fpmPort, $itersPerRun, $runs, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase);
 
     // A floor probed at a different budget than the dataset it will be grafted into
     // is the 2026-11-23 `/echo` bug, and this is the earliest place it is visible:
@@ -723,7 +695,7 @@ if ($floorsOnly) {
 }
 
 echo "\n=== Floors (webserver overhead, measured once per server) ===\n";
-$results['floors'] = measureFloors($root, $deployDir, $useRr, $useFpm, $rrPort, $fpmPort, $itersPerRun, $runs, $rrBinary, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase, $phpCgiBin);
+$results['floors'] = measureFloors($root, $deployDir, $useFpm, $fpmPort, $itersPerRun, $runs, $phpFpmBin, $benchUser, $phpCli, $volucerArms, $volucerBin, $volucerPortBase);
 
 // A full run produces both halves of the boot story in one pass, so they must agree
 // before anything is written. See bench-lib.php::assertRowBootStampsMatchProbe().

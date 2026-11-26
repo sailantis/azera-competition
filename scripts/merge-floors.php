@@ -6,14 +6,14 @@ declare(strict_types=1);
  * Graft a floors-only probe into a dataset, leaving every measured row untouched.
  *
  * WHY THIS EXISTS. `floors` is the one block of a real-deployment dataset that is
- * independent of the apps: each floor is a single `GET /` to a server with no
+ * independent of the apps: each floor is a single `GET /echo` to a server with no
  * framework in it, so it describes the SERVER, not any row measured on it. That
  * makes it the only block that can be added to an existing dataset without
  * re-timing anything — unlike boot or memory probes, which are per (server, app)
  * and belong to the run whose latency rows they sit beside.
  *
  * The case this was written for: the 2026-11-23 dataset carried floors for nginx,
- * PHP-FPM and RoadRunner but NONE for the two Volucer arms, so those rows had no
+ * PHP-FPM but NONE for the Volucer arm, so those rows had no
  * reference point for server overhead. Re-running 26 endpoints x 7 apps x 2 arms
  * to obtain four probe numbers would have re-rolled every published figure.
  *

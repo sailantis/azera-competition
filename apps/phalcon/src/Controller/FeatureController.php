@@ -28,7 +28,7 @@ use Phalcon\Mvc\View\Simple as SimpleView;
  * 11 of them are the feature demos. This app shipped with 14, so every real run
  * died at the first missing one:
  *
- *   [ABORT] fpm/phalcon GET /features/aop: HTTP status 404
+ *   [ABORT] fpm/phalcon GET /features/aop-tx: HTTP status 404
  *
  * Worse, the volucer arm "passed" the same block, because a 404 body went out as
  * 200 OK and the client guard only recognised `Not Found`. Eleven endpoints were
@@ -38,22 +38,23 @@ use Phalcon\Mvc\View\Simple as SimpleView;
  *
  * WHAT PHALCON ACTUALLY HAS. Following the CI4 and CakePHP entrants — which also
  * lack an interceptor pipeline — the endpoints are built on the primitives the
- * framework does ship. `GET /features/aop` is the one endpoint this app does NOT
+ * framework does ship. `GET /features/aop-tx` is the one endpoint this app does NOT
  * serve, and that is deliberate: see aopDirectAction() and
  * BenchmarkConfig::excludedRequests(). Everything else is native:
  *
- *   aop-direct     → an upsert inside an explicit begin/commit, the hand-written
+ *   aop-tx-direct  → an upsert inside an explicit begin/commit, the hand-written
  *                    control every entrant serves (2026-11-25: the placeholder
- *                    `/features/aop` action was deleted; it was not the feature)
- *   log, retry,    → demonstrated with plain code + Phalcon's Logger, which is
- *   pipeline          what CI4 and Cake do for the same rows
- *   db-events      → Phalcon's own db events manager (`db:beforeQuery`,
- *                    `db:afterQuery`, `db:beginTransaction`, `db:commitTransaction`)
+ *                    `/features/aop-tx` action was deleted; it was not the feature)
+ *   aop-cache-direct → the cached COUNT (Phalcon\Cache, 10s TTL) with the cache
+ *                    lookup written by hand — Phalcon has no attribute-to-advice
+ *                    layer, so the AOP form of this row is not Phalcon's to serve
+ *   log            → demonstrated with plain code + Phalcon's Logger, which is
+ *                    what CI4 and Cake do for the same row
+ *   db-events      → Phalcon's own db events manager (`db:afterQuery`,
+ *                    `db:beginTransaction`, `db:commitTransaction`)
  *   events         → Phalcon\Events\Manager
  *   validation     → Phalcon\Filter\Validation
  *   config         → Phalcon\Config (path() gives the dot-notation access)
- *   request-scoped → an explicit reset, the resident-worker contract the
- *                    bootstrap's cleanup() implements for the DI container
  *   rate-limiter   → fixed-window facade over Phalcon's cache, same contract
  *                    as the CI4 and Cake limiter
  *
@@ -83,24 +84,22 @@ final class FeatureController extends Controller
         $this->view->setVars([
             'title'    => 'Features',
             'features' => [
-                ['url' => '/features/cache', 'title' => 'Cache', 'desc' => 'Cache a COUNT(*) via Phalcon\'s cache adapter (10s TTL)'],
-                ['url' => '/features/log', 'title' => 'Logging', 'desc' => 'Log method entry/exit via a Phalcon Logger adapter'],
-                ['url' => '/features/retry', 'title' => 'Retry', 'desc' => 'Retry a failing operation up to N times'],
-                ['url' => '/features/pipeline', 'title' => 'Pipeline (direct)', 'desc' => 'Explicit handler composition — closure pipeline'],
+                ['url' => '/features/aop-cache-direct', 'title' => 'Cache (hand-written control)', 'desc' => 'A COUNT(*) cached 10s via Phalcon\'s cache adapter, lookup written by hand'],
+                ['url' => '/features/log', 'title' => 'Logging', 'desc' => 'Entry/exit records written by Phalcon\'s own Logger (not PSR-3) into an in-memory adapter, read back from it'],
                 ['url' => '/features/db-events', 'title' => 'Db Events', 'desc' => 'Observe queries and transactions via the db adapter\'s events manager'],
                 ['url' => '/features/events', 'title' => 'Phalcon Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate input via Phalcon\\Filter\\Validation'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Dot-notation access via Phalcon\\Config path()'],
-                ['url' => '/features/request-scoped', 'title' => 'RequestScoped', 'desc' => 'Per-request state with an explicit worker-style reset'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'Cache-backed fixed-window rate limiter (max 5 per 60s)'],
+                ['url' => '/features/lifecycle-hooks', 'title' => 'Request Lifecycle Hooks', 'desc' => 'An events-manager listener wraps the handler: it stamps a header and sets 203'],
             ],
         ]);
     }
 
     /**
-     * GET /features/aop-direct — an insert inside an explicit begin/commit.
+     * GET /features/aop-tx-direct — an insert inside an explicit begin/commit.
      *
-     * There is no `/features/aop` here, by design. That endpoint measures the cost of
+     * There is no `/features/aop-tx` here, by design. That endpoint measures the cost of
      * AOP MACHINERY — Azera's generated `#[Transactional]` proxy, Laravel's and
      * Symfony's interceptor pipelines, Spiral's `PipelineBuilder` — and Phalcon 6 has
      * no advice layer at all. The only row it could produce would be this same
@@ -141,13 +140,18 @@ final class FeatureController extends Controller
     }
 
     /**
-     * GET /features/cache — a COUNT(*) cached for 10s.
+     * GET /features/aop-cache-direct — a COUNT(*) cached for 10s.
+     *
+     * The hand-written CONTROL for the `aop-cache` feature: Phalcon ships no
+     * attribute-to-advice layer, so the cache read, the miss decision and the
+     * store are written out here while Azera serves the same work through a
+     * generated `#[Cache]` proxy on `/features/aop-cache`.
      *
      * The COUNT is the whole body and nothing else: a fixed delay here would be
      * a constant on the miss path and would measure the harness, not the
      * framework (see tests/WorkloadIntegrityTest.php).
      */
-    public function cacheAction(): string
+    public function aopCacheDirectAction(): string
     {
         $cache = $this->cacheStore();
         $key   = 'items-count';
@@ -167,8 +171,10 @@ final class FeatureController extends Controller
         $elapsedMs2 = round((microtime(true) - $start2) * 1000, 4);
 
         return $this->json([
-            'feature'        => 'Cache (Phalcon cache adapter)',
-            'description'    => 'First call runs the COUNT query (miss); the second hits the cache.',
+            'feature'        => 'Cache control (hand-written)',
+            // Not "first call is a miss": in a resident worker both calls hit,
+            // and `first_hit` reports which of the two this request saw.
+            'description'    => 'The same COUNT and 10-second TTL with the cache lookup written in application code — no interceptor, no generated proxy.',
             'item_count'     => $count,
             'first_hit'      => $firstHit,
             'first_call_ms'  => $elapsedMs,
@@ -200,99 +206,8 @@ final class FeatureController extends Controller
 
         return $this->json([
             'feature'     => 'Logging (Phalcon Logger)',
-            'description' => 'A Phalcon Logger records method entry and exit; the entries are shown as they were written.',
+            'description' => 'Two Phalcon\\Logger\\Logger records for entry and exit, read back from the in-memory adapter. Phalcon\'s logger is its own API, not a Psr\\Log implementation.',
             'result'      => $result,
-            'log_entries' => $adapter->entries(),
-        ]);
-    }
-
-    /**
-     * GET /features/retry — retry a failing operation up to N times.
-     *
-     * Phalcon has no #[Retry] advice, so this is the manual loop the CI4 and
-     * CakePHP entrants use for the same row.
-     */
-    public function retryAction(): string
-    {
-        $attempts = 0;
-        $maxTries = 3;
-        $result   = null;
-
-        while ($attempts < $maxTries) {
-            $attempts++;
-            try {
-                // Fail the first two attempts so the retry path is real work,
-                // not a loop that always succeeds on the first pass.
-                if ($attempts < 3) {
-                    throw new \RuntimeException('transient failure');
-                }
-                $result = "succeeded after {$attempts} attempts";
-            } catch (\RuntimeException) {
-                continue;
-            }
-        }
-
-        return $this->json([
-            'feature'     => 'Retry (manual loop)',
-            'description' => 'Retries a failing operation up to 3 attempts — Phalcon has no retry advice.',
-            'attempts'    => $attempts,
-            'result'      => $result,
-        ]);
-    }
-
-    /**
-     * GET /features/pipeline — explicit handler composition, no proxy generation.
-     *
-     * The same technique the Spiral entrant uses for its "direct pipeline" arm:
-     * nested closures around a plain callable, which is the fair comparison for
-     * a framework with no AOP container.
-     */
-    public function pipelineAction(): string
-    {
-        $adapter = $this->loggerAdapter();
-        $adapter->clear();
-
-        $logger = $this->logger();
-        $entries = [];
-
-        // The innermost handler: what the pipeline ultimately runs.
-        $handler = static fn(): string => 'direct pipeline result';
-
-        // One interceptor around it, timed and logged the way the AOP entrants'
-        // LogInterceptor reports its work.
-        $logged = function () use ($handler, $logger, &$entries): string {
-            $t0     = microtime(true);
-            $logger->info('pipeline: before handler');
-            $entries[] = 'log: entering handler';
-
-            $result = $handler();
-
-            $elapsed = round((microtime(true) - $t0) * 1000, 4);
-            $logger->info('pipeline: after handler', ['elapsed_ms' => $elapsed]);
-            $entries[] = 'log: leaving handler in ' . $elapsed . 'ms';
-
-            return $result;
-        };
-
-        // A retry interceptor wrapping that one: it runs the inner pipeline and,
-        // being a healthy request, succeeds on the first pass.
-        $attempts = 0;
-        $result   = null;
-        while ($attempts < 3) {
-            $attempts++;
-            try {
-                $result = $logged();
-                break;
-            } catch (\Throwable) {
-                continue;
-            }
-        }
-
-        return $this->json([
-            'feature'     => 'Pipeline (closure composition)',
-            'description' => 'Explicit interceptor pipeline around a plain callable — no proxy generation.',
-            'result'      => $result,
-            'attempts'    => $attempts,
             'log_entries' => $adapter->entries(),
         ]);
     }
@@ -303,6 +218,16 @@ final class FeatureController extends Controller
      * The adapter's events manager is attached once in Bootstrap (the same
      * place the CI4 and Cake entrants register their query taps), so this
      * endpoint only has to collect what fires during its own queries.
+     *
+     * The write runs on an AUTOCOMMIT connection, like every other entrant's.
+     * It used to be wrapped in `$db->begin()`/`commit()` — copied from this
+     * class's own `aopAction()`, which hand-writes a transaction because Phalcon
+     * has no advice layer. That belongs to the `aop-*` rows. Here it charged this
+     * row for a transaction the feature is not about, and reported two extra
+     * events no other entrant produces. Phalcon's `db:beginTransaction` /
+     * `db:commitTransaction` capability is still exercised by
+     * `/features/aop-tx-direct`, the control row that genuinely hand-writes a
+     * transaction.
      */
     public function dbEventsAction(): string
     {
@@ -312,24 +237,15 @@ final class FeatureController extends Controller
         $db  = $this->db();
         $now = date('Y-m-d H:i:s');
 
-        // A transaction plus a query, so the demo shows the transaction events
-        // as well as the two per-statement ones. The count deliberately uses the
-        // plain query path: a cache hit fires no DB event at all.
-        $db->begin();
-        try {
-            $this->upsertSentinel($db, self::FEATURE_SENTINEL_ID, $this->writeTitle('DbEvent Item', $now), $now);
-            $db->commit();
-        } catch (\Throwable $e) {
-            $db->rollback();
-
-            throw $e;
-        }
+        // The count deliberately uses the plain query path: a cache hit fires no
+        // DB event at all.
+        $this->upsertSentinel($db, self::FEATURE_SENTINEL_ID, $this->writeTitle('DbEvent Item', $now), $now);
 
         $count = $this->itemCount();
 
         return $this->json([
             'feature'     => 'Db Events (db adapter events manager)',
-            'description' => 'The db adapter fires beforeQuery/afterQuery per statement and beginTransaction/commitTransaction per transaction.',
+            'description' => 'The db adapter fires afterQuery per executed statement; the listener records the SQL. This write runs on an autocommit connection, so the log holds queries only.',
             'item_count'  => $count,
             'events'      => $log->all(),
         ]);
@@ -409,27 +325,24 @@ final class FeatureController extends Controller
     }
 
     /**
-     * GET /features/request-scoped — per-request state with an explicit reset.
+     * GET /features/lifecycle-hooks — an events-manager listener rewrites the response.
      *
-     * In a resident worker the container survives between requests, so state a
-     * request leaves behind must be cleared. The counter is read, incremented
-     * and then cleared, showing the reset the worker loop performs.
+     * The work is on the LISTENER, not here:
+     * App\Phalcon\Listener\LifecycleHookListener runs on `dispatch:afterExecuteRoute`
+     * (attached in Bootstrap::boot()) and sets the marker header plus status 203 for this
+     * controller/action only. The handler is constant, so the row measures the
+     * interception and not the handler.
+     *
+     * Phalcon's full-MVC `Application` has no middleware pipeline — `Mvc\Micro` does, but
+     * the benchmark runs the full application — so the events manager is the framework's
+     * own mechanism here. See BenchmarkConfig::featureMap().
      */
-    public function requestScopedAction(): string
+    public function lifecycleHooksAction(): string
     {
-        $counter = $this->getDI()->getShared('requestCounter');
-
-        $before = $counter->count();
-        $after  = $counter->increment();
-        $counter->reset();
-        $afterReset = $counter->count();
-
         return $this->json([
-            'feature'           => 'RequestScoped',
-            'description'       => 'Request-scoped state is reset between requests by the worker loop.',
-            'count_before'      => $before,
-            'count_after'       => $after,
-            'count_after_reset' => $afterReset,
+            'feature'     => 'Request Lifecycle Hooks',
+            'description' => 'An events-manager listener wraps the handler, stamps a header and sets 203. Phalcon uses dispatch events.',
+            'lifecycle'   => ['handler' => 'ran'],
         ]);
     }
 

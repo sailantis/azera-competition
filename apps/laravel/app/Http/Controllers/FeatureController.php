@@ -17,10 +17,7 @@ use App\Laravel\Models\Item;
 use App\Laravel\Service\AopService;
 use App\Laravel\Service\DbEventLog;
 use App\Laravel\Service\RateLimiter;
-use App\Laravel\Service\RequestCounter;
-use App\Laravel\Service\ScopeState;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Pipeline\Pipeline;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -41,56 +38,53 @@ class FeatureController
     public function __construct(
         private readonly AopService $aopService,
         private readonly DbEventLog $dbLog,
-        private readonly RequestCounter $counter,
-        private readonly ScopeState $state,
     ) {}
 
     /**
      * GET /features — overview page listing all feature demos.
      */
-    public function index(): \Illuminate\View\View
+    public function index(): \Illuminate\View\View|string
     {
         return view('features', \array_merge(self::viewGlobals(), [
             'features' => [
-                ['url' => '/features/aop', 'title' => 'AOP Interceptors', 'desc' => 'Insert a row inside an interceptor-managed DB transaction'],
-                ['url' => '/features/cache', 'title' => 'Cache', 'desc' => 'Cache a method result via Laravel\'s Cache repository'],
-                ['url' => '/features/log', 'title' => 'Pipeline Logging', 'desc' => 'Log method entry/exit via the LogInterceptor'],
-                ['url' => '/features/retry', 'title' => 'Pipeline Retry', 'desc' => 'Retry a failing method up to N times via the RetryInterceptor'],
-                ['url' => '/features/pipeline', 'title' => 'Pipeline (direct)', 'desc' => 'Explicit interceptor pipeline — no proxy generation'],
+                ['url' => '/features/aop-cache-direct', 'title' => 'Cache (hand-written control)', 'desc' => 'The same cached COUNT with the cache lookup written in application code'],
+                ['url' => '/features/log', 'title' => 'Pipeline Logging', 'desc' => 'Entry/exit records written by Laravel\'s PSR-3 logger (LogManager → Monolog)'],
                 ['url' => '/features/db-events', 'title' => 'Db Events (query log)', 'desc' => 'Observe queries + transactions via Laravel\'s DB query events'],
                 ['url' => '/features/events', 'title' => 'Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate input via Laravel\'s Validator'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Configuration access through Laravel\'s Config repository'],
-                ['url' => '/features/request-scoped', 'title' => 'RequestScoped (container)', 'desc' => 'Per-request state via Laravel\'s scoped container bindings'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'Cache-backed fixed-window rate limiter'],
+                ['url' => '/features/lifecycle-hooks', 'title' => 'Request Lifecycle Hooks', 'desc' => 'A middleware wraps the handler via LifecycleHookMiddleware: it stamps a header and sets 203'],
             ],
         ]));
     }
 
     /**
-     * GET /features/aop — create an item through an interceptor pipeline.
+     * GET /features/lifecycle-hooks — a middleware wraps this handler.
      *
-     * Laravel's real interception technique: Illuminate\Pipeline composing
-     * invokable interceptors around a handler.
+     * The work is on the ROUTE, not here: `LifecycleHookMiddleware` runs around this
+     * method and sets the marker header plus status 203. The handler is constant, so
+     * the row measures the interception and not the handler.
+     *
+     * Kept in this controller rather than a dedicated one because the route is a
+     * feature demo, exactly like its neighbours; the comparison is of the request
+     * lifecycle, and the body only has to prove the handler ran.
      */
-    public function aop(): JsonResponse
+    public function lifecycleHooks(): JsonResponse
     {
-        $title = 'AOP Item ' . \date('Y-m-d H:i:s') . ' #' . \random_int(1000, 9999);
-        [$id, $log] = $this->aopService->createItem($title);
-
         return response()->json([
-            'feature'     => 'AOP interceptors',
-            'description' => 'Inserted a row inside a transaction managed by Laravel\'s interceptor pipeline — no manual begin/commit/rollback.',
-            'new_id'      => $id,
-            'title'       => $title,
-            'log_entries' => $log,
+            'feature'     => 'Request Lifecycle Hooks',
+            'description' => 'A middleware wraps the handler, stamps a header and sets 203. Laravel uses its middleware pipeline.',
+            'lifecycle'   => ['handler' => 'ran'],
         ]);
     }
 
     /**
-     * GET /features/aop-direct — the same upsert with no interceptor pipeline.
+     * GET /features/aop-tx-direct — the same upsert with no interceptor pipeline.
      *
-     * Control for `/features/aop`: identical work, one variable (the pipeline).
+     * Control for the `aop-tx` row, which Laravel does not serve: it has no
+     * attribute-to-advice layer. `aop-tx-direct` is a feature of its own, raced by
+     * all seven (see BenchmarkConfig::adapterFeatures()).
      */
     public function aopDirect(): JsonResponse
     {
@@ -99,7 +93,7 @@ class FeatureController
 
         return response()->json([
             'feature'     => 'Direct transaction (no pipeline)',
-            'description' => 'Identical upsert to /features/aop with no interceptor pipeline around it.',
+            'description' => 'An upsert on an autocommit connection with no interceptor around it — the hand-written control. Laravel has no attribute-to-advice layer, so it does not serve `/features/aop-tx` at all.',
             'new_id'      => $id,
             'title'       => $title,
             'log_entries' => [],
@@ -107,9 +101,14 @@ class FeatureController
     }
 
     /**
-     * GET /features/cache — demonstrate Laravel's Cache repository.
+     * GET /features/aop-cache-direct — demonstrate Laravel's Cache repository.
+     *
+     * The hand-written CONTROL for the `aop-cache` feature: Laravel has no
+     * attribute-to-advice layer that applies caching to a service method, so the
+     * cache read, the miss decision and the store are written out here; Azera
+     * serves the same work through a generated `#[Cache]` proxy.
      */
-    public function cache(): JsonResponse
+    public function aopCacheDirect(): JsonResponse
     {
         $key = 'items:count';
 
@@ -128,9 +127,12 @@ class FeatureController
         $elapsedMs2 = \round((\microtime(true) - $start2) * 1000, 2);
 
         return response()->json([
-            'feature'        => 'Cache',
-            'description'    => 'First call runs the COUNT query (cache miss); second call hits the cache.',
+            'feature'        => 'Cache control (hand-written)',
+            // Not "first call is a miss": in a resident worker both calls hit,
+            // and `first_hit` reports which of the two this request saw.
+            'description'    => 'The same COUNT and 10-second TTL with the cache lookup written in application code — no interceptor, no generated proxy.',
             'item_count'     => $count,
+            'first_hit'      => $firstHit,
             'first_call_ms'  => $elapsedMs,
             'second_call_ms' => $elapsedMs2,
             'same_result'    => $count === $count2,
@@ -138,7 +140,16 @@ class FeatureController
     }
 
     /**
-     * GET /features/log — pipeline logging interceptor demo.
+     * GET /features/log — Laravel's logging stack behind a pipeline interceptor.
+     *
+     * `LogInterceptor` writes through `LoggerInterface`, which Laravel resolves to
+     * `LogManager` → Monolog. The records come back from Monolog's in-memory
+     * handler, so this reports what the logger wrote rather than rebuilding it in
+     * the controller.
+     *
+     * This used to be an interceptor appending strings to an array the
+     * application owned: no logger was involved at all, and the report's
+     * "PSR-3 everywhere" sentence was false for this entrant.
      */
     public function log(): JsonResponse
     {
@@ -148,60 +159,9 @@ class FeatureController
 
         return response()->json([
             'feature'     => 'Pipeline Logging',
-            'description' => 'LogInterceptor wrapped a plain callable via Laravel\'s Illuminate Pipeline.',
+            'description' => 'LogInterceptor wrote entry and exit records through Laravel\'s PSR-3 logger (LogManager → Monolog), read back from the channel.',
             'result'      => $result,
-            'log_entries' => $this->aopService->logEntries(),
-        ]);
-    }
-
-    /**
-     * GET /features/retry — pipeline retry interceptor demo.
-     */
-    public function retry(): JsonResponse
-    {
-        $attempts = 0;
-        $result   = $this->aopService->retryCall(
-            function () use (&$attempts): string {
-                $attempts++;
-                if ($attempts < 3) {
-                    throw new \RuntimeException('transient failure');
-                }
-                return "succeeded after {$attempts} attempts";
-            },
-        );
-
-        return response()->json([
-            'feature'     => 'Pipeline Retry',
-            'description' => 'RetryInterceptor retried a failing callable until it succeeded.',
-            'result'      => $result,
-            'attempts'    => $attempts,
-            'log_entries' => $this->aopService->logEntries(),
-        ]);
-    }
-
-    /**
-     * GET /features/pipeline — direct interceptor pipeline (no proxy).
-     *
-     * This is the apples-to-apples comparison against azera's Pipeline:
-     * explicit interceptors around a plain callable.
-     */
-    public function pipeline(): JsonResponse
-    {
-        $entries = [];
-
-        $result = (new Pipeline(app()))
-            ->send(null)
-            ->through([
-                new \App\Laravel\Http\Middleware\Interceptors\RetryInterceptor($entries, 3, 0),
-                new \App\Laravel\Http\Middleware\Interceptors\LogInterceptor($entries),
-            ])
-            ->then(static fn(): string => 'direct pipeline result');
-
-        return response()->json([
-            'feature'     => 'Pipeline (direct)',
-            'description' => 'Explicit interceptor pipeline around a plain callable — no proxy generation. The technique Laravel uses.',
-            'result'      => $result,
-            'log_entries' => $entries,
+            'log_entries' => $this->aopService->logRecords(),
         ]);
     }
 
@@ -307,7 +267,7 @@ class FeatureController
 
         return response()->json([
             'feature'     => 'Db Events (query log)',
-            'description' => 'Laravel fires a QueryExecuted event per query ({elapsed, sql}) and exposes transaction lifecycle; the DbEventLog service records them.',
+            'description' => 'Laravel fires a QueryExecuted event per executed query ({elapsed, sql}). This write runs on an autocommit connection, so no transaction events fire here.',
             'new_id'      => $id,
             'item_count'  => $count,
             'events'      => $this->dbLog->all(),
@@ -315,35 +275,10 @@ class FeatureController
     }
 
     /**
-     * GET /features/request-scoped — container scope lifecycle demo.
-     *
-     * Laravel's equivalent of azera's RequestScoped reset is
-     * `$app->scoped()`: RequestCounter is a scoped singleton — a fresh
-     * instance per request, single instance within the request, and
-     * `forgetScopedInstances()` runs after every RequestHandled event.
-     */
-    public function requestScoped(): JsonResponse
-    {
-        $this->state->touch('request-scoped endpoint hit');
-
-        $before = $this->counter->count();
-        $after  = $this->counter->increment();
-
-        return response()->json([
-            'feature'           => 'RequestScoped (container scopes)',
-            'description'       => 'RequestCounter is a scoped singleton resolved per request via $app->scoped(); forgetScopedInstances() after RequestHandled guarantees state cannot leak between requests.',
-            'count_before'      => $before,
-            'count_after'       => $after,
-            'count_after_reset' => 0,
-            'scope_trace'       => $this->state->trace(),
-        ]);
-    }
-
-    /**
      * GET /features/rate-limit — cache-backed rate limiter demo
      * (5 requests per 60 seconds), mirroring azera's RateLimiter.
      */
-    public function rateLimit(RequestCounter $counter): JsonResponse
+    public function rateLimit(): JsonResponse
     {
         $ip  = request()->ip() ?? '127.0.0.1';
         $key = 'demo:' . $ip;

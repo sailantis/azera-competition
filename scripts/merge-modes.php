@@ -24,7 +24,7 @@ declare(strict_types=1);
  *     change cannot move it beyond a one-time first-request bucket sort.
  *     Re-measuring it would only re-roll good numbers, so it is preserved.
  *     That reasoning is per MODE, not per server: it is why the 2026-11-10
- *     volucer-attach blocks were kept while the volucer-cgi blocks were
+ *     volucer-attach blocks were kept while the other arm's blocks were
  *     re-measured after the spawn_cgi arm's php arguments were equalised with
  *     the FPM pool's.
  *
@@ -38,7 +38,7 @@ declare(strict_types=1);
  *   e.g. php scripts/merge-modes.php results/real-deployments.json \
  *            results/fpm-refresh.json php-fpm
  *        php scripts/merge-modes.php results/real-deployments.json \
- *            results/cold-refresh.json php-fpm volucer-cgi
+ *            results/cold-refresh.json php-fpm
  *
  * Guards (a partially-spliced dataset must never reach the report tooling):
  *   - both files must carry an `apps` list, and every target app must exist
@@ -247,7 +247,7 @@ foreach ($modes as $mode) {
 }
 // The dataset timestamp describes when its measurement was taken. A partial
 // re-measure leaves the whole-dataset stamp alone (provenance for the spliced
-// half is in env.mode_refresh) rather than claiming the RoadRunner half was
+// half is in env.mode_refresh) rather than claiming the resident half was
 // measured today.
 if (!isset($target['env']['timestamp'])) {
     $target['env']['timestamp'] = $fresh['env']['timestamp'] ?? date('c');

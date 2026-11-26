@@ -61,7 +61,7 @@ final class AopService
      * Create the same item with the transaction written by hand — the direct
      * twin of {@see createItem()}.
      *
-     * `/features/aop` wraps this write in a retry pipeline; this runs the
+     * `/features/aop-tx` wraps this write in a retry pipeline; this runs the
      * identical upsert with no interceptor at all. The two together are a
      * same-work pair, so the difference is the pipeline's cost rather than the
      * cost of two different demonstrations.
@@ -82,12 +82,74 @@ final class AopService
     }
 
     /**
-     * Wrap a plain callable with LogInterceptor via the pipeline.
+     * Wire a plain callable through LogInterceptor on the `bench` channel.
+     *
+     * The channel is where Laravel's own logging stack decides the sink: this app
+     * names an in-memory Monolog channel in `config/logging.php`, so the records
+     * are Monolog's, not an array the app appends to. The buffer is read back with
+     * `logRecords()`.
      */
     public function loggedCall(callable $fn): mixed
     {
         $this->entries = [];
-        return $this->pipeline(new LogInterceptor($this->entries))->then($fn);
+
+        $channel = \Illuminate\Support\Facades\Log::channel('bench');
+
+        // Clear the channel's in-memory handler before the demo writes, so a
+        // resident worker's previous request cannot leak into this response.
+        $this->logHandler()?->clear();
+
+        return $this->pipeline(new LogInterceptor($channel))->then($fn);
+    }
+
+    /**
+     * Records the `bench` channel's Monolog handler captured.
+     *
+     * Laravel's own stack does the capture (Monolog's in-memory `TestHandler`), so
+     * this is a readback of what the logger wrote rather than a re-description of
+     * the call.
+     *
+     * @return list<array{level: string, message: string, context: array<string, mixed>}>
+     */
+    public function logRecords(): array
+    {
+        $handler = $this->logHandler();
+
+        if ($handler === null) {
+            return [];
+        }
+
+        $records = [];
+        foreach ($handler->getRecords() as $record) {
+            $records[] = [
+                'level'   => strtolower($record->level->getName()),
+                'message' => $record->message,
+                'context' => $record->context,
+            ];
+        }
+
+        return $records;
+    }
+
+    /**
+     * The in-memory handler behind the `bench` channel.
+     *
+     * Null when the channel is not configured with one — the honest answer rather
+     * than reporting entries nothing captured.
+     */
+    private function logHandler(): ?\Monolog\Handler\TestHandler
+    {
+        $channel = \Illuminate\Support\Facades\Log::channel('bench');
+
+        $monolog = (new \ReflectionClass($channel))->getProperty('logger')->getValue($channel);
+
+        foreach ($monolog->getHandlers() as $handler) {
+            if ($handler instanceof \Monolog\Handler\TestHandler) {
+                return $handler;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -106,41 +106,6 @@ final class PhpPairingTest extends TestCase
     }
 
     /**
-     * The RoadRunner template must not hardcode `php`.
-     *
-     * RoadRunner spawns `server.command` itself, so a bare `php` there becomes the
-     * runtime of every RoadRunner number in the dataset while FPM keeps using its
-     * packaged binary. The template therefore takes a placeholder, and the
-     * orchestrator stamps the resolved path in.
-     *
-     * Asserted as "the command STARTS with the placeholder" rather than requiring
-     * the placeholder to sit directly against `{{ROOT}}/deploy/rr/worker.php`.
-     * The command carries `-d opcache.*`/`-d opcache.jit=*` flags between the two
-     * (CLI is the SAPI where `opcache.enable_cli` is the switch that matters, and
-     * the JIT needs an explicit mode here), so an adjacency assertion would fail
-     * on a correct template and pressure a future edit into dropping the flags to
-     * keep the test green — putting the worker back on the host's
-     * `opcache.jit=disable` default.
-     */
-    public function testTheRoadRunnerTemplateTakesTheResolvedInterpreter(): void
-    {
-        $tpl = self::stripComments(
-            (string) file_get_contents(dirname(__DIR__) . '/deploy/rr/config-template.php')
-        );
-
-        self::assertMatchesRegularExpression(
-            '~command:\s*"?\{\{PHP_CLI\}\}[^"]*\{\{ROOT\}\}/deploy/rr/worker\.php~',
-            $tpl,
-            'the RR worker command must be stamped with the resolved CLI, not a bare `php`'
-        );
-        self::assertStringNotContainsString(
-            '"php ',
-            $tpl,
-            'a bare `php` here lets PATH decide which PHP RoadRunner measures'
-        );
-    }
-
-    /**
      * JIT is configured on EVERY path that launches PHP, not just the convenient one.
      *
      * A benchmark that turns the JIT on for one arm and leaves another on the host's
@@ -198,19 +163,11 @@ final class PhpPairingTest extends TestCase
             );
         }
 
-        // --- The spawned interpreters must carry the flags too --------------
+        // --- The spawned interpreter must carry the flags too ---------------
         self::assertGreaterThanOrEqual(
-            2,
+            1,
             substr_count($lib, '-d opcache.jit=tracing'),
-            'the php-cgi wrapper and the attach supervisor must pass -d opcache.jit'
-        );
-        $rr = self::stripComments(
-            (string) file_get_contents($root . '/deploy/rr/config-template.php')
-        );
-        self::assertStringContainsString(
-            'opcache.jit=tracing',
-            $rr,
-            'the RR worker command must enable the JIT'
+            'the attach supervisor must pass -d opcache.jit'
         );
 
         // --- Both provenance probes must describe what actually ran ---------

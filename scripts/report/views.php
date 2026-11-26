@@ -31,27 +31,27 @@ return [
         ],
 
         // The same run, relabelled by DEPLOYMENT MODEL instead of harness
-        // mode: warm -> roadrunner (resident worker), cold -> php-fpm (fresh
+        // mode: warm -> volucer-attach (resident worker), cold -> php-fpm (fresh
         // boot per request). Produced by scripts/derive-fpm.php from the
         // canonical file — regenerate it after every new run.
         'deployments' => [
-            'label' => 'Deployment models — the free-for-all run, warm/cold relabelled as roadrunner/php-fpm',
+            'label' => 'Deployment models — the free-for-all run, warm/cold relabelled as volucer-attach/php-fpm',
             'file'  => $root . '/results/free-for-all-opcache-iso-deployments.json',
         ],
 
         // REAL deployment measurements (scripts/run-http.php on the benchmark
-        // VM): RoadRunner resident worker (mode roadrunner) and nginx +
+        // VM): volucer attach resident worker (mode volucer-attach) and nginx +
         // php-fpm with pm.max_requests=0 (mode php-fpm) — the real servers,
         // not the harness simulation. End-to-end HTTP over loopback, so the
         // constant webserver overhead is INCLUDED in every number; the
         // floor-* pseudo-apps in the dataset expose that overhead explicitly.
         'real-deployments' => [
-            // All four servers as of the 2026-11-10 run, which measured
-            // RoadRunner, nginx/PHP-FPM and BOTH Volucer arms in one pass. The
-            // Volucer views read this same file rather than a separate partial
-            // run: a second dataset carrying the same apps invites two pages that
-            // silently render different numbers from each other.
-            'label' => 'Real deployments — RoadRunner + nginx/FPM + Volucer on the benchmark VM (HTTP over loopback)',
+            // Both servers as of the 2026-11-26 run, which measured nginx/PHP-FPM
+            // and volucer attach in one pass. The Volucer view reads this same
+            // file rather than a separate partial run: a second dataset carrying
+            // the same apps invites two pages that silently render different
+            // numbers from each other.
+            'label' => 'Real deployments — nginx/FPM + Volucer on the benchmark VM (HTTP over loopback)',
             'file'  => $root . '/results/real-deployments.json',
         ],
 
@@ -84,11 +84,11 @@ return [
     // the memory chart — see the note on that view for why, including the
     // stale "boot ratchet" rationale it used to carry.)
     'views' => [
-        // The headline comparison, ROADRUNNER story: resident worker, boot
+        // The headline comparison, RESIDENT story: worker boots once, boot
         // paid once. Published into the framework docs + README.
         'warm-start' => [
             'title'     => 'Framework Competition — Warm Start',
-            'subtitle'  => 'RoadRunner/Octane-style resident worker: the framework boots once, then serves every request. Each number charges that boot per request, so a cell is the whole time one request keeps a worker busy — what a recycled pool or a queue behind one worker actually experiences. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).',
+            'subtitle'  => 'Resident-worker style (Octane / Volucer attach): the framework boots once, then serves every request. Each number charges that boot per request, so a cell is the whole time one request keeps a worker busy — what a recycled pool or a queue behind one worker actually experiences. Full-stack request lifecycle benchmark (routing → controller → ORM query (SQLite) → template render → response).',
             'dataset'   => 'free-for-all',
             'baseline'  => 'azera',
             'mode'      => 'warm',
@@ -131,36 +131,11 @@ return [
             //     in-process cold mode forks a child per iteration, and real
             //     FPM (pm.max_requests=0) runs the entry script per request.
             //     Resident memory — the question a memory chart answers —
-            //     belongs to the roadrunner views.
+            //     belongs to the resident views.
             //
             // Timing is unaffected by any of this (residue is unreachable;
             // boot_ms and run means stay flat).
             'charts' => ['hero', 'speedup', 'features'],
-        ],
-
-        // REAL RoadRunner: actual RoadRunner server + resident worker over
-        // HTTP (loopback). End-to-end numbers include the constant
-        // webserver/IPC overhead — sub-0.1 ms framework features are expected
-        // to disappear into that floor; heavy features stay meaningful.
-        'real-roadrunner' => [
-            'title' => 'Framework Competition — Real RoadRunner',
-            // The boot a row carries depends on the pool's max_jobs, which is
-            // a DATASET fact — so this static subtitle states the rule only and
-            // leaves the measured model to the generated prose below the table
-            // (bootLegend/bootBasis read env.rr_max_jobs). Asserting a value
-            // here would be a claim the view cannot check.
-            'subtitle'  => 'Real RoadRunner server, resident PHP worker: the framework boots once, then serves every request. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-rr in the dataset); framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker\'s boot depends on the pool\'s max_jobs, which the dataset records: the boot is amortised across the jobs a worker serves between recycles, and a pool that never recycles puts no boot into a row at all. The deployment model actually measured is stated with the table.',
-            'dataset'   => 'real-deployments',
-            'baseline'  => 'azera',
-            'mode'      => 'roadrunner',
-            'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
-            // 'resident-memory' rather than 'memory': these rows DO carry the
-            // probe (mem_boot_heap/mem_heap), and a worker's retained heap is
-            // the memory question this deployment model actually raises.
-            // peak_mem is 0 here — run-http.php refuses to present the
-            // client's own footprint as the framework's.
-            'charts' => ['hero', 'speedup', 'features', 'resident-memory'],
         ],
 
         // REAL PHP-FPM + nginx: FPM runs the app's entry script for every
@@ -182,7 +157,7 @@ return [
             // This used to be FPM's distinguishing feature: the pool is
             // pm=static/max_children=1/max_requests=0, so its ONE worker is
             // resident for the whole block and does retain what it built. The
-            // probe only existed on the RoadRunner side until 2026-09-17, so
+            // probe only existed on the resident side until 2026-09-17, so
             // these rows carried zeros and the chart rendered nothing.
             'charts' => ['hero', 'speedup', 'features', 'resident-memory'],
         ],
@@ -190,10 +165,10 @@ return [
         // --- Volucer ------------------------------------------------------
         //
         // Two pages, one per deployment model, published the same way the
-        // RoadRunner and FPM pages are. They exist because the two models are the
+        // FPM page is. It exists because the resident model is one of the two
         // two answers a reader actually chooses between, and because Volucer is a
         // third server implementing them: a model that only ever showed up in
-        // RoadRunner and FPM is a claim about those two implementations.
+        // one server is a claim about that implementation.
         //
         // The app lists are deliberately ABSENT: render() intersects a view's
         // `apps` with what the dataset actually carries, so naming them here would
@@ -208,20 +183,6 @@ return [
             'mode'      => 'volucer-attach',
             'log_scale' => false,
             'charts'    => ['hero', 'speedup', 'features', 'resident-memory'],
-        ],
-
-        'real-volucer-cgi' => [
-            'title'     => 'Framework Competition — Volucer (spawn_cgi)',
-            'subtitle'  => 'Volucer\'s `spawn_cgi` backend: volucer runs the app\'s entry script through a fresh `php-cgi` for every request, so the framework\'s boot is inside the request clock — the same shape as nginx + PHP-FPM, in a different server. The php-cgi pool is reached over a unix socket, not loopback TCP, so this arm differs from the FPM arm by its SERVER and never by its transport. End-to-end HTTP over loopback — includes the constant webserver overhead. Single sequential client.',
-            'dataset'   => 'real-deployments',
-            'baseline'  => 'azera',
-            'mode'      => 'volucer-cgi',
-            'log_scale' => false,
-            // No 'resident-memory': this model has no resident state to report.
-            // Each request gets its own process, so a "retained heap" chart would
-            // describe something that does not exist (see the same reasoning on
-            // the cold-start view).
-            'charts'    => ['hero', 'speedup', 'features'],
         ],
 
         // --- Published summaries ------------------------------------------
@@ -247,7 +208,7 @@ return [
         // 59 SVGs into the framework repository. The framework docs want one page
         // per deployment model that carries the claim, not a second dashboard.
         //
-        // Why TWO pages and never one: RoadRunner and PHP-FPM are different
+        // Why TWO pages and never one: volucer and PHP-FPM are different
         // transports, and the memory chart measures a different THING in each (a
         // retained worker heap vs a per-request peak). One page would have to
         // caption both, which is the one thing the report never does — the models
@@ -257,45 +218,6 @@ return [
         // same .md is written to this repo's docs/benchmarks and to the framework
         // repo's docs/, so a relative path would resolve in one and dangle in the
         // other.
-        // NOT PUBLISHED, and that is a deliberate decision rather than an
-        // oversight (2026-11-10): the framework's docs carry the Volucer summary
-        // for the resident model and the FPM summary for the per-request one, and
-        // RoadRunner remains an ENTRANT in the full report. Publishing a
-        // RoadRunner summary beside Volucer's would put the framework's own
-        // server tool in the position of comparing itself to a rival in the
-        // framework's own docs, which is not a comparison a reader can be
-        // expected to read as neutral. The page still exists on the benchmark
-        // site, where all four servers are presented as measurements.
-        //
-        // What keeps this honest: the removal is a `publish` change ONLY. The
-        // data stays, so every RoadRunner row is still measured and still appears
-        // in the full report — and the Volucer summary's agreement with it stays
-        // checkable at https://sailantis.github.io/azera-competition/benchmarks/.
-        'summary-roadrunner' => [
-            'title'     => 'Framework Competition — RoadRunner Summary',
-            'subtitle'  => 'The headline numbers from the measured RoadRunner deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and the worker memory that survives a request. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-rr in the dataset). The deployment model actually measured is stated with the table.',
-            'dataset'   => 'real-deployments',
-            'baseline'  => 'azera',
-            'mode'      => 'roadrunner',
-            'log_scale' => false,
-            'apps'      => ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'],
-            // 'features' is the CHART (it draws the feature races); 'feature_keys'
-            // narrows which races it draws. Routing leads the list: it is the
-            // lightest workload in the suite and the one the dropped startup
-            // chart was measured on, so it is what keeps the boot question on
-            // the page — as a race to compare, not a chart to interpret. The
-            // two data-access races follow, since those are what a reader
-            // choosing a framework weighs.
-            'charts'       => ['speedup', 'features', 'resident-memory'],
-            'feature_keys' => ['routing', 'orm', 'rest-api'],
-            'links'        => [
-                'The complete report (all seven frameworks, every feature chart)' => 'https://sailantis.github.io/azera-competition/benchmarks/',
-                'This model, measured end to end'                               => 'https://sailantis.github.io/azera-competition/benchmarks/view-real-roadrunner.html',
-                'The same model in Volucer'                                     => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-volucer.html',
-                'The PHP-FPM summary'                                           => 'https://sailantis.github.io/azera-competition/benchmarks/view-summary-fpm.html',
-            ],
-        ],
-
         'summary-fpm' => [
             'title'     => 'Framework Competition — PHP-FPM Summary',
             'subtitle'  => 'The headline numbers from the measured nginx + PHP-FPM deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and what one request costs in memory. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-http/floor-php in the dataset). The worker-recycling setting of the pool is stated with the server floor below, because it changes what each row contains.',
@@ -321,11 +243,11 @@ return [
         //
         // This is the page the framework's docs publish for the resident model,
         // so it is also the page that has to stand alone: it no longer sits beside
-        // a RoadRunner summary (that page stopped publishing on 2026-11-10), and
+        // another resident server summary (removed entirely 2026-11-26), and
         // nothing here should imply a comparison the docs do not carry.
         //
         // The independent confirmation still exists and is still worth pointing at
-        // — RoadRunner remains a measured entrant, and its numbers land within
+        // — that confirmation is what makes the finding about the deployment
         // 1.8% on azera / 5.4% at worst across the six frameworks. That is what
         // makes the finding about the deployment MODEL rather than about one
         // server, and it is checkable in the full report, which is where a reader

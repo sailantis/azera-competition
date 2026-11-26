@@ -92,7 +92,7 @@ final class OpcacheProvenanceTest extends TestCase
         $manifest = self::manifest();
         $store    = self::realStore();
 
-        foreach (['real-fpm', 'real-roadrunner'] as $key) {
+        foreach (['real-fpm', 'real-volucer-attach'] as $key) {
             $md = (new MarkdownReport($store, $key, $manifest['views'][$key]))
                 ->render(sys_get_temp_dir() . "/tmp-opcache-{$key}", "svg/{$key}");
 
@@ -131,7 +131,7 @@ final class OpcacheProvenanceTest extends TestCase
         // A dataset where the servers DISAGREE: true for php-fpm, false for
         // RoadRunner. One boolean cannot describe both, so a page reading the
         // wrong side is observable.
-        $path  = self::syntheticReal(['php-fpm' => true, 'roadrunner' => false]);
+        $path  = self::syntheticReal(['php-fpm' => true, 'volucer-attach' => false]);
         $store = ResultStore::load($path);
 
         $fpm = (new MarkdownReport($store, 'real-fpm', $manifest['views']['real-fpm']))
@@ -142,17 +142,17 @@ final class OpcacheProvenanceTest extends TestCase
             'the php-fpm page records true and must say yes'
         );
 
-        $rr = (new MarkdownReport($store, 'real-roadrunner', $manifest['views']['real-roadrunner']))
-            ->render(sys_get_temp_dir() . '/tmp-opcache-own-rr', 'svg/real-roadrunner');
+        $rr = (new MarkdownReport($store, 'real-volucer-attach', $manifest['views']['real-volucer-attach']))
+            ->render(sys_get_temp_dir() . '/tmp-opcache-own-va', 'svg/real-volucer-attach');
         self::assertStringContainsString(
             'OPcache: no',
             $rr,
-            'the RoadRunner page records false and must say no \u2014 NOT the php-fpm answer'
+            'the resident page records false and must say no \u2014 NOT the php-fpm answer'
         );
         self::assertStringNotContainsString(
             'OPcache: yes',
             $rr,
-            'the RoadRunner page must not borrow the php-fpm answer'
+            'the resident page must not borrow the php-fpm answer'
         );
     }
 
@@ -180,19 +180,19 @@ final class OpcacheProvenanceTest extends TestCase
         //     soon as the RR setting was established). The RULE is what is
         //     pinned: no record, no clause.
         $path = self::syntheticReal(null);
-        $md   = (new MarkdownReport(ResultStore::load($path), 'real-roadrunner', $manifest['views']['real-roadrunner']))
-            ->render(sys_get_temp_dir() . '/tmp-opcache-rr', 'svg/real-roadrunner');
+        $md   = (new MarkdownReport(ResultStore::load($path), 'real-volucer-attach', $manifest['views']['real-volucer-attach']))
+            ->render(sys_get_temp_dir() . '/tmp-opcache-va', 'svg/real-volucer-attach');
         self::assertStringNotContainsString('OPcache', $md, 'an unrecorded setting must render no clause');
 
         // (b) a real dataset that records ONLY the other mode: the mode being
         //     drawn must not borrow its neighbour's answer.
         $path = self::syntheticReal(['php-fpm' => true]);
-        $md   = (new MarkdownReport(ResultStore::load($path), 'real-roadrunner', $manifest['views']['real-roadrunner']))
-            ->render(sys_get_temp_dir() . '/tmp-opcache-rr2', 'svg/real-roadrunner');
+        $md   = (new MarkdownReport(ResultStore::load($path), 'real-volucer-attach', $manifest['views']['real-volucer-attach']))
+            ->render(sys_get_temp_dir() . '/tmp-opcache-va2', 'svg/real-volucer-attach');
         self::assertStringNotContainsString(
             'OPcache',
             $md,
-            'the RoadRunner page must not borrow the php-fpm answer'
+            'the resident page must not borrow the php-fpm answer'
         );
 
         // (c) a CLI dataset with the key stripped: the same rule.
@@ -233,16 +233,21 @@ final class OpcacheProvenanceTest extends TestCase
     public function testNoPageNamesTheDirectiveInTheEnvironmentLine(): void
     {
         $manifest = self::manifest();
-        $store    = self::realStore();
+        // BOTH modes recorded, because the property under test is "no page names the
+        // directive", not "every page has a clause": the committed dataset predates
+        // the volucer-attach opcache stamp, so a bare realStore() would render that
+        // page with no environment clause at all and the regex below would fail for a
+        // reason unrelated to the assertion.
+        $store    = ResultStore::load(self::syntheticReal(['php-fpm' => true, 'volucer-attach' => true]));
 
         $markdown = [];
-        foreach (['real-fpm', 'real-roadrunner'] as $key) {
+        foreach (['real-fpm', 'real-volucer-attach'] as $key) {
             $markdown[$key] = (new MarkdownReport($store, $key, $manifest['views'][$key]))
                 ->render(sys_get_temp_dir() . "/tmp-opcache-plain-{$key}", "svg/{$key}");
         }
         $dashboard = (new HtmlReport($store, $manifest))->index([], sys_get_temp_dir());
 
-        foreach (['real-fpm' => $markdown['real-fpm'], 'real-roadrunner' => $markdown['real-roadrunner']] as $key => $md) {
+        foreach (['real-fpm' => $markdown['real-fpm'], 'real-volucer-attach' => $markdown['real-volucer-attach']] as $key => $md) {
             self::assertMatchesRegularExpression(
                 '/OPcache: (yes|no)/',
                 $md,
@@ -279,7 +284,7 @@ final class OpcacheProvenanceTest extends TestCase
         self::assertStringContainsString('OPcache: yes', $html, 'agreeing servers are summarised');
 
         // Servers that disagree: no single value is a summary, so none is printed.
-        $path = self::syntheticReal(['php-fpm' => true, 'roadrunner' => false]);
+        $path = self::syntheticReal(['php-fpm' => true, 'volucer-attach' => false]);
         $html = (new HtmlReport(ResultStore::load($path), self::manifest()))->index([], sys_get_temp_dir());
         self::assertStringNotContainsString(
             'OPcache',
@@ -652,50 +657,6 @@ final class OpcacheProvenanceTest extends TestCase
      * Asserted on the generated wrapper rather than on intent, because the
      * failure mode is a directive that is simply absent.
      */
-    public function testTheSpawnCgiWrapperMirrorsTheFpmPoolDirectives(): void
-    {
-        $dir = sys_get_temp_dir() . '/tmp-cgi-wrapper-' . getmypid();
-        @mkdir($dir, 0777, true);
-
-        $path = writePhpCgiWrapper($dir, '/usr/bin/php-cgi8.5');
-        $script = (string) file_get_contents($path);
-
-        self::assertStringContainsString('/usr/bin/php-cgi8.5', $script);
-        foreach ([
-            'opcache.enable=1',
-            'opcache.enable_cli=1',
-            'opcache.validate_timestamps=0',
-            'xdebug.mode=off',
-            'xdebug.start_with_request=no',
-            'memory_limit=512M',
-        ] as $directive) {
-            self::assertStringContainsString(
-                $directive,
-                $script,
-                "the spawn_cgi wrapper must pass {$directive}, or it diverges from the FPM pool"
-            );
-        }
-
-        // The wrapper must be executable AND must forward its arguments: php-cgi
-        // is invoked by volucer as `<binary> <socket-or-args>`, so a wrapper that
-        // drops "$@" breaks the arm instead of equalising it.
-        //
-        // The exec bit is a POSIX concept and NTFS has nowhere to store it, so
-        // this assertion is skipped on Windows: the run only ever happens on the
-        // Linux VM, and asserting it here would make the suite fail on the
-        // machine that develops it while proving nothing about the one that
-        // measures. The shebang IS asserted everywhere, because that is what
-        // makes the file executable-by-interpreter on both.
-        if (DIRECTORY_SEPARATOR === '\\') {
-            self::assertStringStartsWith('#!/bin/sh', $script);
-        } else {
-            self::assertTrue(is_executable($path), 'the wrapper must be executable');
-        }
-        self::assertStringContainsString('"$@"', $script);
-
-        @unlink($path);
-        @rmdir($dir);
-    }
 
     /**
      * The clause is carried into the HTML verbatim, never re-escaped.
@@ -786,12 +747,12 @@ final class OpcacheProvenanceTest extends TestCase
         file_put_contents($scratch . '/deploy/fpm/other.conf', '');
 
         self::assertSame(
-            ['roadrunner' => true],
+            ['volucer-attach' => true],
             deploymentOpcache($scratch, static fn(string $cmd): string => "1\n"),
             'a probe answering 1 must record true'
         );
         self::assertSame(
-            ['roadrunner' => false],
+            ['volucer-attach' => false],
             deploymentOpcache($scratch, static fn(string $cmd): string => '0'),
             'a probe answering 0 must record false'
         );
@@ -825,7 +786,7 @@ final class OpcacheProvenanceTest extends TestCase
         ), true);
         $data['env']['opcache_by_mode'] = [
             'php-fpm'    => false,
-            'roadrunner' => '1', // a string, not a measurement
+            'volucer-attach' => '1', // a string, not a measurement
             'junk'       => null,
         ];
         $path = sys_get_temp_dir() . '/tmp-opcache-types.json';
@@ -835,7 +796,7 @@ final class OpcacheProvenanceTest extends TestCase
 
         self::assertSame(['php-fpm' => false], $store->opcacheByMode(), 'only real booleans may survive');
         self::assertFalse($store->opcacheFor('php-fpm'));
-        self::assertNull($store->opcacheFor('roadrunner'), 'a non-boolean is not an answer');
+        self::assertNull($store->opcacheFor('volucer-attach'), 'a non-boolean is not an answer');
         self::assertNull($store->opcacheFor('missing'), 'an absent mode is not an answer');
         self::assertNull($store->opcacheFor(null), 'no mode means no claim');
     }

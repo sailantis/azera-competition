@@ -4,17 +4,18 @@
  *
  * Endpoints:
  *   GET  /features           — overview page
- *   GET  /features/aop        — #[Transactional] AOP demo (insert in a transaction)
- *   GET  /features/cache      — #[Cache] AOP demo (cached DB count)
- *   GET  /features/log        — #[Log] AOP demo (method entry/exit logging)
- *   GET  /features/retry      — #[Retry] AOP demo (retry a flaky method)
+ *   GET  /features/aop-tx    — #[Transactional] AOP demo (insert in a transaction)
+ *   GET  /features/aop-tx-explicit   — the same advice via Azera\Aop\Pipeline
+ *   GET  /features/aop-tx-direct     — the same insert with a hand-written begin/commit
+ *   GET  /features/aop-cache — #[Cache] AOP demo (cached DB count, advice applied by the proxy)
+ *   GET  /features/aop-cache-direct  — the same cached count with the cache read written by hand
+ *   GET  /features/log       — logging (method entry/exit via the PSR-3 logger)
  *   GET  /features/db-events  — Db event pipeline demo
  *   GET  /features/validation — Validator demo (valid + invalid payloads)
  *   GET  /features/config     — Config dot-notation demo
- *   GET  /features/request-scoped — RequestScoped lifecycle demo
- *   GET  /features/pipeline   — direct (explicit) AOP Pipeline demo
  *   GET  /features/events     — PSR-14 event dispatch + listener demo
  *   GET  /features/rate-limit — RateLimiter demo (max 5 requests / 60s)
+ *   GET  /features/lifecycle-hooks — request/response hook demo (middleware sets 203)
  *   GET  /features/security   — Hasher + CSRF token demo
  *   POST /features/security   — CSRF-protected POST demo
  */
@@ -25,9 +26,7 @@ use App\Azera\Events\ItemCreated;
 use App\Azera\Services\DbEventLog;
 use App\Azera\Services\FeatureService;
 use App\Azera\Services\MemoryLogger;
-use App\Azera\Services\RequestCounter;
-use Azera\Aop\LogInterceptor;
-use Azera\Aop\RetryInterceptor;
+use Azera\Aop\TransactionalInterceptor;
 use Azera\AppContext;
 use Azera\Core\Controller;
 use Azera\Http\Response;
@@ -43,19 +42,21 @@ class FeatureController extends Controller
      */
     public function indexAction(): Response
     {
-        $html = $this->view()->render('features.index', [
+        $html = $this->view()
+            ->render('features.index', [
             'features' => [
-                ['url' => '/features/aop', 'title' => 'AOP #[Transactional]', 'desc' => 'Insert a row inside an AOP-managed DB transaction'],
-                ['url' => '/features/cache', 'title' => 'AOP #[Cache]', 'desc' => 'Cache a method result for 10 seconds via #[Cache] attribute'],
-                ['url' => '/features/log', 'title' => 'AOP #[Log]', 'desc' => 'Log method entry/exit/duration via the #[Log] advice'],
-                ['url' => '/features/retry', 'title' => 'AOP #[Retry]', 'desc' => 'Retry a failing method up to N times via the #[Retry] advice'],
-                ['url' => '/features/db-events', 'title' => 'Db Events', 'desc' => 'Observe QueryExecuted / StatementPrepared / Transaction events'],
+                ['url' => '/features/aop-tx', 'title' => 'AOP #[Transactional]', 'desc' => 'Insert a row inside an AOP-managed DB transaction'],
+                ['url' => '/features/aop-tx-explicit', 'title' => 'AOP explicit Pipeline', 'desc' => 'Same interceptor composed by hand via Azera\Aop\Pipeline — no proxy generation'],
+                ['url' => '/features/aop-tx-direct', 'title' => 'AOP control (hand-written)', 'desc' => 'The same insert with a plain begin/commit — no AOP on either side'],
+                ['url' => '/features/aop-cache', 'title' => 'AOP #[Cache]', 'desc' => 'Cache a method result for 10 seconds via #[Cache] attribute'],
+                ['url' => '/features/aop-cache-direct', 'title' => 'AOP #[Cache] control (hand-written)', 'desc' => 'The same cached count with the get/miss/set written in application code'],
+                ['url' => '/features/log', 'title' => 'Logging', 'desc' => 'Entry/exit logs via the registered PSR-3 logger, read back from it'],
+                ['url' => '/features/db-events', 'title' => 'Db Events', 'desc' => 'Observe the framework\'s query events around one write and one COUNT'],
                 ['url' => '/features/validation', 'title' => 'Validation', 'desc' => 'Validate and coerce input via the Validator'],
                 ['url' => '/features/config', 'title' => 'Config', 'desc' => 'Dot-notation access to a nested config array'],
-                ['url' => '/features/request-scoped', 'title' => 'RequestScoped', 'desc' => 'Reset per-request state via clearRequestScope()'],
-                ['url' => '/features/pipeline', 'title' => 'AOP Pipeline (direct)', 'desc' => 'Explicit interceptor pipeline — no proxy generation'],
                 ['url' => '/features/events', 'title' => 'PSR-14 Events', 'desc' => 'Dispatch an event and show listener output'],
                 ['url' => '/features/rate-limit', 'title' => 'Rate Limiter', 'desc' => 'Allow max 5 requests per 60 seconds'],
+                ['url' => '/features/lifecycle-hooks', 'title' => 'Request Lifecycle Hooks', 'desc' => 'A middleware wraps the handler, stamps a header and sets 203'],
                 ['url' => '/features/security', 'title' => 'Security (Hasher + CSRF)', 'desc' => 'Password hashing and CSRF token protection'],
             ],
         ]);
@@ -63,7 +64,7 @@ class FeatureController extends Controller
     }
 
     /**
-     * GET /features/aop — create an item via #[Transactional] AOP.
+     * GET /features/aop-tx — create an item via #[Transactional] AOP.
      */
     public function aopAction(FeatureService $service): Response
     {
@@ -81,16 +82,20 @@ class FeatureController extends Controller
     }
 
     /**
-     * GET /features/aop-direct — the SAME insert as /features/aop, but with the
+     * GET /features/aop-tx-direct — the SAME insert as /features/aop-tx, but with the
      * transaction written by hand instead of applied by the `#[Transactional]`
      * proxy.
      *
-     * This is the control for the AOP race. `/features/aop` answers "what does
-     * this request cost with transparent interception"; this answers "…and with
-     * the interception written out". The difference between them is the price of
-     * the abstraction, measured on identical work — the only such pair in the
-     * suite, because every other entrant's equivalent endpoint does different
-     * work (see BenchmarkConfig::adviceRoutedEndpoints()).
+     * This is the CONTROL row, and a feature of its own: every entrant can serve it
+     * because it needs no framework facility. `/features/aop-tx` answers "what does this
+     * request cost with transparent interception"; this answers "…and implemented
+     * directly, with none". The difference is the price of the abstraction on
+     * identical work.
+     *
+     * It is deliberately NOT the framework's explicit-AOP facility — that is
+     * `/features/aop-tx-explicit`, which composes a real `Azera\Aop\Pipeline`.
+     * Conflating the two published a hand-written `try/catch` as though it exercised
+     * the framework's interceptor layer.
      */
     public function aopDirectAction(FeatureService $service): Response
     {
@@ -99,7 +104,7 @@ class FeatureController extends Controller
 
         return Response::json([
             'feature'     => 'AOP #[Transactional] — direct twin',
-            'description' => 'Identical insert and event dispatch to /features/aop, but the transaction is an explicit begin/commit rather than a #[Transactional] interceptor. The difference between the two rows is the cost of transparent interception.',
+            'description' => 'Identical insert and event dispatch to /features/aop-tx, but the transaction is an explicit begin/commit rather than a #[Transactional] interceptor. The difference between the two rows is the cost of transparent interception.',
             'new_id'      => $id,
             'title'       => $title,
             'proxy_class' => $service::class,
@@ -108,22 +113,114 @@ class FeatureController extends Controller
     }
 
     /**
-     * GET /features/cache — demonstrate #[Cache] AOP caching.
+     * GET /features/aop-tx-explicit — AOP through the framework's explicit
+     * `Pipeline`, the second real AOP mode Azera ships.
+     *
+     * The proxy route above applies advice because an attribute sits on a method.
+     * This one composes the SAME `TransactionalInterceptor` by hand and wraps a
+     * plain callable with it — no proxy class, no attribute, and the transaction
+     * is still opened and committed by framework machinery rather than by
+     * application code. That is `Azera\Aop\Pipeline`, documented as "Explicit AOP"
+     * in the framework guide.
+     *
+     * It is deliberately NOT the same row as `/features/aop-tx-direct`, which is the
+     * hand-written control every entrant serves (plain `begin`/`commit` in the
+     * app). Only Azera and Spiral ship an interceptor abstraction, so only those
+     * two are raced on this endpoint — see BenchmarkConfig::adapterFeatures().
      */
-    public function cacheAction(FeatureService $service): Response
+    public function aopExplicitAction(FeatureService $service): Response
+    {
+        $ctx   = $this->context();
+        $title = 'Explicit AOP Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999);
+
+        // Composed once per request, which is the unit a reader cares about: the
+        // pipeline is application wiring, not a per-call allocation. `pipeline()`
+        // is the framework accessor; the interceptor is the very same class the
+        // proxy registers, so both modes execute identical BEGIN/COMMIT logic.
+        $pipeline = $ctx->pipeline([
+            new TransactionalInterceptor($ctx->dbManager()),
+        ]);
+
+        $id = $pipeline->call(
+            fn(): int => $service->createItemUnmanaged($title),
+            identity: FeatureService::class . '::createItemUnmanaged',
+        );
+
+        return Response::json([
+            'feature'     => 'AOP explicit Pipeline',
+            'description' => 'Inserted through Azera\Aop\Pipeline with a TransactionalInterceptor composed by hand — the same interceptor the #[Transactional] proxy registers, with no generated proxy and no attribute.',
+            'new_id'      => $id,
+            'title'       => $title,
+            'proxy_class' => FeatureService::class,
+            'is_proxied'  => false,
+        ]);
+    }
+
+    /**
+     * GET /features/aop-cache — demonstrate #[Cache] AOP caching.
+     *
+     * The cache lookup, the miss decision and the store are performed by the
+     * generated `#[Cache]` proxy; this action only times the two calls. That is
+     * what makes it the AOP row: the advice is declared on `countItems()` and
+     * applied by code the framework generated, not written here.
+     *
+     * `GET /features/aop-cache-direct` is the control: the same COUNT and the
+     * same 10-second TTL with the get/miss/set written out by hand, so the pair
+     * prices one generated override plus one interceptor frame on identical work.
+     */
+    public function aopCacheAction(FeatureService $service): Response
     {
         $start     = microtime(true);
         $count     = $service->countItems();
         $elapsedMs = round((microtime(true) - $start) * 1000, 2);
 
-        // Call again — should be instant (cache hit)
+        // Second call — the proxy's stored value is returned without the query.
         $start2     = microtime(true);
         $count2     = $service->countItems();
         $elapsedMs2 = round((microtime(true) - $start2) * 1000, 2);
 
         return Response::json([
             'feature'        => 'AOP #[Cache]',
-            'description'    => 'First call runs the COUNT query (cache miss); second call hits the cache.',
+            'description'    => 'The #[Cache] proxy serves the cached value and runs the COUNT only on a miss; the endpoint itself performs no cache lookup.',
+            'item_count'     => $count,
+            'first_call_ms'  => $elapsedMs,
+            'second_call_ms' => $elapsedMs2,
+            'same_result'    => $count === $count2,
+        ]);
+    }
+
+    /**
+     * GET /features/aop-cache-direct — the CONTROL for `aop-cache`.
+     *
+     * Deliberately NOT an AOP demo: the cache read, the miss decision and the
+     * store are written out here, with no interceptor and no generated proxy.
+     * It exists so the `aop-cache` row has a same-work baseline the other six
+     * entrants can also serve, exactly as `aop-tx-direct` does for `aop-tx`.
+     *
+     * The TTL and the key match `FeatureService::$countItems`'s `#[Cache(ttl:
+     * 10, key: 'item_count')]`. Sharing the key is what makes the two rows
+     * interchangeable: a warm process that ran either one serves the other from
+     * the same entry.
+     */
+    public function aopCacheDirectAction(FeatureService $service): Response
+    {
+        $cache = $this->context()->cache();
+
+        $start = microtime(true);
+        $count = $cache->get(FeatureService::CACHE_KEY);
+        if ($count === null) {
+            $count = $service->countItemsQuery();
+            $cache->set(FeatureService::CACHE_KEY, $count, 10);
+        }
+        $elapsedMs = round((microtime(true) - $start) * 1000, 2);
+
+        $start2     = microtime(true);
+        $count2     = $cache->get(FeatureService::CACHE_KEY);
+        $elapsedMs2 = round((microtime(true) - $start2) * 1000, 2);
+
+        return Response::json([
+            'feature'        => 'Cache control (hand-written)',
+            'description'    => 'The same COUNT and 10-second TTL with the cache lookup written in application code — no interceptor, no generated proxy.',
             'item_count'     => $count,
             'first_call_ms'  => $elapsedMs,
             'second_call_ms' => $elapsedMs2,
@@ -181,6 +278,38 @@ class FeatureController extends Controller
             // aborted the run once the harness started refusing non-2xx bodies.
             // CakePHP and CodeIgniter always answered 200; this makes all seven
             // agree. See tests/RateLimitStatusTest.php.
+        ], 200);
+    }
+
+    /**
+     * GET /features/lifecycle-hooks — intercept the request/response around the handler.
+     *
+     * WHAT MAKES THIS COMPARABLE. Every framework has a place to hook the request
+     * before the handler runs and the response before it is returned, but they are
+     * NOT the same mechanism: Azera, Laravel, Spiral and CakePHP have middleware
+     * pipelines, CodeIgniter has filters, Symfony has `kernel.request` /
+     * `kernel.response` event listeners, and Phalcon has events-manager hooks. The
+     * row is therefore named for what is MEASURED — lifecycle interception — and each
+     * entrant uses its own facility. That is the same rule `db-events` follows.
+     *
+     * THE WORKLOAD. One hook stamps a response header and one sets the status to 203;
+     * the handler itself is a constant. Deliberately no database access and no
+     * business event, which is what separates this row from `events`.
+     *
+     * Azera's middleware pipeline is the natural facility here. It is applied to this
+     * ONE route rather than globally for the reason Bootstrap::boot() documents: no
+     * other entrant runs a middleware stack on the benchmark rows, and charging one
+     * would measure the stack instead of the framework.
+     */
+    public function lifecycleHooksAction(): Response
+    {
+        // The handler is constant. The 203 status and the marker header are set by the
+        // route's middleware (see LifecycleHookMiddleware), so this method's job is to
+        // prove the handler ran and nothing more.
+        return Response::json([
+            'feature'     => 'Request Lifecycle Hooks',
+            'description' => 'A hook wraps the handler, stamps a header and sets 203. Azera uses its middleware pipeline.',
+            'lifecycle'   => ['handler' => 'ran'],
         ], 200);
     }
 
@@ -251,32 +380,29 @@ class FeatureController extends Controller
     }
 
     /**
-     * GET /features/log — demonstrate #[Log] AOP logging.
+     * GET /features/log — logging through Azera's registered PSR-3 logger.
+     *
+     * DIRECT, not advised: `FeatureService::logSomething()` writes the entry and
+     * exit records itself, so this row is comparable with the six entrants that
+     * have no advice layer. Azera's `#[Log]` advice is not wired into this app —
+     * intercepting a logger would put proxy cost on a row that is supposed to
+     * measure logging, which is the confusion the `aop-*` rows exist to isolate.
+     *
+     * The records are read back from the logger the service wrote to
+     * (`MemoryLogger`), not rebuilt here — a hand-built literal would pass parity
+     * while measuring array construction, which is the defect this endpoint used to
+     * have on five other entrants.
      */
     public function logAction(MemoryLogger $logger, FeatureService $service): Response
     {
         $logger->clear();
-        $result = $service->logSomething('hello from the #[Log] demo');
+        $result = $service->logSomething('hello from the logging demo');
 
         return Response::json([
-            'feature'     => 'AOP #[Log]',
-            'description' => 'LogInterceptor logs method entry, exit (with duration), and exceptions via PSR-3.',
+            'feature'     => 'Logging (PSR-3)',
+            'description' => 'FeatureService::logSomething() wrote entry and exit records through the registered PSR-3 logger, read back from it.',
             'result'      => $result,
             'log_entries' => $logger->entries(),
-        ]);
-    }
-
-    /**
-     * GET /features/retry — demonstrate #[Retry] AOP retry.
-     */
-    public function retryAction(FeatureService $service): Response
-    {
-        $result = $service->flakyOperation();
-
-        return Response::json([
-            'feature'     => 'AOP #[Retry]',
-            'description' => 'RetryInterceptor retries a failing method up to `times` attempts (including the first).',
-            'result'      => $result,
         ]);
     }
 
@@ -287,16 +413,22 @@ class FeatureController extends Controller
     {
         $log->clear();
 
-        // Run a couple of queries + a transaction so the Db events fire.
+        // Run a couple of queries so the Db events fire.
+        //
+        // The write is deliberately the AUTOCOMMIT path, not
+        // createItemTransactional(): this row measures the event pipeline, so it
+        // must not also charge Azera a transaction proxy the other six entrants
+        // do not run. See FeatureService::createItemAutocommit().
+        //
         // The count deliberately bypasses the #[Cache] demo (countItems()):
         // a cached hit fires no Db events, so this row must use the plain
         // query path.
-        $service->createItemTransactional('DbEvent Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999));
+        $service->createItemAutocommit('DbEvent Item ' . date('Y-m-d H:i:s') . ' #' . random_int(1000, 9999));
         $service->countItemsQuery();
 
         return Response::json([
             'feature'     => 'Db Events',
-            'description' => 'Database dispatches QueryExecuted, StatementPrepared, TransactionStarted, TransactionCommitted via PSR-14.',
+            'description' => 'Database dispatches QueryExecuted per executed statement, StatementPrepared per prepared one, and TransactionStarted/Committed when a transaction is opened, via PSR-14. This handler writes on an autocommit connection, so the log holds queries only.',
             'events'      => $log->all(),
         ]);
     }
@@ -362,62 +494,6 @@ class FeatureController extends Controller
             'missing'     => $config->get('does.not.exist', 'fallback'),
             'has_app'     => $config->has('app'),
             'all'         => $config->all(),
-        ]);
-    }
-
-    /**
-     * GET /features/request-scoped — demonstrate the RequestScoped lifecycle.
-     *
-     * Increments a request-scoped counter.  In a long-lived worker the
-     * counter is reset by clearRequestScope() between requests; here we
-     * call it explicitly to show the reset works.
-     */
-    public function requestScopedAction(RequestCounter $counter): Response
-    {
-        $before = $counter->count();
-        $after  = $counter->increment();
-
-        // Simulate the end of a request: clear request-scoped state.
-        $this->context()->clearRequestScope();
-
-        $afterReset = $counter->count();
-
-        return Response::json([
-            'feature'           => 'RequestScoped',
-            'description'       => 'Services implementing RequestScoped are reset by clearRequestScope() between requests.',
-            'count_before'      => $before,
-            'count_after'       => $after,
-            'count_after_reset' => $afterReset,
-        ]);
-    }
-
-    /**
-     * GET /features/pipeline — demonstrate the direct (explicit) AOP Pipeline.
-     *
-     * Unlike the transparent #[Advised] proxy, the Pipeline composes
-     * interceptors around a plain callable with NO proxy generation.
-     * This is the technique Spiral uses — so it's the fair apples-to-apples
-     * comparison for the AOP feature.  The same interceptors work in both
-     * modes.
-     */
-    public function pipelineAction(MemoryLogger $logger): Response
-    {
-        $logger->clear();
-
-        // Direct pipeline: RetryInterceptor + LogInterceptor around a
-        // plain callable.  No proxy class is generated.
-        $result = $this->context()->pipeline()
-            ->through([
-                new RetryInterceptor($logger, defaultTimes: 3, defaultBackoff: 0),
-                new LogInterceptor($logger),
-            ])
-            ->call(fn() => 'direct pipeline result');
-
-        return Response::json([
-            'feature'     => 'AOP Pipeline (direct)',
-            'description' => 'Explicit interceptor pipeline around a plain callable — no proxy generation. The technique Spiral uses.',
-            'result'      => $result,
-            'log_entries' => $logger->entries(),
         ]);
     }
 }

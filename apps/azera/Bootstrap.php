@@ -11,10 +11,6 @@ namespace App\Azera;
 use App\Azera\Controllers\BenchController;
 use Azera\Aop\Cache as CacheAdvice;
 use Azera\Aop\CacheInterceptor;
-use Azera\Aop\Log as LogAdvice;
-use Azera\Aop\LogInterceptor;
-use Azera\Aop\Retry as RetryAdvice;
-use Azera\Aop\RetryInterceptor;
 use Azera\Aop\Transactional;
 use Azera\Aop\TransactionalInterceptor;
 use Azera\AppContext;
@@ -73,9 +69,6 @@ class Bootstrap
         AppContext::setInstance(new AppContext());
         $ctx = AppContext::instance();
 
-        // Reset benchmark state for cold-mode reproducibility
-        \App\Azera\Middleware\RequestContextMiddleware::reset();
-
         // --- Database (SQLite) ---
         // Use a factory so we can configure PRAGMAs right after connecting.
         $ctx->dbManager()->set('default', function () use ($dbPath) {
@@ -129,11 +122,12 @@ class Bootstrap
                 ->setViewPath($viewsPath)
                 ->setCachePath($cacheDir)
                 ->setRevalidateFreq(60)
-                // Boot-time defaults, from the SAME shared resolver the middleware
-                // calls (bench-view-globals.php). A request that sends locale hints
-                // has them overwritten by the middleware before the render; one that
-                // sends none renders these. Written as a call rather than as a
-                // literal pair so this app cannot drift from the other six again.
+                // Boot-time DEFAULTS for the two view vars, from the SAME shared
+                // resolver the middleware calls (bench-view-globals.php). These exist
+                // so a render with no request in scope (the template tests render the
+                // layout directly) still produces a footer. A real request is
+                // overwritten by RequestContextMiddleware before the render, which is
+                // why this must stay a cheap default and not the only resolution.
                 //
                 // REQUIRED HERE, not assumed. The functions live in a plain
                 // (namespace-less) file that the FPM entry script happens to require,
@@ -178,37 +172,37 @@ class Bootstrap
             $router->controller(BenchController::class, function (\Azera\Core\Router $r) {
                 // The framework floor: routed and dispatched, no work after that.
                 $r->get('/echo', '::echoAction');
-                // ORM endpoints (model hydration)
-                // GET /items with the identity map removed and nothing else changed:
-                // the single-variable control for /items (see listFastAction).
-                $r->get('/items-fast', '::listFastAction');
-                $r->post('/items', '::createAction');
 
-                // HTML routes: these render `layouts/app.clarity.html`, the only
-                // consumer of the `locale` / `platform` view vars, so only they
-                // need the 'web' middleware group (see the group's definition for
-                // why it is no longer global).
+                // Every route below renders a template that extends
+                // `layouts/app.clarity.html`, so every one of them reads `locale` /
+                // `platform` and belongs in the `web` group. `/echo` above is the one
+                // route in this group that renders nothing — keep it outside.
                 $r->middleware('web', function () use ($r) {
+                    // ORM endpoints (model hydration)
+                    // GET /items with the identity map removed and nothing else changed:
+                    // the single-variable control for /items (see listFastAction).
+                    $r->get('/items-fast', '::listFastAction');
+                    $r->post('/items', '::createAction');
+
+                    // HTML routes
                     $r->get('/', '::indexAction');
                     $r->get('/items', '::listAction');
                     $r->get('/items/{id:int}', '::showAction');
+
+                    // New ORM stack endpoints (Model facade over the EM pipeline)
+                    // Deactivated (2026-09-05) — the listOrmAction/showOrmAction/
+                    // createOrmAction actions stay in BenchController for the next
+                    // comparison run; re-enable these three routes to bring the
+                    // /items-orm paths back.
+                    // $r->get('/items-orm', '::listOrmAction');
+                    // $r->get('/items-orm/{id:int}', '::showOrmAction');
+                    // $r->post('/items-orm', '::createOrmAction');
+
+                    // Query Builder endpoints (no model hydration)
+                    $r->get('/items-qb', '::listQbAction');
+                    $r->get('/items-qb/{id:int}', '::showQbAction');
+                    $r->post('/items-qb', '::createQbAction');
                 });
-
-
-
-                // New ORM stack endpoints (Model facade over the EM pipeline)
-                // Deactivated (2026-09-05) — the listOrmAction/showOrmAction/
-                // createOrmAction actions stay in BenchController for the next
-                // comparison run; re-enable these three routes to bring the
-                // /items-orm paths back.
-                // $r->get('/items-orm', '::listOrmAction');
-                // $r->get('/items-orm/{id:int}', '::showOrmAction');
-                // $r->post('/items-orm', '::createOrmAction');
-
-                // Query Builder endpoints (no model hydration)
-                $r->get('/items-qb', '::listQbAction');
-                $r->get('/items-qb/{id:int}', '::showQbAction');
-                $r->post('/items-qb', '::createQbAction');
             });
 
             // --- Fill routes ---
@@ -227,59 +221,43 @@ class Bootstrap
         $dispatcher = $ctx->dispatcher();
         $dispatcher->setBaseNamespace('\App\Azera\Controllers');
 
-        // These used to be GLOBAL, so every request paid for both:
-        //   SecurityHeadersMiddleware — sets X-Frame-Options, X-Content-Type-Options, ...
-        //   RequestContextMiddleware  — parses Accept-Language + User-Agent, stamps view vars
+        // The view-context group: resolves `locale` / `platform` for
+        // `layouts/app.clarity.html`, the only template that reads them.
         //
-        // GLOBAL WAS NOT A FAIR COMPARISON. The comment that used to sit here
-        // claimed this "adds realistic per-request overhead that all full-stack
-        // frameworks pay". Measured 2026-11-23: they do not. No other entrant sets
-        // a security header at all, and none parses Accept-Language/User-Agent on
-        // a benchmark route — Laravel stamps a constant `locale` at boot via
-        // `View::share('locale', 'en_US')`, which is not the same work.
+        // WHY MIDDLEWARE AND NOT BOOT. Laravel stamps the same two vars once per boot
+        // (`View::share()` in `AppServiceProvider::boot()`), and this app briefly
+        // copied it. That only works for a CONSTANT: at boot no request exists, so
+        // `AppContext::request()` resolves the container's empty default and every
+        // footer on the resident arms read `en_US` no matter what the client sent —
+        // while the FPM arm, whose entry script re-runs per request, resolved the real
+        // header. Two arms, two answers, from the same app. Resolving per request puts
+        // them back on one path, because `Kernel::handle()` publishes the live request
+        // into the context before the middleware chain runs.
         //
-        // The cost was real and landed on the no-DB routes hardest, because it is
-        // a fixed ~1.5-1.7 us on top of a ~1-2 us handler. On the bench VM the two
-        // chained cost 1.52 us, against a whole `/echo` of 4.70 us for Azera and
-        // 1.22 us for Phalcon. `/features/config` measured 6.5 us vs Phalcon's
-        // 5.4 us while Azera's OWN config work was 4.5x cheaper (0.61 us vs
-        // 2.79 us) — the gap was entirely this pipeline.
+        // WHY NOT GLOBAL. Every JSON route (`/echo`, every `/api` endpoint, every
+        // feature demo) returns without rendering, so a global group would charge
+        // header parsing to rows that never read the result — the same fault that got
+        // `SecurityHeadersMiddleware` deleted.
         //
-        // They are scoped to the routes that actually consume them rather than
-        // removed, so the demo is intact and the benchmark routes measure the
-        // same work as the other six entrants:
-        //   RequestContextMiddleware — only HTML routes that render
-        //     `layouts/app.clarity.html`, which is the sole consumer of the
-        //     `locale` / `platform` view vars. The JSON routes (every /api and
-        //     /features demo endpoint) never render a template, so paying header
-        //     parsing for them measured nothing.
-        //   SecurityHeadersMiddleware — HTML routes again. No entrant compares
-        //     headers, and applying them to a JSON response no browser renders is
-        //     work that exists only to slow the row down.
+        // WHY NOT JUST THE THREE ORIGINAL ROUTES. `/items-fast`, `/items-qb`,
+        // `/items-qb/{id}` and both POST routes render these layouts too; they were
+        // simply missing from the first definition and printed a footer with no locale
+        // at all. `tests/ViewGlobalsCoverageTest.php` enumerates every rendering route
+        // from the controller source and fails if one is not in this group.
         //
-        // Same shape as the pre-existing `session` group below, which was scoped
-        // to `/features/security` for exactly this reason.
-        //
-        // CLASS STRINGS, not instances. `Dispatcher::normalizeMiddleware()` accepts
-        // `'Fully\Qualified\Class'` and instantiates it on the first request that
-        // actually runs the group, so registering the group costs one array append
-        // instead of `new`ing both middlewares at boot. `/echo`, every `/api` route and
-        // every feature demo return JSON and never render `layouts/app.clarity.html`,
-        // so on those routes the two classes were being loaded (6 files, 11.7 KB) and
-        // constructed for a group that never ran.
-        //
-        // Measured on the bench VM: the eager pair cost 6 file loads at boot; the
-        // string form costs none. Behaviour is unchanged — the dispatcher builds the
-        // same two objects, with the same no-argument constructors, at the same point
-        // in the request it always did.
-        //
-        // NOTE: no `slash-star` appears in this comment on purpose. Several tests strip
-        // block comments with a non-nesting-aware regex, so a glob written as
-        // `slash-star` inside prose opens a phantom comment and swallows the routes
-        // below it (see FeatureRouteParityTest::declarations()).
+        // CLASS STRING, not an instance: `Dispatcher::normalizeMiddleware()` builds it
+        // on the first request that runs the group, so registering costs one array
+        // append at boot.
         $dispatcher->defineMiddlewareGroup('web', [
-            \App\Azera\Middleware\SecurityHeadersMiddleware::class,
             \App\Azera\Middleware\RequestContextMiddleware::class,
+        ]);
+
+        // The lifecycle-hook group for `GET /features/lifecycle-hooks` alone. Separate
+        // from `web` because it does different work: `web` resolves the two view vars
+        // the HTML layouts read, while this one rewrites the response (a marker header
+        // plus status 203) and exists to make the lifecycle row measurable.
+        $dispatcher->defineMiddlewareGroup('lifecycle', [
+            \App\Azera\Middleware\LifecycleHookMiddleware::class,
         ]);
 
 
@@ -291,11 +269,6 @@ class Bootstrap
         // generates the AOP proxy.  The constructor receives AppContext
         // which is already available as a registered service.
         $ctx->set(\App\Azera\Services\FeatureService::class);
-
-        // --- RequestScoped demo service ---
-        // Registered as a class string so AppContext::build() instantiates
-        // it once; clearRequestScope() calls its resetState() hook.
-        $ctx->set(\App\Azera\Services\RequestCounter::class);
 
         // --- Config ---
         // Register a Config instance with a small nested array so the
@@ -328,24 +301,36 @@ class Bootstrap
         // cached() blocks.
         $router->cached(__FILE__, function (\Azera\Core\Router $router): void {
             $router->controller(\App\Azera\Controllers\FeatureController::class, function (\Azera\Core\Router $r) {
-                // The one HTML page in this group: renders the layout, so it needs
-                // the 'web' group. Every route below it returns JSON.
+                // The one RENDERING route in this group: `features/index.clarity.html`
+                // extends the same layout, so it reads the same two vars. Every route
+                // below it returns JSON and stays outside the group.
                 $r->middleware('web', function () use ($r) {
                     $r->get('/features', '::indexAction');
                 });
 
-                $r->get('/features/aop', '::aopAction');
-                $r->get('/features/aop-direct', '::aopDirectAction');
-                $r->get('/features/cache', '::cacheAction');
+                $r->get('/features/aop-tx', '::aopAction');
+                // Second real AOP mode: the explicit Pipeline. Raced only by the
+                // entrants that actually ship an interceptor abstraction
+                // (BenchmarkConfig::adapterFeatures()).
+                $r->get('/features/aop-tx-explicit', '::aopExplicitAction');
+                $r->get('/features/aop-tx-direct', '::aopDirectAction');
+                $r->get('/features/aop-cache', '::aopCacheAction');
+                $r->get('/features/aop-cache-direct', '::aopCacheDirectAction');
                 $r->get('/features/log', '::logAction');
-                $r->get('/features/retry', '::retryAction');
                 $r->get('/features/db-events', '::dbEventsAction');
                 $r->get('/features/validation', '::validationAction');
                 $r->get('/features/config', '::configAction');
-                $r->get('/features/request-scoped', '::requestScopedAction');
-                $r->get('/features/pipeline', '::pipelineAction');
                 $r->get('/features/events', '::eventsAction');
                 $r->get('/features/rate-limit', '::rateLimitAction');
+
+                // The lifecycle row: one route, one hook group. Applying the hook here
+                // rather than globally is deliberate — no other entrant runs a
+                // middleware stack on the benchmark rows (see the `web` group's
+                // comment), so a global hook would charge this row's cost to every
+                // other one.
+                $r->middleware('lifecycle', function () use ($r) {
+                    $r->get('/features/lifecycle-hooks', '::lifecycleHooksAction');
+                });
 
                 // CSRF demo needs a real session — apply the 'session' group
                 // only to these routes.
@@ -398,10 +383,10 @@ class Bootstrap
     {
         // --- PSR-3 Logger ---
         // Register a single in-memory logger instance under BOTH its
-        // concrete class and the PSR-3 interface, so the #[Log] AOP
-        // interceptor (which resolves LoggerInterface) and the controller
-        // (which injects MemoryLogger) share the same object.  Swap to
-        // Monolog for real logs.
+        // concrete class and the PSR-3 interface, so the feature service
+        // (which resolves LoggerInterface through AppContext::logger()) and
+        // the controller (which injects MemoryLogger) share the same object.
+        // Swap to Monolog for real logs.
         $memoryLogger = new \App\Azera\Services\MemoryLogger();
         $ctx->set(\App\Azera\Services\MemoryLogger::class, $memoryLogger);
         $ctx->set(LoggerInterface::class, $memoryLogger);
@@ -459,7 +444,7 @@ class Bootstrap
         //
         // This bit exactly once and only on the VM: data/aop had been created 0775
         // by an earlier run, before the framework grew the check, so every
-        // /features/aop and /features/aop-direct request turned into
+        // /features/aop-tx and /features/aop-tx-direct request turned into
         // "RuntimeException: AOP proxy cache directory is group/world writable"
         // -> a 500 -> an aborted benchmark. Locally the directory either did not
         // exist (ProxyFactory created it 0700) or Windows has no mode bits to
@@ -483,9 +468,8 @@ class Bootstrap
 
         // Interceptors as FACTORIES: built once, on the first advised-class
         // construction (proxy build), not at boot. The eager versions pulled
-        // ArrayCache + DatabaseManager + NullLogger + all four interceptor
-        // classes into the cold-boot path; AOP requests resolve them on
-        // first use instead.
+        // ArrayCache + DatabaseManager + all interceptor classes into the
+        // cold-boot path; AOP requests resolve them on first use instead.
         $ctx->registerInterceptor(
             Transactional::class,
             fn() => new TransactionalInterceptor($ctx->dbManager()),
@@ -493,14 +477,6 @@ class Bootstrap
         $ctx->registerInterceptor(
             CacheAdvice::class,
             fn() => new CacheInterceptor($ctx->cache()),
-        );
-        $ctx->registerInterceptor(
-            LogAdvice::class,
-            fn() => new LogInterceptor($ctx->logger()),
-        );
-        $ctx->registerInterceptor(
-            RetryAdvice::class,
-            fn() => new RetryInterceptor($ctx->logger()),
         );
     }
 

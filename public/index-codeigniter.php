@@ -93,7 +93,7 @@ if (getcwd() . DIRECTORY_SEPARATOR !== FCPATH) {
 // request 500s with an empty body. The RR worker (deploy/rr/worker.php) and
 // run-app.php both pre-load Common.php for exactly this reason; this entry
 // script did not, so codeigniter only ever worked under the in-process
-// harness and RoadRunner (2026-09-15). Common.php is pure function
+// harness and the resident worker (2026-09-15). Common.php is pure function
 // definitions with no top-level side effects, so an early include is safe.
 require_once __DIR__ . '/../vendor/codeigniter4/framework/system/Common.php';
 

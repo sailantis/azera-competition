@@ -273,7 +273,7 @@ final class AppAutoloadTest extends TestCase
         // Only files that BOOT an app directly. `deploy/volucer/worker.php` is a thin
         // `$handler = require …/app.php`, so it inherits app.php's resolver and naming it
         // here would demand a duplicate call.
-        foreach (['deploy/rr/worker.php', 'deploy/volucer/app.php', 'run-app.php'] as $relative) {
+        foreach (['deploy/volucer/app.php', 'run-app.php'] as $relative) {
             $source = (string) file_get_contents("{$root}/{$relative}");
             self::assertStringContainsString(
                 'benchRequireAutoload(',

@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
  *
  * What this pins. On 2026-11-21 a real run against the VM produced no dataset
  * at all: the Phalcon 6 arm had no feature routes, php-fpm aborted on
- * `GET /features/aop` (`HTTP status 404`), and the volucer arm of the same block
+ * `GET /features/aop-tx` (`HTTP status 404`), and the volucer arm of the same block
  * reported "250201 requests, 0 failed" — because a `404 Not Found` BODY went out
  * as **200 OK**, and the client guard only rejected `body === 'Not Found'` and
  * bodies prefixed `'500 '`.
@@ -148,7 +148,6 @@ final class ResponseGuardTest extends TestCase
             'run-app.php'                => 'in-process harness',   // warm/cold loop + fork children
             'smoke-app.php'              => 'smoke harness',        // the cheap pre-flight
             'deploy/volucer/app.php'     => 'volucer transport',    // body -> status
-            'deploy/rr/worker.php'       => 'roadrunner transport', // body -> status
             'public/index-phalcon.php'   => 'phalcon FPM entry',    // body -> status
         ];
 
@@ -190,7 +189,6 @@ final class ResponseGuardTest extends TestCase
             'run-app.php'            => 'isBenchErrorBody',
             'smoke-app.php'          => 'isBenchErrorBody',
             'deploy/volucer/app.php' => 'benchStatus',
-            'deploy/rr/worker.php'   => 'benchStatus',
         ];
 
         foreach ($callers as $relative => $helper) {

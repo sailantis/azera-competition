@@ -16,8 +16,8 @@ declare(strict_types=1);
  * stays alive can be asked at any time, and one that re-runs its entry script per
  * request can only write a file.
  *
- *   true  — rr, volucer, volucer-attach   (resident worker)
- *   false — fpm, volucer-cgi              (per-request boot)
+ *   true  — volucer, volucer-attach   (resident worker)
+ *   false — fpm                       (per-request boot)
  *
  * It lives HERE rather than in http-bench.php because three separate decisions read it
  * and they must not disagree: which transport the memory probe uses, which file the
@@ -27,7 +27,7 @@ declare(strict_types=1);
  */
 function probeUsesHeaders(string $probeKind): bool
 {
-    return $probeKind === 'rr' || $probeKind === 'volucer';
+    return $probeKind === 'volucer';
 }
 
 // The shared "is this body an error page" rule, so the client and the server
@@ -171,7 +171,7 @@ function assertUniformBudget(array $budgets): array
  * motivated this check, which was 13.9% under. A caller with a noisier server can
  * widen it; narrowing it below the measured drift produces false failures.
  *
- * Modes with no floor, and floors missing a `GET /` row, are SKIPPED rather than
+ * Modes with no floor, and floors with no first row, are SKIPPED rather than
  * failed: "no reference point" is not "inconsistent", and FloorCoverageTest is what
  * asserts that a floor exists at all.
  *
@@ -181,19 +181,26 @@ function assertUniformBudget(array $budgets): array
  */
 function assertRowsNotBelowFloor(array $dataset, float $tolerance = 0.08): array
 {
-    // The floor of a mode is its `GET /` probe: the same request shape as the
-    // template rows (routing + a body), so it is a fair reference for every row on
-    // that server, and it is the row the report's floor note already quotes.
+    // The floor of a mode is its single probe row. It is a LOWER BOUND for every row
+    // on that arm, whatever the URI: the probe boots no framework and touches no
+    // database, so any real row on the same server must cost at least as much.
+    //
+    // Bounding every row is deliberate and is NOT the same claim as `floor − row`.
+    // That subtraction is the framework's cost only when the two are the SAME request
+    // — which is why measureFloorApp() probes `GET /echo`, the row the report quotes
+    // the floor against. The bound itself needs no such caveat.
+    //
+    // Datasets written before the probe moved to `/echo` carry a `GET /` floor. That
+    // floor still bounds their rows, so they remain checked rather than skipped.
     $floorByMode = [];
     foreach (($dataset['floors'] ?? []) as $floor) {
         foreach (($floor['modes'] ?? []) as $mode => $m) {
             if (!is_array($m)) {
                 continue;
             }
-            foreach (($m['requests'] ?? []) as $row) {
-                if (($row['request'] ?? null) === 'GET /' && is_numeric($row['trimmed_mean_ms'] ?? null)) {
-                    $floorByMode[$mode] = (float) $row['trimmed_mean_ms'];
-                }
+            $row = $m['requests'][0] ?? null;
+            if (is_array($row) && is_numeric($row['trimmed_mean_ms'] ?? null)) {
+                $floorByMode[$mode] = (float) $row['trimmed_mean_ms'];
             }
         }
     }
@@ -417,22 +424,30 @@ function parseRequestsArg(?string $raw): array
             'GET /api/items-fast',
             'GET /api/items/1',
             'POST /api/items',
-            'GET /features/aop',
-        // The direct twin of /features/aop: SAME work, transaction written by
+            'GET /features/aop-tx',
+        // The direct twin of /features/aop-tx: SAME work, transaction written by
         // hand instead of applied by generated advice. The only same-work
         // transparent-vs-direct pair in the suite, so the difference between the
         // two rows prices the abstraction.
-        'GET /features/aop-direct',
-            'GET /features/cache',
-            'GET /features/log',
-            'GET /features/retry',
-            'GET /features/pipeline',
+        'GET /features/aop-tx-direct',
+        // The second real AOP mode: the same advice composed by hand through the
+        // framework's explicit interceptor pipeline. Only Azera and Spiral ship
+        // such an abstraction, so only they are raced here — the other five have
+        // no route for it and are filtered out per app by BenchmarkConfig.
+        'GET /features/aop-tx-explicit',
+        // The attribute-applied cache (Azera only) and its same-work control that
+        // every entrant serves. Same split as aop-tx/aop-tx-direct, applied to caching.
+        'GET /features/aop-cache',
+        'GET /features/aop-cache-direct',
+        'GET /features/log',
             'GET /features/db-events',
             'GET /features/events',
             'GET /features/validation',
             'GET /features/config',
-            'GET /features/request-scoped',
             'GET /features/rate-limit',
+            // Lifecycle row: a hook before/after the handler. Each entrant uses its
+            // own mechanism, so all seven compete.
+            'GET /features/lifecycle-hooks',
         ];
 
     return array_map(static function (string $r): array {

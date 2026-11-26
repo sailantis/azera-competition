@@ -44,7 +44,7 @@ final class BenchController extends Controller
     }
 
     /**
-     * GET /routing/{id} — routing cost with nothing after it.
+     * GET /api/routing/{id} — routing cost with nothing after it.
      *
      * `/echo` is static, so the router can answer it without walking
      * candidates; this one carries a typed parameter and a constant handler, so

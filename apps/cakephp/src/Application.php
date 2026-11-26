@@ -7,12 +7,13 @@ declare(strict_types=1);
  *
  * A real full-stack Cake app: BaseApplication + RoutingMiddleware +
  * ControllerFactory (idiomatic controllers, templates, Table ORM), wired
- * against the shared SQLite database — the same structure a stock Cake 5
+ * against the shared SQLite database ??? the same structure a stock Cake 5
  * app ships, so boot/dispatch costs reflect what Cake users actually pay.
  */
 
 namespace App\Cake;
 
+use Cake\Core\Configure;
 use Cake\Http\BaseApplication;
 use Cake\Http\MiddlewareQueue;
 use Cake\Routing\RouteBuilder;
@@ -34,7 +35,7 @@ final class Application extends BaseApplication
      * Worker-mode definitions slot.  BaseApplication::handle() calls
      * $container->add() on every request; League Container's add() APPENDS a
      * new Definition per call (overwrite is opt-in), so the definitions array
-     * — and one retained request object graph with it — grows per request.
+     * ??? and one retained request object graph with it ??? grows per request.
      * We register the two entries once and then swap their concrete values
      * per request, keeping the definitions array at a fixed size.
      */
@@ -44,7 +45,7 @@ final class Application extends BaseApplication
 
     public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
     {
-        // ErrorHandlerMiddleware FIRST — it must wrap everything below to catch
+        // ErrorHandlerMiddleware FIRST ??? it must wrap everything below to catch
         // what they throw. A stock Cake app ships it for the same reason:
         // without it a route miss leaves Server::run() as a
         // MissingRouteException, and the adapter could only report the class
@@ -54,9 +55,9 @@ final class Application extends BaseApplication
         //
         // `exceptionRenderer` is pinned to WebExceptionRenderer because Cake
         // chooses by SAPI (`ExceptionTrap::chooseRenderer()`: `PHP_SAPI === 'cli'`
-        // → ConsoleExceptionRenderer). The resident arms are a web app running
+        // ??? ConsoleExceptionRenderer). The resident arms are a web app running
         // inside a CLI process, so the heuristic picked the console renderer,
-        // whose output is a string — which the middleware then republishes as a
+        // whose output is a string ??? which the middleware then republishes as a
         // hard 500 ("An Internal Server Error Occurred") instead of the 404 the
         // exception carried. A real FPM request gets the web renderer anyway, so
         // pinning it makes the two arms agree on the thing being measured.
@@ -68,12 +69,58 @@ final class Application extends BaseApplication
         // is what invokes the routes() hook (see the routesLoaded guard above).
         $middlewareQueue->add(new \Cake\Routing\Middleware\RoutingMiddleware($this));
 
+        // The lifecycle row's hook, appended LAST so it sits closest to the controller
+        // and therefore sees the final response. It acts only on
+        // Feature::lifecycleHooks and passes everything else through untouched ??? a
+        // global hook that rewrote the status of every response would change what all
+        // 26 benchmark rows measure. See the class docblock.
+        $middlewareQueue->add(new \App\Cake\Middleware\LifecycleHookMiddleware());
+
         return $middlewareQueue;
     }
 
     public function bootstrap(): void
     {
-        // Configure::initialize equivalent: no Configure state needed.
+        // Register a log engine, because Cake ships NONE by default.
+        //
+        // `Log::write()` iterates `LogEngineRegistry`; with an empty registry it
+        // returns `false` and the message is dropped. Nothing in this app called
+        // `Log::setConfig()`, so `/features/log` was writing into the void and
+        // then reporting a hand-built array as if the logger had produced it ????????
+        // the row measured array construction, not logging.
+        //
+        // `ArrayLog` is Cake's own in-memory engine (its docblock names this exact
+        // use case). The subclass keeps `level`/`message`/`context` instead of
+        // `ArrayLog::read()`'s formatted strings, so the payload matches the
+        // triple every other entrant reports. No `scopes` restriction is set: an
+        // engine scoped to a channel would silently ignore an unscoped write,
+        // which is the same silent-drop failure in a different disguise.
+        if (Configure::read('Bench.featureLog') === null) {
+            \Cake\Log\Log::setConfig('bench_feature', [
+                'className' => \App\Cake\Support\FeatureLogEngine::class,
+                'levels'    => [],
+                'scopes'    => [],
+            ]);
+            Configure::write('Bench.featureLog', 'bench_feature');
+        }
+    }
+
+    /**
+     * The engine registered by bootstrap().
+     *
+     * `Log::engine()` returns the live engine instance, so `/features/log` reads
+     * back what the logger itself captured rather than re-describing the call.
+     */
+    public static function featureLogEngine(): ?\App\Cake\Support\FeatureLogEngine
+    {
+        $name = Configure::read('Bench.featureLog');
+        if (!is_string($name)) {
+            return null;
+        }
+
+        $engine = \Cake\Log\Log::engine($name);
+
+        return $engine instanceof \App\Cake\Support\FeatureLogEngine ? $engine : null;
     }
 
     public function routes(RouteBuilder $routes): void
@@ -142,22 +189,21 @@ final class Application extends BaseApplication
             // --- Feature demo endpoints (GET) ---
             $builder->connect('/features', ['controller' => 'Feature', 'action' => 'index'])
                 ->setMethods(['GET']);
-            $builder->connect('/features/aop', ['controller' => 'Feature', 'action' => 'aop'])
+            $builder->connect('/features/aop-tx-direct', ['controller' => 'Feature', 'action' => 'aopDirect'])
                 ->setMethods(['GET']);
-            $builder->connect('/features/aop-direct', ['controller' => 'Feature', 'action' => 'aopDirect'])
-                ->setMethods(['GET']);
-            $builder->connect('/features/cache', ['controller' => 'Feature', 'action' => 'cache'])
+            $builder->connect('/features/aop-cache-direct', ['controller' => 'Feature', 'action' => 'aopCacheDirect'])
                 ->setMethods(['GET']);
             $builder->connect('/features/log', ['controller' => 'Feature', 'action' => 'logDemo'])
                 ->setMethods(['GET']);
-            $builder->connect('/features/retry', ['controller' => 'Feature', 'action' => 'retry']);
-            $builder->connect('/features/pipeline', ['controller' => 'Feature', 'action' => 'pipeline']);
             $builder->connect('/features/db-events', ['controller' => 'Feature', 'action' => 'dbEvents']);
             $builder->connect('/features/events', ['controller' => 'Feature', 'action' => 'events']);
             $builder->connect('/features/validation', ['controller' => 'Feature', 'action' => 'validation']);
             $builder->connect('/features/config', ['controller' => 'Feature', 'action' => 'config']);
-            $builder->connect('/features/request-scoped', ['controller' => 'Feature', 'action' => 'requestScoped']);
             $builder->connect('/features/rate-limit', ['controller' => 'Feature', 'action' => 'rateLimit']);
+            // The lifecycle row. Cake's middleware queue is global, so the hook scopes
+            // itself to this controller/action pair (see
+            // App\Cake\Middleware\LifecycleHookMiddleware).
+            $builder->connect('/features/lifecycle-hooks', ['controller' => 'Feature', 'action' => 'lifecycleHooks']);
 
             // --- Filler routes (route-table size parity) ---
             for ($i = 1; $i <= 100; $i++) {
@@ -168,7 +214,7 @@ final class Application extends BaseApplication
 
     /**
      * Stock handle() appends two Definitions per request (leak in worker
-     * mode — see property docs above).  Register once, then mutate the
+     * mode ??? see property docs above).  Register once, then mutate the
      * concrete value per request.
      */
     public function handle(

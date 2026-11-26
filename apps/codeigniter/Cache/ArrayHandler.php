@@ -13,16 +13,16 @@ declare(strict_types=1);
  *
  *   - warm/worker mode: entries survive between requests (the service
  *     singleton is preserved by BaseService::resetForWorkerMode — 'cache'
- *     is in Config\WorkerMode::$persistentServices), so the #[Cache]-style
+ *     is in Config\WorkerMode::$persistentServices), so the aop-cache-direct
  *     demo hits after the first call;
  *   - cold mode: every fresh boot (forked child) starts with an EMPTY
- *     store, so the 50 ms simulated cache-miss is paid again — exactly
- *     what every other framework pays.
+ *     store, so the COUNT is paid again — exactly what every other
+ *     framework pays.
  *
  * With the previous file handler the on-disk store survived re-boots, so
  * only iteration 1 of a cold block paid the miss — a parity hole that
- * made CI4's cold /features/cache + /features/db-events rows ~17x faster
- * than the field's (and halved its cold total).
+ * made CI4's cold /features/aop-cache-direct + /features/db-events rows ~17x
+ * faster than the field's (and halved its cold total).
  */
 
 namespace Ci4App\Cache;

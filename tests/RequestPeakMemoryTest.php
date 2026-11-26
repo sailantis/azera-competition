@@ -231,35 +231,6 @@ final class RequestPeakMemoryTest extends TestCase
      * be read side by side (which is the whole reason one code path serves
      * both).
      */
-    public function testRoadRunnerWorkerAnswersTheSamePeakField(): void
-    {
-        // LF-normalised: the position comparison below spans lines, and this
-        // repo is checked out CRLF.
-        $w = str_replace(
-            "\r\n",
-            "\n",
-            (string) file_get_contents(dirname(__DIR__) . '/deploy/rr/worker.php')
-        );
-
-        self::assertStringContainsString('X-Bench-Peak', $w);
-        self::assertStringContainsString('memory_get_peak_usage(false)', $w);
-        // Reset BEFORE dispatch. Resetting after would throw away the very
-        // work the number is supposed to describe.
-        $reset    = strpos($w, 'memory_reset_peak_usage()');
-        $dispatch = strpos($w, '$adapter->dispatch(');
-        self::assertNotFalse($reset);
-        self::assertNotFalse($dispatch);
-        self::assertLessThan(
-            $dispatch,
-            $reset,
-            'the RR mark must be reset before the request is dispatched'
-        );
-
-        // The cumulative heap must SURVIVE: it is the leak trajectory the
-        // roadrunner page is built around — it is what showed cakePHP's
-        // 0.85 -> 40.6 MB climb before the adapter leak was fixed.
-        self::assertStringContainsString('X-Bench-Heap', $w);
-    }
 
     /**
      * Repeats are only worth taking because peak is per-request. The harness

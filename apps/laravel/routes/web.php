@@ -31,18 +31,20 @@ Route::post('/items-qb', [BenchController::class, 'createQb']);
 
 // --- Feature demos ----------------------------------------------------------
 Route::get('/features', [FeatureController::class, 'index']);
-Route::get('/features/aop', [FeatureController::class, 'aop']);
-Route::get('/features/aop-direct', [FeatureController::class, 'aopDirect']);
-Route::get('/features/cache', [FeatureController::class, 'cache']);
+Route::get('/features/aop-tx-direct', [FeatureController::class, 'aopDirect']);
+Route::get('/features/aop-cache-direct', [FeatureController::class, 'aopCacheDirect']);
 Route::get('/features/log', [FeatureController::class, 'log']);
-Route::get('/features/retry', [FeatureController::class, 'retry']);
-Route::get('/features/pipeline', [FeatureController::class, 'pipeline']);
 Route::get('/features/db-events', [FeatureController::class, 'dbEvents']);
 Route::get('/features/events', [FeatureController::class, 'events']);
 Route::get('/features/validation', [FeatureController::class, 'validation']);
 Route::get('/features/config', [FeatureController::class, 'config']);
-Route::get('/features/request-scoped', [FeatureController::class, 'requestScoped']);
 Route::get('/features/rate-limit', [FeatureController::class, 'rateLimit']);
+// The lifecycle row. The middleware is attached HERE rather than in the kernel's
+// global stack: no other entrant runs a middleware stack on the benchmark rows, so a
+// global registration would charge this work to every row. See
+// App\Laravel\Http\Middleware\LifecycleHookMiddleware.
+Route::get('/features/lifecycle-hooks', [FeatureController::class, 'lifecycleHooks'])
+    ->middleware(\App\Laravel\Http\Middleware\LifecycleHookMiddleware::class);
 
 // --- Filler routes (route-table size parity with other apps) ----------------
 // Pointed at a CONTROLLER METHOD, not a closure. A closure route cannot be part of a

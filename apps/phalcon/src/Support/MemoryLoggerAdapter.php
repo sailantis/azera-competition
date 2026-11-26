@@ -10,11 +10,10 @@ use Phalcon\Logger\Item;
 /**
  * A logger adapter that keeps the records in memory instead of writing them.
  *
- * Why this exists: the `#features/log` and `/features/pipeline` demos have to
- * SHOW what the logger did, and every other app does that by reading back the
- * entries it just wrote (azera's MemoryLogger, CI4's log_message capture,
- * Cake's explicit entry array). Streaming to a file would make the endpoint
- * measure disk I/O, which is not the feature under test and is not comparable.
+ * Why this exists: the `#features/log` demo has to SHOW what the logger did, and every
+ * other app does that by reading back the entries it just wrote (azera's MemoryLogger,
+ * CI4's log_message capture, Cake's explicit entry array). Streaming to a file would make
+ * the endpoint measure disk I/O, which is not the feature under test and is not comparable.
  *
  * `AbstractAdapter` supplies the queue, transactions, formatter and level
  * handling; only the two abstract members — `process()` and `close()` — are

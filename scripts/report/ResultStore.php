@@ -26,8 +26,8 @@ final class ResultStore
     /**
      * Webserver-overhead pseudo-apps from the real-deployment dataset
      * (`floors` top-level key: floor-http = static file via nginx, floor-php =
-     * hello-world via a freshly spawned FPM worker, floor-rr = bare resident
-     * RoadRunner worker). These are NOT frameworks and are excluded from
+     * hello-world via a freshly spawned FPM worker, floor-volucer-attach = bare resident
+     * resident worker). These are NOT frameworks and are excluded from
      * apps(); they exist to make the constant server/spawn cost explicit, so
      * a real-FPM number can be read as "floor + framework boot".
      *
@@ -247,12 +247,11 @@ final class ResultStore
      * request).
      *
      * This used to be decided by matching the mode NAME against
-     * `['warm', 'roadrunner']` / `['cold', 'php-fpm']`, repeated in about
-     * eighty places across the renderers. That was correct while the only two
-     * modes were those two, and it broke silently the moment a fourth name
-     * existed: `volucer-attach` is a resident worker and `volucer-cgi` boots
-     * per request, so a name-matching renderer would have drawn the cold arm
-     * with the resident memory chart and charged it the warm boot rule — a
+     * `['warm']` / `['cold', 'php-fpm']`, repeated in about eighty places across
+     * the renderers. That was correct while the only two modes were those two,
+     * and it broke silently the moment a third name existed: the resident
+     * `volucer-attach` arm would have been drawn with the cold memory chart had
+     * it not been in the list — a
      * wrong page with a green run, no exception anywhere.
      *
      * The dataset already knows the answer: the harness stamps
@@ -277,7 +276,7 @@ final class ResultStore
         // Fallback: the historical name convention, widened by the names that
         // have existed. A name this does not recognise is treated as warm,
         // matching the pre-stamp behaviour.
-        return in_array($mode, ['cold', 'php-fpm', 'volucer-cgi'], true) ? 'cold' : 'warm';
+        return in_array($mode, ['cold', 'php-fpm'], true) ? 'cold' : 'warm';
     }
 
     /**
@@ -416,7 +415,7 @@ final class ResultStore
      *
      * A real deployment has two servers, and they do not read the same
      * directive: php-fpm runs as `fpm-fcgi` and reads `opcache.enable`, while
-     * the RoadRunner worker runs `php deploy/rr/worker.php` (the CLI SAPI) and
+     * the volucer worker runs `deploy/volucer/app.php` under the CLI SAPI and
      * reads `opcache.enable_cli`. A single boolean cannot describe both, which
      * is why this is a per-mode map rather than the CLI harness's scalar
      * `env.opcache`.
@@ -489,13 +488,13 @@ final class ResultStore
     }
 
     /**
-     * The RoadRunner pool's max_jobs the measured worker ran with, or null
+     * The resident pool's max_jobs the measured worker ran with, or null
      * when the dataset does not say (every dataset written before this was
      * stamped).
      *
-     * RoadRunner defines 0 as "no limit" — the worker is never recycled. The
-     * warm/roadrunner band must branch on this for the same reason the
-     * cold/php-fpm band branches on fpmMaxRequests(): the boot a request
+     * 0 means "no limit" — the worker is never recycled. The warm band must
+     * branch on this for the same reason the cold/php-fpm band branches on
+     * fpmMaxRequests(): the boot a request
      * carries is a property of the POOL SETTING, not of the framework. At 0
      * one boot is amortised over the whole block; at N the pool pays a
      * recycle every N requests, so each request carries boot/N.
@@ -507,11 +506,11 @@ final class ResultStore
     }
 
     /**
-     * Does the measured RoadRunner pool recycle its worker, and does the
+     * Does the measured resident pool recycle its worker, and does the
      * dataset even say? Shared by every prose site that describes what the
-     * warm/roadrunner rows contain, so they cannot drift apart:
+     * warm rows contain, so they cannot drift apart:
      *
-     *   'never'   — max_jobs 0 (RoadRunner's "no limit"). One boot for the
+     *   'never'   — max_jobs 0 ("no limit"). One boot for the
      *               whole block; no request carries a boot.
      *   'every'   — max_jobs N > 0. A recycle every N jobs, so each request
      *               carries boot/N.
@@ -533,7 +532,7 @@ final class ResultStore
      * dataset even say?
      *
      * The accessor every prose site should use. `rrRecycleModel()` reads
-     * `env.rr_max_jobs`, which is a RoadRunner setting: on a Volucer page it
+     * `env.rr_max_jobs`, which was the RoadRunner arm's setting: on a Volucer page it
      * described recycling performed by a different mechanism, i.e. a claim about a
      * knob the measured server does not read. The two values agreed only by
      * coincidence — both 0 — so nothing caught it.
@@ -586,7 +585,7 @@ final class ResultStore
      * alive, for prose like "a pool that never recycles it (max_jobs=0)".
      *
      * The setting is named rather than described because it is checkable: a
-     * reader can find `max_jobs = 0` in the RoadRunner config template and
+     * reader can find `max_jobs = 0` in the retired RoadRunner config template and
      * `max_requests = 0` in Volucer's. A generic "is not recycled" phrase would be
      * true but unfalsifiable, and it was previously spelled `max_jobs=0` on every
      * page including Volucer's, where that key is never read.
@@ -672,7 +671,7 @@ final class ResultStore
 
     /**
      * Whether the boot numbers came from a REAL deployment (the boot probe in
-     * scripts/run-http.php, measured inside the FPM entry script / RoadRunner
+     * scripts/run-http.php, measured inside the FPM entry script / worker
      * worker) rather than from the in-process CLI harness (measureBoot()).
      *
      * The distinction matters because the CLI dataset has THREE bands (cold
@@ -769,7 +768,7 @@ final class ResultStore
      *     The measured boot is therefore already part of trimmed_mean_ms;
      *     the row's own boot_ms reports the split, so it is read from there.
      *
-     *   warm/roadrunner — a resident worker boots ONCE, so the per-request
+     *   warm — a resident worker boots ONCE, so the per-request
      *     rows contain no boot at all (their boot_ms is a guarded no-op
      *     re-boot, ~0.0002 ms). The recycle a worker pays to come back —
      *     measureBoot()'s warm_ms — is the boot this mode's requests carry,
@@ -778,12 +777,12 @@ final class ResultStore
      * This is what makes a feature row mean "how long the worker is occupied
      * by one request, boot included" instead of "the request minus the boot".
      *
-     * The warm/roadrunner branch reads the per-MODE boot first. On a real
-     * deployment one app is measured on two servers, and run-http.php writes
-     * the boot under both `boot_by_mode[mode]` (correct) and the legacy scalar
-     * `boot` (whichever server was measured LAST — php-fpm, since the server
-     * loop is [rr, fpm]). Reading the scalar here therefore charged every
-     * RoadRunner row the PHP-FPM boot: a roughly constant offset per framework
+     * The warm branch reads the per-MODE boot first. On a real deployment one
+     * app is measured on two servers, and run-http.php writes the boot under
+     * both `boot_by_mode[mode]` (correct) and the legacy scalar `boot`
+     * (whichever server was measured LAST — php-fpm). Reading the scalar here
+     * therefore charged every resident row the PHP-FPM boot: a roughly constant
+     * offset per framework
      * (+16.0 ms Spiral, +3.2 Laravel, +0.88 CodeIgniter, ...) that reordered
      * the field and made the inflated rows read "server-bound" — a report bug,
      * not a measurement (2026-09-17). The scalar is only the fallback for
@@ -818,7 +817,7 @@ final class ResultStore
      *
      * Cold/php-fpm rows already carry their boot inside trimmed_mean_ms
      * (fork-per-iteration times bootstrap() in the request clock), so this
-     * returns the measured total. Warm/roadrunner rows measure post-boot work
+     * returns the measured total. Warm (resident) rows measure post-boot work
      * only, so the boot SHARE that request carries is added — the worker's
      * recycle divided by the pool's max_jobs (and zero when the pool never
      * recycles; see bootAddOn()).
@@ -841,11 +840,11 @@ final class ResultStore
      *     the request clock, so the measured number IS the occupancy and
      *     adding anything would double-count the boot.
      *
-     *   warm/roadrunner — the recycle the pool pays, DIVIDED by how many jobs
+     *   warm — the recycle the pool pays, DIVIDED by how many jobs
      *     it serves between recycles (max_jobs). The warm rows measure
      *     post-boot work only, so this is the share of the recycle one request
      *     actually carries:
-     *       0    (RoadRunner "no limit") -> 0.0, the worker booted once for
+     *       0    ("no limit") -> 0.0, the worker booted once for
      *              the whole block and no request pays a boot
      *       N    -> warm_ms / N, the recycle amortised across its jobs
      *       null (un-stamped) -> warm_ms, the historical per-request reading
@@ -866,7 +865,7 @@ final class ResultStore
         // How much of the recycle does ONE request actually carry? That is a
         // property of the pool's max_jobs, not of the framework:
         //
-        //   0    — RoadRunner's "no limit": the worker is never recycled, so
+        //   0    — "no limit": the worker is never recycled, so
         //          it boots ONCE for the whole block and no request pays a
         //          boot. Adding warm_ms here (what this did before the stamp
         //          existed) charged the entire recycle to every cell of a
@@ -877,10 +876,10 @@ final class ResultStore
         //          per-request behaviour so old renders do not silently move.
         //
         // The knob comes from modeRecycleJobs(), which reads the setting the
-        // MEASURED server actually uses: `max_jobs` is RoadRunner's, `max_requests`
+        // MEASURED server actually uses: `max_jobs` is the resident pool's, `max_requests`
         // is Volucer's, and `attach` recycles per connection (one request) rather
         // than on a schedule. Reading $this->rrMaxJobs() directly charged every
-        // Volucer resident row a boot according to a RoadRunner setting.
+        // Volucer resident row a boot according to another server's setting.
         $jobs = $this->modeRecycleJobs($mode);
         if ($jobs === 0) {
             return 0.0;
@@ -1122,7 +1121,7 @@ final class ResultStore
      * The three numbers a dot-and-range mark needs: typical, best and tail.
      *
      * These are PER-REQUEST WORKER OCCUPANCY, not bare request time: the
-     * deployment model's boot is added (bootAddOn), so a warm/roadrunner dot
+     * deployment model's boot is added (bootAddOn), so a warm dot
      * carries the worker's recycle cost exactly like the cold dot carries its
      * FPM rebuild. Charts and tables therefore agree on what a cell means —
      * the whole time one request keeps the worker busy.
@@ -1206,7 +1205,7 @@ final class ResultStore
         ];
     }
 
-    // --- Resident-worker memory (the opt-in RoadRunner probe) --------------
+    // --- Resident-worker memory (the opt-in worker probe) -------------------
     //
     // deploy/rr/worker.php answers an `X-Mem-Probe: 1` request with the
     // worker's own heap numbers; scripts/http-bench.php makes exactly one such
@@ -1527,8 +1526,8 @@ final class ResultStore
                 continue;
             }
             // The endpoint-level exclusion, which the feature gate cannot express:
-            // Phalcon implements `aop` (it serves the control endpoint) but sits out
-            // `/features/aop` itself.
+            // Phalcon implements `aop-tx` (it serves the control endpoint) but sits out
+            // `/features/aop-tx` itself.
             if (!$this->racesOn($app, $request)) {
                 continue;
             }
@@ -1626,7 +1625,7 @@ final class ResultStore
      * An endpoint one entrant is excluded from is NOT common: the totals are the sum
      * of what a framework does on a pass over these requests, and including a row the
      * page shows as `—` for that entrant would sum work it never did. That was the
-     * 2026-11-25 bug — the table blanked Phalcon's `/features/aop` while the totals
+     * 2026-11-25 bug — the table blanked Phalcon's `/features/aop-tx` while the totals
      * quietly added its 2 ms, so the same page said "not competed" and "competed".
      *
      * The consequence is that the totals cover a smaller set than the table's rows, so

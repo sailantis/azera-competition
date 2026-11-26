@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Floor entry script: a front controller with NO framework behind it.
  *
- * WHY THIS EXISTS. Every Volucer arm and every RoadRunner/FPM block gets a floor
+ * WHY THIS EXISTS. Every measured server arm gets a floor
  * probe, so the constant server overhead is visible in the dataset instead of
  * being attributed to whichever framework ran on that row. The two Volucer arms
  * had no floor until 2026-11-24, which left their rows — the ones where the floor
@@ -22,12 +22,12 @@ declare(strict_types=1);
  * not be able to drift into booting something, and a probe that shares a file
  * with a measured app is a probe one edit away from measuring the app.
  *
- * The name `floor-volucer-attach` / `floor-volucer-cgi` is what
+ * The name `floor-volucer-attach` is what
  * `stampVolucerConfigs()` stamps into `front_controller`, and it is why this file
  * is named `index-floor-volucer-attach.php` — `index-{{APP}}.php` with
  * `{{APP}} = floor-volucer-attach`. The two arms share it because the only
  * difference between them is whether volucer forks a child (attach) or spawns
- * `php-cgi` (spawn_cgi) to run this file.
+ * a per-request transport to run this file.
  */
 
 // A constant, and nothing else. No autoloader, no boot, no database: the whole

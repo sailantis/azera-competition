@@ -12,6 +12,10 @@ namespace App\Phalcon\Support;
  * events manager is attached to it. This class is the listener that records
  * them, in the same shape the CI4 and CakePHP entrants emit for the same row.
  *
+ * The `/features/db-events` demo writes on an autocommit connection, so only
+ * `db:afterQuery` reaches this log there; the transaction types are recorded for
+ * the `aop-*` rows, which do open one.
+ *
  * ATTACHED PERMANENTLY, ON PURPOSE — and that is not free. `setEventsManager()`
  * only accepts a manager (it rejects `null` with a TypeError), and
  * `detachAll()` leaves the manager itself attached, so there is no way to
@@ -35,17 +39,39 @@ final class DbEventLog
     /**
      * The `db:` event types this log records.
      *
-     * Phalcon fires more than these (`db:createSavepoint`, `db:rollbackSavepoint`,
-     * `db:connectionLost`), but they only occur on paths the demo does not take;
-     * recording the four that actually happen keeps the payload comparable with
-     * the other entrants' query logs.
+     * `beforeQuery` is deliberately NOT here. Phalcon fires that BEFORE the
+     * statement runs, and it also fires for statements that then fail — so
+     * recording it alongside `afterQuery` reports every statement twice and makes
+     * Phalcon's payload look twice as busy as the other entrants', whose hooks fire
+     * once per statement after execution. `afterQuery` is the exact analogue of
+     * `QueryExecuted`.
+     *
+     * Phalcon fires more events than these (`db:createSavepoint`,
+     * `db:rollbackSavepoint`, `db:connectionLost`), but they only occur on paths
+     * the demo does not take.
      */
     private const RECORDED = [
-        'beforeQuery',
         'afterQuery',
         'beginTransaction',
         'commitTransaction',
         'rollbackTransaction',
+    ];
+
+    /**
+     * Statements that describe the CONNECTION or the SCHEMA rather than the demo.
+     *
+     * Not every entrant's hook sees these — it depends on when the framework
+     * attaches its listener relative to when the connection is opened, and on how
+     * much schema introspection the ORM does per operation. Recording them made
+     * the same logical workload (one upsert + one COUNT) report anywhere from 2 to
+     * 9 events, so the row's payload measured when a logger was attached and how
+     * curious an ORM is, not the observation facility it exists to compare.
+     */
+    private const INFRASTRUCTURE_SQL = [
+        '/^\s*PRAGMA\b/i',
+        '/^\s*SELECT\s+.+FROM\s+pragma_/is',
+        '/sqlite_master/i',
+        '/^\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i',
     ];
 
     /**
@@ -65,10 +91,18 @@ final class DbEventLog
 
         $entry = ['event' => $type];
 
-        if ($type === 'beforeQuery' || $type === 'afterQuery') {
-            // The adapter exposes the statement it is running; the log is the
+        if ($type === 'afterQuery') {
+            // The adapter exposes the statement it just ran; the log is the
             // point of this endpoint, so the SQL belongs in the payload.
-            $entry['query'] = (string) $source->getSqlStatement();
+            $sql = (string) $source->getSqlStatement();
+
+            foreach (self::INFRASTRUCTURE_SQL as $pattern) {
+                if (preg_match($pattern, $sql) === 1) {
+                    return;
+                }
+            }
+
+            $entry['query'] = $sql;
         }
 
         if (is_array($data) && $data !== []) {

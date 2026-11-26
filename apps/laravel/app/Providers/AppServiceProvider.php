@@ -4,8 +4,8 @@
  * Benchmark app service provider — config merging + feature service bindings.
  *
  * The Laravel benchmark app has no package discovery; this provider wires
- * the benchmark config namespace and request-scoped services explicitly,
- * mirroring Spiral's AppBootloader.
+ * the benchmark config namespace and the DB event log explicitly, mirroring
+ * Spiral's AppBootloader.
  */
 
 namespace App\Laravel\Providers;
@@ -13,8 +13,6 @@ namespace App\Laravel\Providers;
 use App\Laravel\Events\ItemCreated;
 use App\Laravel\Listeners\StampListener;
 use App\Laravel\Service\DbEventLog;
-use App\Laravel\Service\RequestCounter;
-use App\Laravel\Service\ScopeState;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -23,12 +21,6 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Request-scoped state: scoped singleton semantics via
-        // `$app->scoped()` — a fresh instance per request, single instance
-        // within the request (mirrors Spiral's #[Scope('http')] services).
-        $this->app->scoped(RequestCounter::class);
-        $this->app->scoped(ScopeState::class);
-
         // DB event log lives for the process (query log accumulates there).
         $this->app->singleton(DbEventLog::class);
 
@@ -58,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../../config/benchmark.php', 'benchmark');
         $this->mergeConfigFrom(__DIR__ . '/../../config/cache.php', 'cache');
         $this->mergeConfigFrom(__DIR__ . '/../../config/database.php', 'database');
+        $this->mergeConfigFrom(__DIR__ . '/../../config/logging.php', 'logging');
         $this->mergeConfigFrom(__DIR__ . '/../../config/view.php', 'view');
 
         // View globals — locale + platform for the layout footer, resolved by the
@@ -88,26 +81,22 @@ class AppServiceProvider extends ServiceProvider
         // other listeners this app registers.
         $events->listen(ItemCreated::class, StampListener::class);
 
-        // Laravel 12 scoped flush: reset per-request state after each request.
-        // forgetScopedInstances() alone is NOT sufficient in a long-running
-        // worker: the Router caches each Route's resolved controller for the
-        // process lifetime, so a cached controller keeps its ORIGINAL
-        // constructor-injected scoped services even after the container
-        // flushes them (observed: request-scoped scope_trace grew +2 entries
-        // per request, count never reset). Flushing the matched route's
-        // controller forces re-resolution from the container on the next
-        // request — the worker-safe equivalent of php-fpm teardown.
-        $events->listen(\Illuminate\Foundation\Http\Events\RequestHandled::class, function (\Illuminate\Foundation\Http\Events\RequestHandled $event): void {
+        // Worker-mode per-request teardown.
+        //
+        // `forgetScopedInstances()` is Laravel's own scoped-container flush and
+        // runs after every RequestHandled so a resident worker cannot carry
+        // request state into the next request. Nothing in this app binds a
+        // scoped service today, so it is currently a no-op guard — kept because
+        // it is the framework's contract, not because a demo needs it.
+        //
+        // The DB event log, by contrast, is live: it records one entry per
+        // executed query into a PROCESS-LIFETIME singleton (see register()). In
+        // a resident worker that grows without bound — measured +~850 B per
+        // query-request over 5,000 requests (2026-09-14) — so it must be wiped
+        // per request. Without this, the db-events demo turns the benchmark's own
+        // instrumentation into a false "framework leaks" signal.
+        $events->listen(\Illuminate\Foundation\Http\Events\RequestHandled::class, function (): void {
             $this->app->forgetScopedInstances();
-            $event->request->route()?->flushController();
-
-            // The DB event log records one entry per executed query into a
-            // PROCESS-LIFETIME singleton (see register()). In a resident
-            // worker that grows without bound — measured +~850 B per
-            // query-request over 5,000 requests (2026-09-14) — so it must be
-            // wiped per request exactly like Laravel's scoped services.
-            // Without this, the db-events demo turns the benchmark's own
-            // instrumentation into a false "framework leaks" signal.
             $this->app->make(DbEventLog::class)->clear();
         });
     }

@@ -124,63 +124,6 @@ final class FpmMemoryProbeTest extends TestCase
         self::assertSame(990880, $store->residentBootHeap('azera', 'roadrunner'));
     }
 
-    public function testFpmSampleFieldsMatchTheRoadRunnerHeaderFields(): void
-    {
-        // boot-probe.php must emit exactly the five keys deploy/rr/worker.php
-        // answers with, or the harness's mapping becomes a translation that
-        // can drift. Read both sources rather than trusting the docblocks.
-        //
-        // The field set is FIVE since 2026-09-17: peak joined boot/heap/rss/hwm
-        // when the probe moved from a post-request heap snapshot to a
-        // per-request high-water mark. The two sides must still be identical
-        // sets, which is the property this test exists to pin.
-        $probe = (string) file_get_contents(dirname(__DIR__) . '/boot-probe.php');
-        $rrW   = (string) file_get_contents(dirname(__DIR__) . '/deploy/rr/worker.php');
-
-        $fields = ['boot', 'peak', 'heap', 'rss', 'hwm'];
-        foreach ($fields as $field) {
-            self::assertMatchesRegularExpression(
-                "/'" . $field . "'\s+=>/",
-                $probe,
-                "boot-probe.php must write a '{$field}' key"
-            );
-        }
-        // The RR worker answers through X-Bench-<Field> headers; those names
-        // are the contract the harness reads back.
-        $headers = ['X-Bench-Boot', 'X-Bench-Peak', 'X-Bench-Heap', 'X-Bench-Rss', 'X-Bench-Hwm'];
-        foreach ($headers as $header) {
-            self::assertStringContainsString($header, $rrW, "{$header} must still be answered");
-        }
-
-        // Neither side may grow a field the other lacks — that is exactly the
-        // drift this test guards, and the loops above only catch MISSING
-        // fields, never an extra one. Extracting both sets and comparing them
-        // as sets catches either direction.
-        //
-        // Scoped to the MEMORY probe's own names on both sides: the RR worker
-        // also answers X-Bench-Split/Handle-Us/Cleanup-Us for a different
-        // measurement entirely, and counting those would compare field sets of
-        // two unrelated probes.
-        preg_match_all("/'(boot|peak|heap|rss|hwm)'\s+=>/", $probe, $pm);
-        preg_match_all('/X-Bench-(Boot|Peak|Heap|Rss|Hwm)\b/', $rrW, $rm);
-
-        $probeFields = array_values(array_unique(array_map('strtolower', $pm[1])));
-        $rrFields    = array_values(array_unique(array_map('strtolower', $rm[1])));
-        sort($probeFields);
-        sort($rrFields);
-
-        self::assertSame(
-            $probeFields,
-            $rrFields,
-            'both probes must report the same memory field set, in either direction'
-        );
-
-        // And the client-side reader must normalise to those same keys.
-        $lib = (string) file_get_contents(dirname(__DIR__) . '/scripts/bench-lib.php');
-        self::assertStringContainsString("'hwm'  => (int) (\$row['hwm'] ?? 0)", $lib);
-        self::assertStringContainsString("'peak' => \$peak,", $lib);
-    }
-
     public function testFpmProbeIsGatedOnAHeaderTimedRequestsNeverSend(): void
     {
         // An ungated 3.124 us/op append would charge the fastest framework
@@ -247,50 +190,6 @@ final class FpmMemoryProbeTest extends TestCase
      * differ as well: "Resident worker memory" is only true where a worker is
      * resident.
      */
-    public function testResidentMemoryProseDoesNotAttributeFpmNumbersToRoadRunner(): void
-    {
-        $store = ResultStore::load(self::writeFixture(
-            ['boot' => 990880, 'peak' => 1394568, 'heap' => 1394568, 'rss' => 0, 'hwm' => 0],
-            ['boot' => 990880, 'peak' => 1394568, 'heap' => 1394568, 'rss' => 0, 'hwm' => 0]
-        ));
-        $apps = ['azera', 'spiral'];
-        $dir  = dirname(__DIR__) . '/temp/tmp-fpm-mem-svg';
-
-        $fpmMd = (new MarkdownReport($store, 'real-fpm', [
-            'title'  => 'Real FPM',
-            'apps'   => $apps,
-            'mode'   => 'php-fpm',
-            'charts' => ['resident-memory'],
-        ]))->render($dir . '-fpm', 'svg/real-fpm');
-
-        $rrMd = (new MarkdownReport($store, 'real-roadrunner', [
-            'title'  => 'Real RR',
-            'apps'   => $apps,
-            'mode'   => 'roadrunner',
-            'charts' => ['resident-memory'],
-        ]))->render($dir . '-rr', 'svg/real-roadrunner');
-
-        // FPM: a per-request page that never mentions a resident worker.
-        self::assertStringContainsString('## Per-request memory', $fpmMd);
-        self::assertStringNotContainsString(
-            'RoadRunner worker',
-            $fpmMd,
-            'the FPM page must not claim its numbers came from a RoadRunner worker'
-        );
-        self::assertStringNotContainsString(
-            'Resident worker memory',
-            $fpmMd,
-            'a fresh-process server has no resident worker to describe'
-        );
-        self::assertStringContainsString('max_requests = 0', $fpmMd);
-        // The per-request question, stated as such.
-        self::assertStringContainsString('high-water mark', $fpmMd);
-
-        // RR: the resident-worker page keeps its own section and transport.
-        self::assertStringContainsString('RoadRunner worker', $rrMd);
-        self::assertStringContainsString('## Resident worker memory', $rrMd);
-        self::assertStringNotContainsString('Per-request memory', $rrMd);
-    }
 
     /**
      * The read must WAIT for the shutdown hook's write.

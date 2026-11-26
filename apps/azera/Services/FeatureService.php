@@ -12,8 +12,6 @@ namespace App\Azera\Services;
 
 use Azera\Aop\Advised;
 use Azera\Aop\Cache;
-use Azera\Aop\Log;
-use Azera\Aop\Retry;
 use Azera\Aop\Transactional;
 use Azera\AppContext;
 use Azera\Db\Query;
@@ -24,9 +22,47 @@ class FeatureService
     /** Fixed row used by every feature-demo write — the row count stays stable across benchmark runs. */
     public const FEATURE_SENTINEL_ID = 888800;
 
+    /**
+     * Cache key of the cached COUNT.
+     *
+     * Shared by the `#[Cache]` advice (below) and the hand-written control in
+     * `FeatureController::aopCacheDirectAction()`, so the two endpoints read and
+     * write the SAME entry — which is what makes them a same-work pair rather
+     * than two demos that happen to look alike.
+     */
+    public const CACHE_KEY = 'item_count';
+
     public function __construct(
         private AppContext $ctx,
     ) {}
+
+    /**
+     * Write the feature sentinel row and dispatch its event — the ONE workload
+     * every AOP demo in this app runs.
+     *
+     * Extracted so the three demos cannot drift apart. `#[Transactional]` (proxy),
+     * the explicit `Pipeline` and the hand-written control all call this same
+     * method, so the transaction handling is genuinely the only variable between
+     * them. The `WriteTitleUniqueness` and `AdvicePair` guards both depend on that:
+     * a twin that wrote a different row would be measuring a different workload
+     * under a label claiming otherwise.
+     */
+    private function writeSentinel(string $title): int
+    {
+        $db = $this->ctx->dbManager()->getOrDefault('default');
+        $db->query(
+            'INSERT INTO items (id, title, created_at) VALUES (?, ?, ?)'
+                . ' ON CONFLICT(id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at',
+            [self::FEATURE_SENTINEL_ID, $title, date('Y-m-d H:i:s')],
+        );
+        $id = self::FEATURE_SENTINEL_ID;
+
+        // Dispatch an event — the listener will run synchronously
+        // because we use EventDispatcher (PSR-14).
+        $this->ctx->events()->dispatch(new \App\Azera\Events\ItemCreated($id, $title));
+
+        return $id;
+    }
 
     /**
      * Create an item inside a transaction.
@@ -44,19 +80,52 @@ class FeatureService
     #[Transactional]
     public function createItemTransactional(string $title): int
     {
-        $db = $this->ctx->dbManager()->getOrDefault('default');
-        $db->query(
-            'INSERT INTO items (id, title, created_at) VALUES (?, ?, ?)'
-                . ' ON CONFLICT(id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at',
-            [self::FEATURE_SENTINEL_ID, $title, date('Y-m-d H:i:s')],
-        );
-        $id = self::FEATURE_SENTINEL_ID;
+        return $this->writeSentinel($title);
+    }
 
-        // Dispatch an event — the listener will run synchronously
-        // because we use EventDispatcher (PSR-14).
-        $this->ctx->events()->dispatch(new \App\Azera\Events\ItemCreated($id, $title));
+    /**
+     * Create an item with NO advice and NO transaction — plain autocommit.
+     *
+     * `GET /features/db-events` calls this. That row is about the database EVENT
+     * PIPELINE, not about interception: it writes a row and reads a COUNT so the
+     * framework's query/transaction events have something to fire on, then
+     * reports what its listener captured.
+     *
+     * It used to call {@see createItemTransactional()}, which carries
+     * `#[Transactional]`. That charged the row a generated-proxy dispatch and a
+     * `TransactionalInterceptor` frame the other six entrants do not pay, and —
+     * worse — it made Azera the only entrant whose demo opened a transaction
+     * here. Three of the others then described transaction events their own
+     * code could not produce. Same reasoning as the `log` row: advice belongs to
+     * the `aop-*` features, which measure it on their own rows.
+     *
+     * On an autocommit connection the event log therefore reports queries only,
+     * which is what every entrant without an explicit `begin` reports too.
+     */
+    public function createItemAutocommit(string $title): int
+    {
+        return $this->writeSentinel($title);
+    }
 
-        return $id;
+    /**
+     * Create an item with NO advice and NO transaction — the body that the
+     * explicit-`Pipeline` demo wraps.
+     *
+     * `GET /features/aop-tx-explicit` feeds this method through
+     * `Azera\Aop\Pipeline` with a real `TransactionalInterceptor`, so the
+     * BEGIN/COMMIT/ROLLBACK that the endpoint measures is executed by framework
+     * machinery the caller composed, not by this method. The method itself must
+     * therefore contain no transaction handling at all; the interceptor is the
+     * only thing that opens one.
+     *
+     * This is what makes Azera's two AOP modes comparable on identical work:
+     * the proxy route reaches {@see createItemTransactional()} and this one
+     * reaches the same `writeSentinel()` call, differing only in which layer
+     * supplies the transaction.
+     */
+    public function createItemUnmanaged(string $title): int
+    {
+        return $this->writeSentinel($title);
     }
 
     /**
@@ -76,7 +145,7 @@ class FeatureService
      * metric and it flattened the spread between frameworks from 15.3x to
      * 6.0x.
      */
-    #[Cache(ttl: 10, key: 'item_count')]
+    #[Cache(ttl: 10, key: self::CACHE_KEY)]
     public function countItems(): int
     {
         $row = $this->ctx->dbManager()
@@ -87,18 +156,18 @@ class FeatureService
     }
 
     /**
-     * Create an item inside a transaction, WITHOUT advice — the direct twin of
-     * {@see createItemTransactional()}.
+     * Create an item inside a hand-written transaction — the CONTROL row.
      *
-     * This exists so `GET /features/aop-direct` can run the SAME work as
-     * `GET /features/aop` through hand-written `begin`/`commit` instead of the
-     * generated `#[Transactional]` proxy. It is the only same-work
-     * transparent-vs-direct pair in the suite, and therefore the only way to
-     * price the abstraction instead of comparing two different workloads.
+     * This is deliberately NOT an AOP demo: it is plain `begin`/`commit`/
+     * `rollback` in application code, with no interceptor involved. It exists so
+     * `GET /features/aop-tx-direct` has the same-work control that every entrant can
+     * serve, which is what makes that row comparable across frameworks at all.
      *
-     * Identical in every respect to the advised method — same upsert, same
-     * sentinel id, same `ItemCreated` dispatch and listener — because any
-     * difference here would be measured as though it were proxy cost.
+     * Azera's own explicit-interceptor facility is measured separately, on
+     * `GET /features/aop-tx-explicit`, through {@see createItemUnmanaged()} plus a
+     * real `Azera\Aop\Pipeline`. Keeping the two apart matters: if this method
+     * called the framework's `TransactionalInterceptor` it would be a different
+     * workload from the six entrants whose control really is hand-written code.
      */
     public function createItemDirect(string $title): int
     {
@@ -111,14 +180,7 @@ class FeatureService
         $db->begin(true);
 
         try {
-            $db->query(
-                'INSERT INTO items (id, title, created_at) VALUES (?, ?, ?)'
-                    . ' ON CONFLICT(id) DO UPDATE SET title = excluded.title, created_at = excluded.created_at',
-                [self::FEATURE_SENTINEL_ID, $title, date('Y-m-d H:i:s')],
-            );
-            $id = self::FEATURE_SENTINEL_ID;
-
-            $this->ctx->events()->dispatch(new \App\Azera\Events\ItemCreated($id, $title));
+            $this->writeSentinel($title);
 
             $db->commit();
         } catch (\Throwable $e) {
@@ -127,7 +189,7 @@ class FeatureService
             throw $e;
         }
 
-        return $id;
+        return self::FEATURE_SENTINEL_ID;
     }
 
     /**
@@ -146,47 +208,39 @@ class FeatureService
 
         return (int) ($row['c'] ?? 0);
     }
+
     /**
-     * Internal hook used by the cache endpoint to inspect whether the
-     * #[Cache] interceptor actually hit without changing the public method
-     * signature used by the benchmark.
-     */
-    public function countItemsHit(): bool
-    {
-        $cache = $this->ctx->get('App\\Azera\\Cache\\ArrayCache');
-        return $cache !== null && $cache->has('item_count');
-    }
-    /**
-     * Log a message via the #[Log] AOP advice.
+     * Log a method entry and exit, and measure the work between them.
      *
-     * The LogInterceptor logs method entry, exit (with duration), and any
-     * exception.  The MemoryLogger registered in Bootstrap captures the
-     * entries so the controller can show them.
+     * DIRECT, not advised. This used to carry `#[Log(level: 'info', logArgs: true)]`
+     * and was reached through the generated proxy, so Azera's `/features/log` row
+     * paid for a proxy dispatch and an `LogInterceptor` frame that the other six
+     * entrants did not — a comparison between different machinery under one label.
+     * The row is about logging, so every entrant now writes the records in the
+     * method body and reports what its own logger captured; the advice belongs to
+     * the `aop-*` features, which have their own rows.
+     *
+     * `logger` is the PSR-3 service registered in Bootstrap (`MemoryLogger` here),
+     * the same interface the interceptors use — so this is still Azera's own
+     * logging stack, just called directly.
      */
-    #[Log(level: 'info', logArgs: true)]
     public function logSomething(string $message): string
     {
-        return "logged: {$message}";
-    }
+        $method = self::class . '::logSomething';
+        $logger = $this->ctx->logger();
 
-    /**
-     * Retry a flaky operation via the #[Retry] AOP advice.
-     *
-     * The RetryInterceptor retries the method up to `times` attempts
-     * (including the first).  This method fails on the first two calls
-     * and succeeds on the third, so the interceptor's retry loop is
-     * exercised and the final result is returned.
-     */
-    #[Retry(times: 3, backoff: 0)]
-    public function flakyOperation(): string
-    {
-        static $attempts = 0;
-        $attempts++;
+        $logger->info("Entering {$method}", ['method' => $method, 'args' => [$message]]);
 
-        if ($attempts < 3) {
-            throw new \RuntimeException("flaky failure (attempt {$attempts})");
-        }
+        $start  = hrtime(true);
+        $result = "logged: {$message}";
+        $elapsedMs = (hrtime(true) - $start) / 1e6;
 
-        return "succeeded on attempt {$attempts}";
+        $logger->info("Completed {$method}", [
+            'method'     => $method,
+            'args'       => [$message],
+            'duration_ms' => round($elapsedMs, 4),
+        ]);
+
+        return $result;
     }
 }

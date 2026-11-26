@@ -24,6 +24,10 @@ $known = [
     'spiral',
     'codeigniter',
     'cakephp',
+    // Phalcon was missing here while smoke-app.php already mapped
+    // PhalconAdapter, so the pre-flight could not be run for one of the seven
+    // entrants — the one whose 404s started this whole guard.
+    'phalcon',
 ];
 
 if (!in_array($key, $known, true)) {

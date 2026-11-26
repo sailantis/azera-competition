@@ -2,12 +2,18 @@
 /**
  * Functional parity checker.
  *
- * Runs each adapter's 4 benchmark endpoints once and asserts that the
- * output contains the expected substring.  Fails fast on any mismatch so
- * you can catch parity regressions before running a long benchmark.
+ * Runs each app's endpoints once (in a per-app child process, verify-app.php)
+ * and asserts the response is a success and contains the expected content.
+ * The expectation table lives there, ONCE: this file used to carry a second,
+ * unread copy that had already drifted — it omitted `GET /features/aop-tx-direct`,
+ * so the control row of the AOP pair was verified by nobody.
+ *
+ * An endpoint an app is deliberately excluded from
+ * (BenchmarkConfig::excludedRequests()) is skipped, not failed — the child
+ * applies the same map the measurement uses.
  *
  * Usage:
- *   php verify.php                 # verify all adapters
+ *   php verify.php                 # verify every adapters (the documented gate)
  *   php verify.php --apps=azera    # verify a subset
  */
 
@@ -16,7 +22,16 @@ require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/bench-view-globals.php';
 
 $opts = getopt('', ['apps::']);
-$apps = isset($opts['apps']) ? explode(',', $opts['apps']) : ['azera'];
+
+// Default to EVERY adapter, as the docblock and README's "Verify functional
+// parity across all adapters" both promise. Defaulting to azera alone meant the
+// documented gate checked one of seven entrants: it reported "All adapters
+// passed parity" after booting a single app, and Phalcon's deliberate
+// `/features/aop-tx` 404 plus CodeIgniter's fatal both sat outside its reach until
+// someone remembered `--apps=`.
+$apps = isset($opts['apps'])
+    ? explode(',', $opts['apps'])
+    : ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter', 'cakephp', 'phalcon'];
 
 $adapterClasses = [
     'azera'       => 'AzeraAdapter',
@@ -28,38 +43,7 @@ $adapterClasses = [
     'phalcon'     => 'PhalconAdapter',
 ];
 
-// Expected substring per endpoint (loose — we check that key content appears).
-$expect = [
-    'GET /echo'                    => 'bench',
-    'GET /api/routing/1'               => 'routing',
-    'GET /'                        => 'Welcome',
-    'GET /items'                   => '<table>',
-    'GET /items-fast'              => '<table>',
-    'GET /items/1'                 => 'Item 1',
-    'POST /items'                  => 'flash',
-    'GET /items-qb'                => '<table>',
-    'GET /items-qb/1'              => 'Item 1',
-    'POST /items-qb'               => 'flash',
-    'GET /api/items'               => '"id":',
-    'GET /api/items-fast'          => '"id":',
-    'GET /api/items/1'             => '"title":',
-    'POST /api/items'              => '"id":',
-    // -orm paths deactivated (2026-09-05) — see run.php.
-    // 'GET /items-orm'             => '<table>',
-    // 'GET /items-orm/1'           => 'Item 1',
-    // 'POST /items-orm'            => 'flash',
-    'GET /features/aop'            => '"new_id"',
-    'GET /features/cache'          => '"item_count"',
-    'GET /features/log'            => '"log_entries"',
-    'GET /features/retry'          => '"result"',
-    'GET /features/pipeline'       => '"log_entries"',
-    'GET /features/events'         => '"listener_log"',
-    'GET /features/validation'     => '"valid_payload"',
-    'GET /features/config'         => '"feature"',
-    'GET /features/db-events'      => '"events"',
-    'GET /features/request-scoped' => '"count_after"',
-    'GET /features/rate-limit'     => '"allowed"',
-];
+
 
 $failures = 0;
 

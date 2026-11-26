@@ -27,6 +27,7 @@ require_once __DIR__ . '/WebAppAdapter.php';
 require_once __DIR__ . '/adapters/BenchmarkAutoloader.php';
 require_once __DIR__ . '/response-guard.php';
 require_once __DIR__ . '/bench-view-globals.php';
+require_once __DIR__ . '/scripts/report/BenchmarkConfig.php';
 
 $map = [
     'azera'       => 'AzeraAdapter',
@@ -60,18 +61,18 @@ $checks = [
     'GET /api/items-fast',
     'GET /api/items/1',
     'POST /api/items',
-    'GET /features/aop',
-    'GET /features/aop-direct',
-    'GET /features/cache',
+    'GET /features/aop-tx',
+    'GET /features/aop-tx-explicit',
+    'GET /features/aop-tx-direct',
+    'GET /features/aop-cache',
+    'GET /features/aop-cache-direct',
     'GET /features/log',
-    'GET /features/retry',
-    'GET /features/pipeline',
     'GET /features/db-events',
     'GET /features/events',
     'GET /features/validation',
     'GET /features/config',
-    'GET /features/request-scoped',
     'GET /features/rate-limit',
+    'GET /features/lifecycle-hooks',
 ];
 
 $adapter = new $map[$key]();
@@ -80,6 +81,19 @@ $adapter->bootstrap();
 $failures = 0;
 
 foreach ($checks as $req) {
+    // An endpoint this app sits out by design is not a failure — the exclusion is
+    // the same map the measurement and the report use
+    // (BenchmarkConfig::excludedRequests()), so demanding the route here reported
+    // Phalcon's `/features/aop-tx` 404 as a broken app instead of a known absence.
+    if (!\AzeraCompetition\Report\BenchmarkConfig::competesOn($key, $req)) {
+        printf(
+            "[SKIP] %-28s %7s   does not compete (no such feature / excluded endpoint)\n",
+            $req,
+            '—'
+        );
+        continue;
+    }
+
     [$method, $uri] = explode(' ', $req, 2);
 
     $t0 = hrtime(true);

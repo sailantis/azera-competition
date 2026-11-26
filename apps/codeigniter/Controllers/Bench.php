@@ -36,7 +36,7 @@ final class Bench extends BaseController
     }
 
     /**
-     * GET /routing/{id} — routing cost with nothing after it.
+     * GET /api/routing/{id} — routing cost with nothing after it.
      *
      * `/echo` is static, so a router that indexes literals can answer it without
      * ever walking candidates; the endpoint measures throughput, not routing.

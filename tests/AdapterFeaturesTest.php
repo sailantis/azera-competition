@@ -24,7 +24,7 @@ use PHPUnit\Framework\TestCase;
  *   2. CLAIM LESS THAN IT CAN DO. After the routes were added, Phalcon was still
  *      excluded from all eleven features — including the seven it implements on
  *      native primitives (cache, db-events, events, validation, config,
- *      request-scoped, rate-limiter). It competed in none of them, and no page
+ *      rate-limiter). It competed in none of them, and no page
  *      said so.
  *
  * ROUTE PRESENCE is deliberately NOT re-checked here: `FeatureRouteParityTest`
@@ -62,14 +62,14 @@ final class AdapterFeaturesTest extends TestCase
     /**
      * Phalcon's one genuine gap is ONE ENDPOINT of AOP, not the feature.
      *
-     * `GET /features/aop` compares generated proxies against hand-written calls. Phalcon
+     * `GET /features/aop-tx` compares generated proxies against hand-written calls. Phalcon
      * 6 has no interceptor layer, so racing its hand-written insert there would compare
      * machinery rather than speed — that endpoint is excluded, per app, in
      * `BenchmarkConfig::excludedRequests()`.
      *
-     * `GET /features/aop-direct` is a DIFFERENT question and Phalcon answers it best: it
-     * is the hand-written CONTROL that every entrant serves, and Phalcon's `/features/aop`
-     * is already that same code. Excluding the whole `aop` feature (what this test used
+     * `GET /features/aop-tx-direct` is a DIFFERENT question and Phalcon answers it best: it
+     * is the hand-written CONTROL that every entrant serves, and Phalcon's `/features/aop-tx`
+     * is already that same code. Excluding the whole `aop-tx` feature (what this test used
      * to require) hid the control row from the entrant that reads it best and dropped
      * Phalcon from the totals' comparison silently.
      *
@@ -83,42 +83,58 @@ final class AdapterFeaturesTest extends TestCase
         $features = self::config()['phalcon'] ?? [];
         $all      = array_keys(self::featureRequests());
 
+        // Phalcon ships neither AOP facility: no proxy-generated advice (`aop-tx`,
+        // `aop-cache`) and no interceptor abstraction (`aop-tx-explicit`). Everything
+        // else is a native subsystem, and — critically — it DOES compete in
+        // `aop-tx-direct` and `aop-cache-direct`, the hand-written controls that need
+        // no framework facility.
         self::assertSame(
-            [],
+            ['aop-tx', 'aop-tx-explicit', 'aop-cache'],
             array_values(array_diff($all, $features)),
-            'Phalcon implements every feature natively; its gap is one ENDPOINT, not a facility. '
-                . 'Missing: ' . implode(', ', array_values(array_diff($all, $features)))
+            'Phalcon ships neither transparent advice nor an interceptor abstraction; '
+                . 'missing: ' . implode(', ', array_values(array_diff($all, $features)))
         );
 
         require_once dirname(__DIR__) . '/scripts/report/BenchmarkConfig.php';
         $cfg = \AzeraCompetition\Report\BenchmarkConfig::class;
 
         self::assertTrue(
-            $cfg::racesOn('phalcon', 'GET /features/aop-direct'),
+            $cfg::racesOn('phalcon', 'GET /features/aop-tx-direct'),
             'the hand-written control is everyone\'s race, including the entrant that always writes it by hand'
         );
         self::assertFalse(
-            $cfg::racesOn('phalcon', 'GET /features/aop'),
+            $cfg::racesOn('phalcon', 'GET /features/aop-tx'),
             'the proxy comparison is the one endpoint Phalcon cannot be raced on'
         );
         self::assertTrue(
-            $cfg::racesOn('azera', 'GET /features/aop'),
+            $cfg::racesOn('azera', 'GET /features/aop-tx'),
             'every other entrant races both endpoints'
+        );
+
+        // `aop-tx-explicit` is the second exception, and it is a FACILITY gap rather
+        // than an endpoint exclusion: Phalcon has no interceptor abstraction, so
+        // the feature is not in its list at all.
+        self::assertNotContains(
+            'aop-tx-explicit',
+            $features,
+            'Phalcon cannot race the explicit interceptor pipeline — it has no such facility'
+        );
+        self::assertFalse(
+            $cfg::competesOn('phalcon', 'GET /features/aop-tx-explicit'),
+            'competesOn() must report a facility gap, not merely an endpoint exclusion'
         );
     }
 
     /**
-     * The advice demos are their own features, not part of the AOP race.
+     * The logging demo is its own feature, not part of the AOP race.
      *
-     * `GET /features/log`, `/features/retry` and `/features/pipeline` used to map
-     * to 'aop', which meant that excluding a framework from the proxy-vs-
-     * hand-written comparison ALSO removed its logger, its retry loop and its
-     * pipeline from the report. CodeIgniter, CakePHP and Phalcon all implement
-     * those three on facilities they genuinely have — CI4's own comment on the
-     * handler reads "manual retry loop (no AOP in CI4)" — so the exclusion was
-     * silently hiding three measurable rows from three entrants.
+     * `GET /features/log` used to map to 'aop-tx', which meant that excluding a
+     * framework from the proxy-vs-hand-written comparison ALSO removed its logger
+     * from the report. CodeIgniter, CakePHP and Phalcon all implement it on a
+     * facility they genuinely have, so the exclusion was silently hiding a
+     * measurable row from three entrants.
      *
-     * Splitting them keeps the AOP exclusion honest and narrow.
+     * Splitting it keeps the AOP exclusion honest and narrow.
      */
     public function testTheAdviceDemosAreNotPartOfTheAopRace(): void
     {
@@ -127,16 +143,14 @@ final class AdapterFeaturesTest extends TestCase
             $map[$request] = $feature;
         }
 
-        self::assertSame('aop', $map['GET /features/aop'], 'the proxy advice demo is the AOP race');
+        self::assertSame('aop-tx', $map['GET /features/aop-tx'], 'the proxy advice demo is the AOP race');
 
-        foreach (['GET /features/log' => 'logging', 'GET /features/retry' => 'retry', 'GET /features/pipeline' => 'pipeline'] as $request => $feature) {
-            self::assertSame(
-                $feature,
-                $map[$request] ?? null,
-                "{$request} must be its own feature; folding it into 'aop' hides it from every "
-                    . 'entrant excluded from the proxy comparison'
-            );
-        }
+        self::assertSame(
+            'logging',
+            $map['GET /features/log'] ?? null,
+            "GET /features/log must be its own feature; folding it into 'aop-tx' hides it from every "
+                . 'entrant excluded from the proxy comparison'
+        );
     }
 
     /**
@@ -153,10 +167,10 @@ final class AdapterFeaturesTest extends TestCase
      * happens inside the wrapped callable".
      *
      * If someone later gives another entrant real generated-proxy advice, this
-     * test is the thing that must be updated deliberately — the report's "read
-     * this row in two styles" note is generated from the same map.
+     * test is the thing that must be updated deliberately — the report's note on
+     * which facility an entrant ships is generated from the same map.
      *
-     * The abstraction is priced by the `/features/aop` vs `/features/aop-direct`
+     * The abstraction is priced by the `/features/aop-tx` vs `/features/aop-tx-direct`
      * pair, which must stay same-work; `AdvicePairTest` holds that.
      */
     public function testInterceptionStyleMatchesTheImplementation(): void
@@ -186,11 +200,12 @@ final class AdapterFeaturesTest extends TestCase
     }
 
     /**
-     * The in-race style split names only participants.
+     * The in-race style split names only participants — and there is exactly one.
      *
-     * Phalcon implements the `aop` FEATURE (it serves the control endpoint) but sits
-     * out the raced `/features/aop` endpoint, so it must not appear in either list —
-     * naming it would tell a reader it competed and lost.
+     * Now that `aop-tx` means transparent AOP and the six hand-written entrants have
+     * left it, Azera is the ONLY entrant in the race. The split therefore has an
+     * empty `direct` list, which is the honest reading: `aop-tx-direct` is a separate
+     * feature precisely so those six keep a row they can serve.
      */
     public function testTheStyleSplitNamesOnlyParticipants(): void
     {
@@ -200,14 +215,14 @@ final class AdapterFeaturesTest extends TestCase
 
         self::assertSame(['Azera'], $split['transparent']);
 
-        self::assertNotContains(
-            'Phalcon 6 (RC)',
+        self::assertSame(
+            [],
             $split['direct'],
-            'Phalcon sits out the raced /features/aop endpoint; listing it among the direct '
-                . 'entrants would claim it competed. It serves /features/aop-direct, which is a '
-                . 'different row.'
+            'no hand-written entrant competes in `aop-tx` any more — the row that compares those is '
+                . '`aop-tx-direct`, which every app races. Naming them here would claim they competed '
+                . 'in a race for a facility they do not ship.'
         );
-        self::assertContains('Laravel', $split['direct']);
+        self::assertNotContains('Phalcon 6 (RC)', $split['transparent']);
     }
 
     /**

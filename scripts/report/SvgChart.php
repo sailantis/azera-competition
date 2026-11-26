@@ -455,7 +455,7 @@ final class SvgChart
      * differs by deployment model, and that is the caller's business — the
      * chart must not invent a fourth meaning:
      *
-     *   resident worker (roadrunner) — one worker serves every endpoint, so the
+     *   resident worker — one worker serves every endpoint, so the
      *     three marks are that worker at three moments: boot footprint, end
      *     state, worst. They form a real cumulative trajectory
      *     (ResultStore::residentHeap / residentPeakHeap).
@@ -1169,10 +1169,10 @@ final class SvgChart
                 // harness emitted min_ms, where the range starts *at* the
                 // median). The test must compare VALUES, not pixels: a real
                 // minimum can sit a couple of pixels from the dot on a wide
-                // axis — Azera's GET /features/pipeline is 0.00541 vs a 0.01381
-                // median on a 0-2 ms axis, 2.9px apart — and dropping its cap
-                // silently hid the fact that Azera has the fastest
-                // observation of any framework on that endpoint.
+                // axis — a row whose min is 0.00541 against a 0.01381 median on
+                // a 0-2 ms axis is 2.9px apart — and dropping its cap silently
+                // hid the fact that one framework had the fastest observation
+                // of any entrant on that endpoint.
                 $capXs = $m['low'] < $m['median'] ? [$xLo, $xHi] : [$xHi];
                 foreach ($capXs as $xc) {
                     $out[] = sprintf(

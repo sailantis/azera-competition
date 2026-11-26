@@ -36,11 +36,11 @@ final class BootProbeOrderingTest extends TestCase
         $src = (string) file_get_contents(self::repoRoot() . '/scripts/run-http.php');
 
         $unlink = strpos($src, '@unlink($bootFile);');
-        $start  = strpos($src, '$proc = startRoadRunner(');
+        $start  = strpos($src, '$proc = startVolucer(');
         $ready  = strpos($src, 'waitForServer($baseUrl, $server, $appKey');
 
         self::assertNotFalse($unlink, 'run-http.php must clear the probe file');
-        self::assertNotFalse($start, 'run-http.php must start RoadRunner');
+        self::assertNotFalse($start, 'run-http.php must start volucer');
         self::assertNotFalse($ready, 'run-http.php must wait for the server');
 
         // The whole bug in one comparison: clearing after the server is ready
@@ -48,34 +48,15 @@ final class BootProbeOrderingTest extends TestCase
         self::assertLessThan(
             $start,
             $unlink,
-            'the probe file must be cleared BEFORE the server starts — the RoadRunner '
-                . 'worker records its boot while `rr serve` comes up, so clearing it after '
-                . 'waitForServer() deletes the sample'
+            'the probe file must be cleared BEFORE the server starts — the resident '
+                . 'worker records its boot while the supervisor comes up, so clearing it '
+                . 'after waitForServer() deletes the sample'
         );
         self::assertLessThan(
             $ready,
             $start,
             'sanity: the server is started before it is waited for'
         );
-    }
-
-    public function testWorkerRecordsBootBeforeItsRequestLoop(): void
-    {
-        $src = (string) file_get_contents(self::repoRoot() . '/deploy/rr/worker.php');
-
-        $boot   = strpos($src, '$adapter->bootstrap();');
-        $record = strpos($src, "boot_probe_record('rr', \$benchApp, true);");
-        $loop   = strpos($src, 'while (true) {');
-
-        self::assertNotFalse($boot, 'the worker must bootstrap the adapter');
-        self::assertNotFalse($record, 'the worker must record its boot sample');
-        self::assertNotFalse($loop, 'the worker must have a request loop');
-
-        // Recording inside the loop would append once per request — the exact
-        // hot-path write the header gate exists to avoid — and would time
-        // request handling rather than worker startup.
-        self::assertGreaterThan($boot, $record, 'the sample must be taken after bootstrap()');
-        self::assertLessThan($loop, $record, 'the sample must be taken BEFORE the request loop');
     }
 
     public function testHttpBenchReadsTheSamePathRunHttpClears(): void
@@ -134,10 +115,8 @@ final class BootProbeOrderingTest extends TestCase
             'stampVolucerConfigs',
             'seedDatabase',
             'warmRouteCaches',
-            'killAllBenchRoadRunners',
             'killAllBenchVolucers',
-            'startRoadRunner',
-            'stopRoadRunner',
+            'stopVolucer',
             'startVolucer',
             'startVolucerSupervisor',
             'stopVolucer',
@@ -204,27 +183,4 @@ final class BootProbeOrderingTest extends TestCase
      * scripts, so if it shared a kind with FPM or with the resident arm the block would
      * read another arm's samples — a wrong chart with a green run.
      */
-    public function testTheVolucerArmsUseDistinctProbeKinds(): void
-    {
-        $runHttp   = (string) file_get_contents(dirname(__DIR__) . '/scripts/run-http.php');
-        $httpBench = (string) file_get_contents(dirname(__DIR__) . '/scripts/http-bench.php');
-
-        foreach (['run-http.php' => $runHttp, 'http-bench.php' => $httpBench] as $label => $src) {
-            self::assertMatchesRegularExpression(
-                "/'volucer-cgi'\s*=>\s*'volucer-cgi'/",
-                $src,
-                "{$label}: the cold volucer arm must use its own probe kind, or it reads FPM's samples"
-            );
-            self::assertMatchesRegularExpression(
-                "/'volucer-attach'\s*=>\s*'volucer'/",
-                $src,
-                "{$label}: the resident volucer arm's kind is 'volucer'"
-            );
-            self::assertStringNotContainsString(
-                "'fpm'            => 'volucer'",
-                $src,
-                "{$label}: the cold volucer arm must not be mapped onto FPM's kind"
-            );
-        }
-    }
 }

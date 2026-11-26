@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * Deployment + server management helpers for scripts/run-http.php.
  *
- * Owns: config stamping (RR yaml / FPM pool / nginx vhost from the deploy/
- * templates), SQLite seeding, RR process lifecycle, FPM + nginx service
+ * Owns: config stamping (FPM pool / nginx vhost / volucer toml from the deploy/
+ * templates), SQLite seeding, volucer process lifecycle, FPM + nginx service
  * management (non-root user with passwordless sudo on the benchmark VM —
  * distro packages), readiness polling, and the http-bench child invocation.
  */
@@ -43,7 +43,7 @@ const BENCH_APP_ORDER = ['azera', 'laravel', 'symfony', 'spiral', 'codeigniter',
  * could not measure 8.5 without editing the harness. A version is therefore stated
  * once, as the `--php-fpm` binary (`php-fpm8.5`), and everything else is derived
  * from it: the pool.d directory, the systemd unit, and — through
- * phpCliForFpm() — the CLI binary the RoadRunner worker must use.
+ * phpCliForFpm() — the CLI binary the volucer worker must use.
  *
  * `/usr/sbin/php-fpm8.5` -> `8.5`. The `cgi`/`cli`/`fpm` suffixed siblings all
  * share the prefix, so the version is whatever follows `php-fpm`.
@@ -64,12 +64,12 @@ function phpSeriesFromFpmBin(string $fpmBin): ?string
  * merely happen to share a version on a well-configured host.
  *
  *   nginx -> php-fpm   is the packaged `php-fpm<X.Y>` binary (FPM SAPI)
- *   RoadRunner worker  is a bare `php` off PATH (CLI SAPI), spawned by RoadRunner
+ *   volucer worker     is a bare `php` off PATH (CLI SAPI), spawned by volucer
  *
  * Nothing links them. On 2026-10-19 the bench VM's `/etc/alternatives/php` was
  * moved to 8.5 while its FPM pools still lived under `/etc/php/8.3`, and the
- * harness — which hardcoded `php8.3-fpm` and let RoadRunner take `php` off PATH —
- * would have written one dataset containing 8.5.11 RoadRunner numbers next to
+ * harness — which hardcoded `php8.3-fpm` and let the worker take `php` off PATH —
+ * would have written one dataset containing 8.5.11 worker numbers next to
  * 8.3.35 FPM numbers, stamped `env.php_version = 8.5.11` over both. Every
  * cross-server ratio in that file would have compared two runtimes.
  *
@@ -137,17 +137,15 @@ function stampPort(string $appKey, string $kind, int $base, array &$ports): int
 
 /**
  * Stamp every per-app config the benchmark needs, once, into $deployDir:
- *   .rr-<app>.yaml (from deploy/rr/config-template.php)
  *   bench-<app>.conf  (FPM pool, from deploy/fpm/pool.conf.template)
  *   bench-<app>.nginx (nginx vhost, from deploy/fpm/vhost.conf.template)
- * Returns the port map: ['rr' => [app => port], 'fpm' => [app => port]].
+ * Returns the port map: ['fpm' => [app => port]].
  */
 function stampAllDeployConfigs(
     string $root,
     string $deployDir,
     array $apps,
     int $fpmPortBase,
-    int $rrPortBase,
     array &$ports,
     string $benchUser,
     string $phpCli = '',
@@ -163,7 +161,6 @@ function stampAllDeployConfigs(
         $phpCli = PHP_BINARY;
     }
 
-    $rrTemplate = require "{$root}/deploy/rr/config-template.php";
     $poolTpl    = (string) file_get_contents("{$root}/deploy/fpm/pool.conf.template");
     $vhostTpl   = (string) file_get_contents("{$root}/deploy/fpm/vhost.conf.template");
 
@@ -182,15 +179,7 @@ function stampAllDeployConfigs(
         // below cannot see this: it only removes apps absent from $apps, and
         // both are present as files — only the PORTS collide. stampPort()
         // therefore derives the port from BENCH_APP_ORDER, not from this list.
-        $rrPort  = stampPort($appKey, 'rr', $rrPortBase, $ports);
         $fpmPort = stampPort($appKey, 'fpm', $fpmPortBase, $ports);
-
-        $rrYaml = str_replace(
-            ['{{APP}}', '{{PORT}}', '{{ROOT}}', '{{PHP_CLI}}'],
-            [$appKey, (string) $rrPort, $root, $phpCli],
-            $rrTemplate()
-        );
-        file_put_contents("{$deployDir}/.rr-{$appKey}.yaml", $rrYaml);
 
         file_put_contents("{$deployDir}/bench-{$appKey}.conf", str_replace(
             ['{{APP}}', '{{PORT}}', '{{ROOT}}', '{{USER}}'],
@@ -227,101 +216,17 @@ function stampAllDeployConfigs(
     }
 }
 
-/**
- * The php-cgi launcher the `spawn_cgi` arm should run, mirroring the FPM pool.
- *
- * WHY A WRAPPER AND NOT THE BARE BINARY.
- *
- * `run-http.php` used to hand volucer `php-cgi<series>` directly, so this arm ran
- * under the host's php.ini alone while the FPM arm ran under the pool template —
- * and the pool sets two directives the ini does not:
- *
- *     php_admin_value[opcache.validate_timestamps] = 0
- *     php_admin_value[memory_limit]                = 512M
- *
- * `validate_timestamps=0` is the one that moves numbers. With it on (the default)
- * OPcache `stat()`s every included and required file on every request to decide
- * whether to recompile; with it off, the cache is trusted for the life of the
- * process. Both arms pay OPcache's `enable` cost alike, so this is not "OPcache
- * on vs off" — it is the per-request validation sweep, and it lands in every row.
- *
- * The two arms were therefore NOT measuring the same deployment model's cost: the
- * 2026-11-10 run showed volucer-cgi slower than nginx+PHP-FPM on 119 of 126
- * endpoints, systematically (+107/-19, ~+0.10 ms fixed per request, azera
- * +2.4% median on 21 of 21). A uniform fixed per-request gap is the signature of
- * a per-request syscall sweep, not of a slower application. Nothing in that
- * dataset could distinguish "volucer's spawn_cgi is 3% slower" from "the cgi arm
- * validated its cache 126 times more often per row", and both readings were
- * publishable. The cold view's whole claim is that the two cold servers differ
- * only by transport, which makes this an error in the comparison rather than a
- * detail of the setup.
- *
- * `max_execution_time` is deliberately NOT mirrored: php-fpm's is the FastCGI
- * request timeout, `request_terminate_timeout` above, and php-cgi has no
- * equivalent directive — passing one would change what is measured rather than
- * equalise it. `xdebug.mode=off` IS mirrored, and so is the pool's
- * `xdebug.start_with_request = no`: the pool turns Xdebug off explicitly, and a
- * host ini is free to turn it back on. Both are passed even on a host without
- * Xdebug, where they are inert.
- *
- * The script is written next to the rendered volucer configs and named per
- * series, so a run that switches interpreters cannot leave a wrapper pointing at
- * the previous one. Returns the bare binary when no wrapper can be written, so a
- * missing deploy dir degrades to the old behaviour instead of failing the run —
- * but the caller should treat that as "not equalised".
- *
- * @return string absolute path to an executable wrapper, or $phpCgi unchanged
- */
-function writePhpCgiWrapper(string $deployDir, string $phpCgi): string
-{
-    // Derive the series from the binary the caller resolved (`php-cgi8.5`), so the
-    // wrapper name tracks the interpreter without a second lookup.
-    $series = preg_match('/(\d+\.\d+)$/', basename($phpCgi), $m) === 1 ? $m[1] : 'default';
-    $path   = "{$deployDir}/php-cgi-wrapper-{$series}.sh";
 
-    // Same directives the pool's php_admin_value sets, plus the two flags the
-    // standalone fw-bench.sh wrapper already proved necessary for this SAPI:
-    // php-cgi reads `opcache.enable_cli`, not `opcache.enable`, and xdebug must be
-    // off explicitly because it is the one extension whose cost is per-request.
-    //
-    // `opcache.jit` has to be a `-d` here for the same reason `enable_cli` does:
-    // this SAPI is spawned by volucer, not by php-fpm, so the pool's
-    // php_admin_value never reaches it. Without these two lines the spawn_cgi arm
-    // would run WITHOUT the JIT the FPM arm has, and the two cold arms — whose
-    // whole purpose is to differ only by server — would differ by interpreter
-    // configuration instead.
-    $script = "#!/bin/sh\n"
-        . "# Generated by writePhpCgiWrapper(). Mirrors deploy/fpm/pool.conf.template\n"
-        . "# so the volucer spawn_cgi arm and the nginx+php-fpm arm run the SAME directives.\n"
-        . "# Regenerated on every run; do not edit.\n"
-        . 'exec ' . escapeshellarg($phpCgi)
-        . " -d opcache.enable=1"
-        . " -d opcache.enable_cli=1"
-        . " -d opcache.validate_timestamps=0"
-        . " -d opcache.jit=tracing"
-        . " -d opcache.jit_buffer_size=64M"
-        . " -d xdebug.mode=off"
-        . " -d xdebug.start_with_request=no"
-        . " -d memory_limit=512M"
-        . " \"\$@\"\n";
-
-    if (@file_put_contents($path, $script) === false) {
-        return $phpCgi;
-    }
-    @chmod($path, 0755);
-
-    return $path;
-}
 
 /**
  * Stamp one volucer config per (arm, app) into $deployDir.
  *
- * Separate from stampAllDeployConfigs() because the placeholder set differs per arm —
- * `attach` needs a relay address, `spawn_cgi` needs the php-cgi binary — and a single
- * str_replace list would have to carry every placeholder for every template, silently
- * leaving any name it did not know about in the rendered file. Volucer rejects an
- * unknown key, so that failure would at least be loud; it would also be at block time
- * rather than here.
+ * Separate from stampAllDeployConfigs() because the placeholder set is volucer-specific --
+ * the relay address and the worker SDK path -- and a single str_replace list shared with
+ * the nginx/FPM templates would have to carry every placeholder for every template,
+ * silently leaving any name it did not know about in the rendered file. Volucer rejects
+ * an unknown key, so that failure would at least be loud; it would also be at block
+ * time rather than here.
  *
  * @param list<string> $arms
  */
@@ -331,7 +236,6 @@ function stampVolucerConfigs(
     array $apps,
     array $arms,
     string $phpCli,
-    string $phpCgi,
     int $volucerPortBase,
     array &$ports,
 ): void {
@@ -341,30 +245,17 @@ function stampVolucerConfigs(
 
     $sdk = "{$root}/vendor/sailantis/volucer-worker";
 
-    // The spawn_cgi arm gets a wrapper that mirrors the FPM pool's directives,
-    // so the two cold servers differ by transport rather than by php.ini. Only
-    // computed when that arm is selected: it writes a file, and a dry run of the
-    // attach arm should not litter the deploy dir.
-    if (in_array('volucer-cgi', $arms, true)) {
-        $phpCgi = writePhpCgiWrapper($deployDir, $phpCgi);
-    }
-
     // One PORT BANK per arm. stampPort() keys its collision check on the kind, so two
-    // arms sharing a base each start at 8800 for the first app and the second server
-    // silently binds a port the first one freed — which is how volucer-attach and
-    // volucer-cgi both ended up on 8800 in the same run. The offset is per arm, so the
-    // banks stay disjoint however many arms are selected. The retired `volucer`
-    // (worker) arm keeps offset 0 reserved so re-enabling it cannot collide.
-    //
-    // This is the port volucer LISTENS on, one per (arm, app). The php-cgi pool behind
-    // spawn_cgi has its own addresses and they are unix sockets, not ports — see the
-    // socket note in spawn-cgi.template.toml.
-    $armOffset = ['volucer-attach' => 10, 'volucer-cgi' => 20];
+    // arms sharing a base each start at the same port and the second server silently
+    // binds a port the first one freed — which is how two arms once ended up on 8800 in
+    // the same run. The offset is per arm, so the banks stay disjoint however many arms
+    // are selected. The retired `volucer` (worker) arm keeps offset 0 reserved so
+    // re-enabling it cannot collide.
+    $armOffset = ['volucer-attach' => 10];
 
     foreach ($arms as $arm) {
         $template = match ($arm) {
             'volucer-attach' => "{$root}/deploy/volucer/attach.template.toml",
-            'volucer-cgi'    => "{$root}/deploy/volucer/spawn-cgi.template.toml",
             default          => throw new RuntimeException("unknown volucer arm '{$arm}'"),
         };
         $tpl = (string) file_get_contents($template);
@@ -375,8 +266,8 @@ function stampVolucerConfigs(
             $relay  = volucerRelayAddress($appKey);
 
             $rendered = str_replace(
-                ['{{APP}}', '{{PORT}}', '{{ROOT}}', '{{SDK}}', '{{PHP_CLI}}', '{{PHP_CGI}}', '{{RELAY_ADDRESS}}', '{{PROBE_KIND}}'],
-                [$appKey, (string) $port, $root, $sdk, $phpCli, $phpCgi, $relay, $arm],
+                ['{{APP}}', '{{PORT}}', '{{ROOT}}', '{{SDK}}', '{{PHP_CLI}}', '{{RELAY_ADDRESS}}', '{{PROBE_KIND}}'],
+                [$appKey, (string) $port, $root, $sdk, $phpCli, $relay, $arm],
                 $tpl
             );
 
@@ -468,52 +359,6 @@ function warmRouteCaches(string $root, string $appKey, string $phpCli = ''): voi
     }
 }
 
-// --- RoadRunner -------------------------------------------------------------------
-
-/**
- * Pgrep pattern matching a RoadRunner process for one config file.
- * A trailing `\)` anchors the path so `.rr-azera.yaml` never matches
- * `.rr-azera-b.yaml`.
- */
-function rrProcessPattern(string $deployDir, string $appKey): string
-{
-    return 'rr serve -c ' . $deployDir . '/.rr-' . $appKey . '.yaml)';
-}
-
-/**
- * Kill any RoadRunner process still bound to this app's config (orphans from
- * an earlier run or a crashed stop). MUST run before startRoadRunner(): an
- * orphan keeps the port, the new `rr serve` silently fails to bind, and
- * waitForServer() would then "succeed" against the OLD app's worker — which
- * is exactly how every RR block after the first got benchmarked against
- * azera's worker on 2026-09-14.
- */
-function killOrphanRoadRunners(string $deployDir, string $appKey): void
-{
-    $pat = rrProcessPattern($deployDir, $appKey);
-    exec('pkill -f ' . escapeshellarg($pat) . ' 2>/dev/null', $o1, $rc1);
-    if ($rc1 === 0) {
-        // Give the port a moment to be released before we try to bind it.
-        usleep(300_000);
-        echo "  killed orphaned RoadRunner ({$appKey}) holding the port\n";
-    }
-}
-
-/**
- * Kill EVERY benchmark RoadRunner (any app) at orchestrator start. A batch
- * runs one orchestrator per app; without this sweep an orphan left by the
- * previous invocation keeps its port and the next invocation's first block
- * cannot bind — the same failure at a coarser granularity.
- */
-function killAllBenchRoadRunners(string $deployDir): void
-{
-    exec('pkill -f ' . escapeshellarg('rr serve -c ' . $deployDir . '/.rr-') . ' 2>/dev/null', $o, $rc);
-    if ($rc === 0) {
-        usleep(400_000);
-        echo "  killed stale benchmark RoadRunner process(es) before starting\n";
-    }
-}
-
 /**
  * Block until nothing is listening on 127.0.0.1:$port. Returns false if the
  * port is still occupied after the timeout (a stale server would silently
@@ -534,114 +379,6 @@ function waitForPortFree(int $port, float $timeoutSec = 10.0): bool
     return false;
 }
 
-/**
- * Start RoadRunner for one app. Config must have been stamped for $appKey.
- *
- * The returned pid is the REAL RoadRunner process, not a shell wrapper:
- * prefixing the command with `sh -c` (the pre-2026-09-14 shape) made
- * proc_open return the wrapper's pid, so stopRoadRunner() SIGTERMed the
- * wrapper and orphaned the actual `rr` binary — which kept the port and made
- * the next app's block benchmark the previous app. The command is therefore
- * chdir'ed into PHP and `exec`'d so the pid we get IS the process holding
- * the listening socket (exec also puts it in this process's group, so the
- * group-kill fallback reaches the workers too).
- *
- * @return array{proc: resource, pipes: array}
- */
-function startRoadRunner(string $root, string $deployDir, string $appKey, string $rrBinary, int $port): array
-{
-    if (is_dir($root)) {
-        chdir($root);
-    }
-
-    // An orphan from a previous block would hold the port (see above).
-    killOrphanRoadRunners($deployDir, $appKey);
-    if (!waitForPortFree($port)) {
-        fwrite(STDERR, "[run-http] Port {$port} is still in use before starting RoadRunner ({$appKey}) — refusing to benchmark a stale server.\n");
-        exit(1);
-    }
-
-    echo "  starting RoadRunner ({$appKey}, port {$port})...\n";
-
-    // NOTE: -d xdebug.mode=off is a PHP flag — the Go binary rejects it
-    // ("unknown command"). Xdebug-off applies to the PHP WORKERS, which
-    // inherit php.ini (CLI ini already has xdebug disabled on the VM);
-    // RR itself needs `-o logs.level=…` style overrides only.
-    $cmd = sprintf(
-        'exec %s serve -c %s 2>&1',
-        escapeshellarg($rrBinary),
-        escapeshellarg("{$deployDir}/.rr-{$appKey}.yaml")
-    );
-
-    $pipes   = [];
-    $logPath = "{$deployDir}/rr-{$appKey}.log";
-    $logFp   = fopen($logPath, 'w');
-    $descr   = $logFp === false
-        ? [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']]
-        : [['pipe', 'r'], $logFp, $logFp];
-
-    $proc = proc_open($cmd, $descr, $pipes);
-    if (!is_resource($proc)) {
-        fwrite(STDERR, "[run-http] Failed to start RoadRunner for {$appKey}\n");
-        exit(1);
-    }
-
-    if ($logFp === false) {
-        // Fallback: keep the pipes non-blocking so a chatty worker cannot
-        // deadlock the orchestrator on a full pipe buffer.
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-    }
-
-    return ['proc' => $proc, 'pipes' => $pipes, 'deployDir' => $deployDir, 'appKey' => $appKey, 'log' => $logPath];
-}
-
-/**
- * Stop RoadRunner hard: SIGTERM the group, SIGKILL the group, then pkill any
- * worker still matching this config. The pkill is what makes the stop
- * trustworthy — without it an orphan can outlive the block and poison the
- * next one (see killOrphanRoadRunners()).
- */
-function stopRoadRunner(array $procRef): void
-{
-    if (!is_resource($procRef['proc'])) {
-        return;
-    }
-
-    $status = proc_get_status($procRef['proc']);
-    $pid    = (int) ($status['pid'] ?? 0);
-    if ($pid > 0) {
-        // Negative pid = the whole process group (startRoadRunner exec'd rr
-        // into this group); rr forwards shutdown to its PHP workers itself,
-        // AND the group kill reaches any worker that ignored the forward
-        // (which otherwise lingers holding RR's log fd).
-        @posix_kill(-$pid, 15);
-        @posix_kill($pid, 15);
-        for ($i = 0; $i < 30; $i++) {
-            $status = proc_get_status($procRef['proc']);
-            if (!$status['running']) {
-                break;
-            }
-            usleep(100_000);
-        }
-        $status = proc_get_status($procRef['proc']);
-        if ($status['running']) {
-            @posix_kill(-$pid, 9);
-            @posix_kill($pid, 9);
-            usleep(100_000);
-        }
-    }
-    proc_close($procRef['proc']);
-
-    // Hammer any survivor so the port cannot stay bound into the next app's
-    // block (this is the bug the whole hardening exists for).
-    if (isset($procRef['deployDir'], $procRef['appKey'])) {
-        killOrphanRoadRunners($procRef['deployDir'], $procRef['appKey']);
-    }
-
-    echo "  RoadRunner stopped.\n";
-}
-
 // --- Volucer ----------------------------------------------------------------------
 //
 // Two arms, and they are two DEPLOYMENT MODELS rather than two spellings of one:
@@ -652,10 +389,6 @@ function stopRoadRunner(array $procRef): void
 //                     before the first fork, so no child pays it. volucer MUST start
 //                     after the supervisor, and its `workers` must match what the
 //                     supervisor can serve.
-//   volucer-cgi       `spawn_cgi` backend. volucer runs public/index-<app>.php per
-//                     request through php-cgi, exactly as nginx+php-fpm does, so the
-//                     framework boot is paid on every request.
-//
 // volucer's `worker` backend (volucer SPAWNS deploy/volucer/worker.php) is not part of
 // the dataset: it is resident like `attach`, shares the same handler (app.php) and the
 // same probe kind, so it measures the same thing and differs only in who owns the
@@ -692,7 +425,7 @@ function volucerRelayAddress(string $appKey): string
 /**
  * Kill every benchmark volucer and attach supervisor (any app) before a run.
  *
- * The same discipline as killAllBenchRoadRunners(): an orphan holds its HTTP port and
+ * The same discipline as any other served arm: an orphan holds its HTTP port and
  * its relay, and the next block would either fail to bind or — worse, for `attach` —
  * connect to the PREVIOUS app's supervisor and get that app's pages under this app's
  * name.
@@ -719,10 +452,10 @@ function killAllBenchVolucers(): void
 /**
  * Start volucer (or its prefork supervisor) for one app.
  *
- * $arm is 'volucer-attach' (attach backend) or 'volucer-cgi' (spawn_cgi). The config
+ * $arm is 'volucer-attach' (the attach backend). The config
  * must already have been stamped for ($arm, $appKey) — see stampVolucerConfigs().
  *
- * Returns the SAME shape startRoadRunner() does, plus 'supervisor' for the attach arm,
+ * Returns the same shape the block loop expects, plus 'supervisor' for the attach arm,
  * so the block loop and stopVolucer() can treat every volucer arm alike.
  *
  * @return array{proc: resource, pipes: array, supervisor: mixed}
@@ -775,7 +508,7 @@ function startVolucer(
     echo "  starting volucer ({$arm}/{$appKey}, port {$port})...\n";
 
     // `exec` so the pid proc_open returns IS the server holding the port, not a shell
-    // wrapper — the bug startRoadRunner() documents in full.
+    // wrapper — the bug that made the pid a wrapper's rather than the server's.
     $cmd     = sprintf('exec %s serve -c %s 2>&1', escapeshellarg($volucerBinary), escapeshellarg($cfg));
     $logPath = "{$deployDir}/volucer-{$arm}-{$appKey}.log";
     $pipes   = [];
@@ -948,34 +681,7 @@ function fpmMaxRequestsFromTemplate(string $root): ?int
     return preg_match('/^\s*pm\.max_requests\s*=\s*(\d+)/m', $tpl, $m) ? (int) $m[1] : null;
 }
 
-/**
- * The RoadRunner http pool's max_jobs, read from the same template the
- * stamped .rr-<app>.yaml files are generated from.
- *
- * This is the RoadRunner counterpart of fpmMaxRequestsFromTemplate(), and it
- * exists for the same reason: the report ADDS the worker's boot to every
- * warm/roadrunner row (ResultStore::bootAddOn), and how much of that boot a
- * real request carries depends entirely on how often the pool recycles.
- *
- * RoadRunner documents `max_jobs` as "maximal count of worker executions.
- * Zero (or nothing) means no limit" — so at the 0 this benchmark stamps, the
- * worker is NEVER recycled: it boots once and serves every request of the
- * block. Charging the full recycle to each of those requests (what the report
- * did before this was stamped) added the entire boot to every cell, worst on
- * the slowest-booting framework.
- *
- * Without the stamp a `max_jobs` edit silently re-labels already-published
- * numbers, exactly like a pm.max_requests edit would.
- */
-function rrMaxJobsFromTemplate(string $root): ?int
-{
-    $tpl = @file_get_contents("{$root}/deploy/rr/config-template.php");
-    if ($tpl === false) {
-        return null;
-    }
-    // The value lives inside a nowdoc YAML block, indented under `pool:`.
-    return preg_match('/^\s*max_jobs\s*:\s*(\d+)/m', $tpl, $m) ? (int) $m[1] : null;
-}
+
 
 /**
  * The OPcache setting a REAL deployment's two servers actually run under, as
@@ -990,7 +696,7 @@ function rrMaxJobsFromTemplate(string $root): ?int
  *
  *   nginx -> php-fpm   runs as `fpm-fcgi`, so it reads `opcache.enable` (1 by
  *                      default) and NEVER reads `opcache.enable_cli`.
- *   RoadRunner worker  runs `php deploy/rr/worker.php`, which is the CLI SAPI,
+ *   volucer worker     runs `deploy/volucer/app.php` under the CLI SAPI,
  *                      so it reads `opcache.enable_cli` (0 by default).
  *
  * So "OPcache (CLI)" is not merely an odd label on an FPM page — it is a
@@ -1008,12 +714,11 @@ function rrMaxJobsFromTemplate(string $root): ?int
  *             installed is the config that ran. Same discipline as
  *             fpmMaxRequestsFromTemplate(): a template edit cannot silently
  *             re-label an already-published number.
- *   roadrunner — PROBED, with the same binary and the same `-d` overrides.
- *             deploy/rr/config-template.php's `server.command` runs {{PHP_CLI}},
- *             the interpreter run-http.php resolved for this run, and RoadRunner
- *             spawns it itself. The command carries the same OPcache/JIT flags
- *             the pool sets for FPM — including `opcache.enable_cli=1`, because
- *             CLI is the one SAPI where that is the switch that matters. Before
+ *   volucer — PROBED, with the same binary and the same `-d` overrides.
+ *             `startVolucerSupervisor()` launches `deploy/volucer/attach.php``n *             with the interpreter run-http.php resolved for this run, and that
+ *             command carries the same OPcache/JIT flags the pool sets for FPM --
+ *             including `opcache.enable_cli=1`, because CLI is the one SAPI where
+ *             that is the switch that matters. Before
  *             those flags were added the worker inherited the host php.ini alone,
  *             which on this VM means `opcache.jit=disable` beside a defaulted
  *             64M buffer: a run could be described as JIT-enabled and have
@@ -1040,10 +745,9 @@ function deploymentOpcache(string $root, ?callable $runProcess = null, string $p
 {
     $out = [];
 
-    // The flags the RoadRunner/attach/spawn-cgi commands carry, kept in ONE place
-    // so the probe and the spawned processes cannot drift. See
-    // deploy/rr/config-template.php and writePhpCgiWrapper() for the copies that
-    // are baked into generated configs; a change here must be mirrored there.
+    // The flags the attach command carries, kept in ONE place so the probe and the
+    // spawned processes cannot drift. See startVolucerSupervisor() for the copy that
+    // is baked into the generated command; a change here must be mirrored there.
     $flags = '-d opcache.enable_cli=1 -d opcache.validate_timestamps=0 '
         . '-d opcache.jit=tracing -d opcache.jit_buffer_size=64M';
 
@@ -1058,7 +762,7 @@ function deploymentOpcache(string $root, ?callable $runProcess = null, string $p
         }
     }
 
-    // --- roadrunner: the CLI SAPI's own switch, as the worker sees it --------
+    // --- volucer worker: the CLI SAPI's own switch, as it sees it ------------
     if ($runProcess !== null) {
         // `-n` would SKIP php.ini and answer a different question; the worker
         // loads php.ini, so the probe must too. And it carries the SAME `-d`
@@ -1069,7 +773,7 @@ function deploymentOpcache(string $root, ?callable $runProcess = null, string $p
         $probe = "{$cli} {$flags} -r \"echo (int) ini_get('opcache.enable_cli');\"";
         $val   = trim($runProcess($probe));
         if ($val === '0' || $val === '1') {
-            $out['roadrunner'] = $val === '1';
+            $out['volucer-attach'] = $val === '1';
         }
     }
 
@@ -1113,10 +817,9 @@ function jitIniContent(): string
  * The three SAPIs matter separately and none inherits from another:
  *
  *   fpm   nginx + PHP-FPM (mode php-fpm)
- *   cgi   volucer's spawn_cgi arm, which reads `opcache.enable_cli` (mode volucer-cgi)
- *   cli   the RoadRunner worker and the attach supervisor (modes roadrunner /
- *         volucer-attach), which ALSO receive the pair as `-d` flags — the ini makes
- *         both routes agree rather than leaving one to a flag list
+ *   cli   the attach supervisor (mode volucer-attach), which ALSO receives the pair
+ *         as `-d` flags — the ini makes both routes agree rather than leaving one
+ *         to a flag list
  *
  * Returns the list of installed paths (or [] when the series cannot be derived, so
  * a caller can report "not installed" instead of assuming success). Idempotent:
@@ -1182,9 +885,9 @@ function installJitIni(string $fpmBin, ?callable $runProcess = null): array
  *
  * ONE PAIR DESCRIBES EVERY ARM, which is why a single global value is honest
  * rather than a per-mode map like `opcache_by_mode`. The FPM pool states the pair
- * via `php_admin_value`, and every spawned interpreter (RoadRunner, attach,
- * spawn_cgi) receives the identical pair as `-d` flags, so all four servers
- * compile under the same configuration. If an arm's JIT settings ever diverge,
+ * via `php_admin_value`, and the attach supervisor receives the identical pair as
+ * `-d` flags, so both servers compile under the same configuration. If an arm's
+ * JIT settings ever diverge,
  * this function must return a per-mode map instead — stamping one value would
  * then describe one arm and misdescribe the rest.
  *
@@ -1196,8 +899,7 @@ function deploymentJit(?callable $runProcess = null, string $phpCli = ''): array
         return [];
     }
 
-    // Keep in step with the flags in deploymentOpcache(), writePhpCgiWrapper(),
-    // startVolucerSupervisor(), the floor-RR worker and deploy/rr/config-template.php.
+    // Keep in step with the flags in deploymentOpcache() and startVolucerSupervisor().
     $cli   = $phpCli !== '' ? escapeshellarg($phpCli) : 'php';
     $flags = '-d opcache.enable_cli=1 -d opcache.validate_timestamps=0 '
         . '-d opcache.jit=tracing -d opcache.jit_buffer_size=64M';
@@ -1405,7 +1107,7 @@ function isGatewayError(string $body): bool
  *
  * When the app has a fingerprint, /features/config MUST contain it: a server
  * that answers is not proof that the RIGHT app is behind the port. An
- * orphaned RoadRunner from a previous block answers every request happily,
+ * orphaned worker from a previous block answers every request happily,
  * and treating that as "ready" is exactly how the 2026-09-14 run recorded
  * azera's worker under five other frameworks' names.
  */
@@ -1440,7 +1142,7 @@ function waitForServer(string $baseUrl, string $server, string $appKey, ?string 
                         "WRONG WORKER on {$baseUrl} for {$appKey}: /features/config did not contain the app fingerprint.\n"
                             . "  expected: {$fingerprint}\n"
                             . "  body head: " . substr($probe, 0, 200) . "\n"
-                            . "  A stale RoadRunner from a previous block is holding the port.\n"
+                            . "  A stale worker from a previous block is holding the port.\n"
                             . workerLogTail($logPath)
                     );
                 }
@@ -1514,23 +1216,19 @@ function runHttpBench(string $root, string $server, string $appKey, string $base
 function measureFloors(
     string $root,
     string $deployDir,
-    bool $useRr,
     bool $useFpm,
-    int $rrPort,
     int $fpmPort,
     int $itersPerRun,
     int $runs,
-    string $rrBinary,
     string $phpFpmBin,
     string $benchUser,
     string $phpCli = '',
     array $volucerArms = [],
     string $volucerBinary = '',
     int $volucerPortBase = 8800,
-    string $phpCgi = '',
 ): array {
     // Same defaulting rule as stampAllDeployConfigs(): empty means "this
-    // orchestrator", so the floor probe runs on the interpreter the RR workers use.
+    // orchestrator", so the floor probe runs on the interpreter the worker uses.
     if ($phpCli === '') {
         $phpCli = PHP_BINARY;
     }
@@ -1594,40 +1292,6 @@ function measureFloors(
         $floors[] = measureFloorApp($root, 'floor-php', 'php-fpm', 'http://127.0.0.1:9901', $itersPerRun, $runs, $phpCli);
     }
 
-    // floor-rr: hello-world through RoadRunner (bare worker cost).
-    if ($useRr) {
-        // The config file is named .rr-<floorKey>.yaml so startRoadRunner()
-        // (which derives the path AND the orphan-pgrep pattern from the app
-        // key) can manage the floor worker exactly like a real app.
-        $floorKey = 'floor-rr';
-        $worker   = "{$root}/temp/floor-rr-worker.php";
-        file_put_contents($worker, floorRrWorkerSource());
-        $cfg = "{$deployDir}/.rr-{$floorKey}.yaml";
-        file_put_contents($cfg, str_replace(
-            ['{{APP}}', '{{PORT}}', '{{ROOT}}', '{{PHP_CLI}}'],
-            [$floorKey, '9902', $root, $phpCli],
-            <<<YAML
-            version: "3"
-            server:
-              command: "{{PHP_CLI}} -d xdebug.mode=off -d opcache.enable_cli=1 -d opcache.validate_timestamps=0 -d opcache.jit=tracing -d opcache.jit_buffer_size=64M {$worker}"
-            http:
-              address: "127.0.0.1:9902"
-              pool:
-                num_workers: 1
-            logs:
-              level: error
-            YAML
-        ));
-
-        $proc = startRoadRunner($root, $deployDir, $floorKey, $rrBinary, 9902);
-        try {
-            waitForServer('http://127.0.0.1:9902', 'rr', $floorKey, $proc['log'] ?? null);
-            $floors[] = measureFloorApp($root, 'floor-rr', 'roadrunner', 'http://127.0.0.1:9902', $itersPerRun, $runs, $phpCli);
-        } finally {
-            stopRoadRunner($proc);
-        }
-    }
-
     // --- Volucer floors ------------------------------------------------------
     //
     // WHY THESE EXIST. The other three servers get a floor probe so the constant
@@ -1648,12 +1312,10 @@ function measureFloors(
     // CHILD PER CONNECTION, and with `workers = 1` volucer holds one connection for
     // the life of the slot, so the child is forked once per run and never again.
     // The per-request cost of that arm is a unix-socket handshake, which is what the
-    // floor reports. floor-volucer-cgi re-runs the entry script through `php-cgi`
-    // every request, so its floor carries the CGI spawn plus a bare PHP boot — the
-    // number to hold a cold row against.
+    // floor reports.
     //
-    // Ports are pinned ABOVE every real app's bank (attach starts at 8810, cgi at
-    // 8820, six apps each, so the highest in use is 8837) rather than derived from
+    // Ports are pinned ABOVE every real app's bank (attach starts at 8810, seven apps,
+    // so the highest in use is 8817) rather than derived from
     // BENCH_APP_ORDER, because a floor is not an app and must not shift an app's
     // port when it is added. The base is passed so the pinning is stated on the
     // SAME scale as the bank it sits above, and the returned map is checked
@@ -1661,7 +1323,6 @@ function measureFloors(
     if ($volucerArms !== []) {
         $floorApps = [
             'floor-volucer-attach' => 'volucer-attach',
-            'floor-volucer-cgi'    => 'volucer-cgi',
         ];
 
         // Stamped by the SAME function that stamps the real apps, so a floor cannot
@@ -1673,7 +1334,6 @@ function measureFloors(
             array_keys($floorApps),
             array_values($floorApps),
             $phpCli,
-            $phpCgi !== '' ? $phpCgi : ('php-cgi' . (phpSeriesFromFpmBin($phpFpmBin) ?? '')),
             $volucerPortBase,
             $floorPortMap,
         );
@@ -1810,34 +1470,7 @@ function ensureAppAutoload(string $root, string $appKey, string $phpCli = ''): v
     }
 }
 
-/**
- * Source of the minimal RoadRunner floor worker (hello world, no framework).
- */
-function floorRrWorkerSource(): string
-{
-    return <<<'PHP'
-    <?php
-    use Spiral\RoadRunner\Http\PSR7Worker;
-    use Spiral\RoadRunner\Worker;
-    use Nyholm\Psr7\Factory\Psr17Factory;
-    use Nyholm\Psr7\Response;
 
-    require __DIR__ . '/../vendor/autoload.php';
-
-    $psr7 = new PSR7Worker(Worker::create(), new Psr17Factory(), new Psr17Factory(), new Psr17Factory());
-    while (true) {
-        try {
-            $request = $psr7->waitRequest();
-            if ($request === null) {
-                break;
-            }
-            $psr7->respond(new Response(200, ['Content-Type' => 'text/plain'], 'floor-rr'));
-        } catch (Throwable $e) {
-            $psr7->respond(new Response(500, [], '500 ' . $e->getMessage()));
-        }
-    }
-    PHP;
-}
 
 // --- Shell helpers -------------------------------------------------------------------------
 

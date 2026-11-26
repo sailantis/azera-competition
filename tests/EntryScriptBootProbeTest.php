@@ -150,69 +150,22 @@ final class EntryScriptBootProbeTest extends TestCase
         $this->assertGreaterThan($cb, $rec);
     }
 
-    public function testRoadRunnerWorkerRecordsWarmRecycleSamples(): void
-    {
-        // The RoadRunner band reports the WARM CYCLE RESET — the framework
-        // re-initialised in an already-warm worker — not process start. Two
-        // things must hold: the cold process-start sample is recorded under a
-        // SEPARATE kind (so one autoload-heavy sample cannot contaminate the
-        // cycle distribution), and the cycle samples are recorded BEFORE the
-        // request loop.
-        $src = (string) file_get_contents(dirname(__DIR__) . '/deploy/rr/worker.php');
-        $this->assertStringContainsString('boot_probe_start()', $src);
-        $this->assertStringContainsString(
-            "boot_probe_record('rr-cold', \$benchApp, true)",
-            $src,
-            'RR worker must record the cold process-start boot under its own kind'
-        );
-        $this->assertStringContainsString(
-            "boot_probe_record('rr', \$benchApp, true)",
-            $src,
-            'RR worker must record warm recycle samples'
-        );
-
-        $cold = strpos($src, "boot_probe_record('rr-cold', \$benchApp, true)");
-        $warm = strpos($src, "boot_probe_record('rr', \$benchApp, true)");
-        $loop = strpos($src, 'while (true) {');
-        $this->assertNotFalse($cold);
-        $this->assertNotFalse($warm);
-        $this->assertNotFalse($loop);
-        $this->assertLessThan($warm, $cold, 'the cold sample must be taken before the warm cycles');
-        $this->assertLessThan($loop, $warm, 'warm cycles must finish before the request loop starts');
-    }
-
-    public function testWarmCyclesAreBoundedAndOverridable(): void
-    {
-        // A cycle loop that cannot be bounded is a hang risk in a resident
-        // worker, and the count must be stated rather than buried: a run that
-        // widens its sample should do so explicitly.
-        $src = (string) file_get_contents(dirname(__DIR__) . '/deploy/rr/worker.php');
-        $this->assertStringContainsString('BENCH_BOOT_CYCLES', $src, 'the cycle count must be overridable');
-        $this->assertStringContainsString(
-            'if ($bootCycles < 1)',
-            $src,
-            'a zero/negative cycle count must be clamped — the loop would otherwise never run'
-        );
-    }
-
     public function testResidentArmsDoNotStampBootOnTheirLatencyRows(): void
     {
-        // A resident worker (RoadRunner, and volucer's attach arm) boots BEFORE
-        // serving, so its boot is not inside the timed rows. Stamping boot_ms there
-        // would double-count the boot in every latency number. Only per-request arms
-        // carry boot_ms — php-fpm and volucer's spawn_cgi.
+        // A resident worker (volucer's attach arm) boots BEFORE serving, so its boot
+        // is not inside the timed rows. Stamping boot_ms there would double-count the
+        // boot in every latency number. Only the per-request arm carries boot_ms.
         //
-        // $bootKind is now per server rather than a two-way rr/fpm choice, because a
-        // second per-request arm exists. The assertion therefore pins the KIND test
-        // (which is what protects the latency rows) and the mapping that produces it,
-        // instead of the old ternary that hardcoded the pair.
+        // $bootKind is per server rather than a hardcoded pair, so the assertion pins
+        // the KIND test (which is what protects the latency rows) and the mapping that
+        // produces it.
         $src = (string) file_get_contents(dirname(__DIR__) . '/scripts/http-bench.php');
         $this->assertStringContainsString("\$bootKind === 'fpm' && \$bootMs !== null", $src);
         $this->assertStringContainsString('$bootKind    = $probeKind;', $src);
         $this->assertStringContainsString(
-            "'volucer-cgi'    => 'volucer-cgi',",
+            "'volucer-attach' => 'volucer',",
             $src,
-            'the cold volucer arm must map to its own probe kind, not FPM\'s'
+            'the resident arm must map to its own probe kind'
         );
     }
 

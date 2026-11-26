@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Attribute the per-request cost of `/features/aop-direct` — ON THE BENCH VM.
+ * Attribute the per-request cost of `/features/aop-tx-direct` — ON THE BENCH VM.
  *
- * WHY THIS EXISTS. The php-fpm row for `GET /features/aop-direct` is ~1.14 ms
+ * WHY THIS EXISTS. The php-fpm row for `GET /features/aop-tx-direct` is ~1.14 ms
  * slower than Phalcon's for the same upsert inside the same transaction, and
  * three explanations have been written into BenchmarkConfig.php and then
  * retracted:
@@ -32,7 +32,7 @@ declare(strict_types=1);
  *   connect       first DB touch on the new container (PRAGMAs included)
  *   write         begin(true) + upsert + commit, connection already open
  *   event         ItemCreated dispatch
- *   controller    the whole /features/aop-direct dispatch
+ *   controller    the whole /features/aop-tx-direct dispatch
  *   floor         /echo, the same container cost with no DB at all
  *
  * `connect` is the number to watch. If it carries the gap, the cost is connection
@@ -104,7 +104,7 @@ $measure = static function (callable $fn) use ($samples): array {
 // Warm every class the endpoints touch, so nothing below is class-loading. This is
 // the opcache-warm worker FPM actually is after the first request; measuring without
 // it is what produced the bogus "listener graph costs 1.78 ms" result.
-foreach (['/echo', '/features/aop-direct', '/features/config', '/features/db-events'] as $uri) {
+foreach (['/echo', '/features/aop-tx-direct', '/features/config', '/features/db-events'] as $uri) {
     $boot::forget();
     $warm = new AzeraAdapter();
     $warm->bootstrap();
@@ -156,7 +156,7 @@ $results['controller'] = $measure(static function () use ($boot): void {
     $boot::forget();
     $o = new AzeraAdapter();
     $o->bootstrap();
-    $o->dispatch('GET', '/features/aop-direct');
+    $o->dispatch('GET', '/features/aop-tx-direct');
     $o->cleanup();
 });
 
@@ -170,7 +170,7 @@ $results['echo'] = $measure(static function () use ($boot): void {
     $o->cleanup();
 });
 
-printf("aop-direct attribution (php-fpm shape: fresh container, warm classes)\n");
+printf("aop-tx-direct attribution (php-fpm shape: fresh container, warm classes)\n");
 printf("samples=%d  php=%s  os=%s\n\n", $samples, PHP_VERSION, PHP_OS_FAMILY);
 printf("%-12s %9s %9s %9s\n", 'layer', 'p50', 'p95', 'min');
 printf("%s\n", str_repeat('-', 42));
@@ -229,7 +229,7 @@ if ($httpPort > 0) {
     $http['/echo']            = $get('/echo', $httpPort, $samples);
     $http['/features/config'] = $get('/features/config', $httpPort, $samples);
     $http['/items/1']         = $get('/items/1', $httpPort, $samples);
-    $http['/features/aop-direct'] = $get('/features/aop-direct', $httpPort, $samples);
+    $http['/features/aop-tx-direct'] = $get('/features/aop-tx-direct', $httpPort, $samples);
 
     printf("\nOVER HTTP (nginx + php-fpm, port %d, trimmed mean of %d):\n", $httpPort, $samples);
     printf("%-26s %9s %8s\n", 'uri', 'trimmed', 'body');
@@ -238,7 +238,7 @@ if ($httpPort > 0) {
         printf("%-26s %9.3f %8d\n", $uri, $r['trim'], $r['body']);
     }
 
-    $writeDelta = $http['/features/aop-direct']['trim'] - $http['/echo']['trim'];
+    $writeDelta = $http['/features/aop-tx-direct']['trim'] - $http['/echo']['trim'];
     $readDelta  = $http['/items/1']['trim'] - $http['/echo']['trim'];
     $inprocDelta = $results['controller']['p50'] - $results['echo']['p50'];
 
@@ -267,7 +267,7 @@ if (is_file($datasetPath)) {
         }
 
         foreach (($app['modes']['php-fpm']['requests'] ?? []) as $row) {
-            if (($row['request'] ?? '') !== 'GET /features/aop-direct') {
+            if (($row['request'] ?? '') !== 'GET /features/aop-tx-direct') {
                 continue;
             }
 
@@ -281,7 +281,7 @@ if (is_file($datasetPath)) {
 }
 
 if ($publishedAzera !== null && $publishedPhalcon !== null) {
-    printf("\npublished php-fpm rows for GET /features/aop-direct:\n");
+    printf("\npublished php-fpm rows for GET /features/aop-tx-direct:\n");
     printf("  azera   %.4f ms\n", $publishedAzera);
     printf("  phalcon %.4f ms\n", $publishedPhalcon);
     printf("  delta   %+.4f ms  <- the number this script exists to attribute\n", $publishedAzera - $publishedPhalcon);

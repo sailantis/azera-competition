@@ -8,11 +8,11 @@ declare(strict_types=1);
  * The harness' cold mode (bootstrap per iteration, opcache retained — the
  * same bytecode-sharing real FPM workers enjoy) models the per-request cost
  * profile of a classic PHP-FPM deployment, while warm mode models a
- * RoadRunner-style long-lived worker. The report views should present those
+ * resident long-lived worker. The report views should present those
  * as two deployment stories, not two abstract "modes" — so this script
  * relabels each mode into its real-world name:
  *
- *   warm -> roadrunner   cold -> php-fpm
+ *   warm -> volucer-attach   cold -> php-fpm
  *
  * env.php_fpm_note is added so every rendered report carries the caveat that
  * cold mode models the *application* boot FPM pays per request, not FPM's own
@@ -49,7 +49,7 @@ if (!is_array($raw) || !isset($raw['apps'])) {
     exit(1);
 }
 
-$rename = ['warm' => 'roadrunner', 'cold' => 'php-fpm'];
+$rename = ['warm' => 'volucer-attach', 'cold' => 'php-fpm'];
 $found  = [];
 foreach ($raw['apps'] as &$app) {
     foreach ($rename as $from => $to) {
@@ -62,7 +62,7 @@ foreach ($raw['apps'] as &$app) {
 }
 unset($app);
 
-if (isset($found['roadrunner']) xor isset($found['php-fpm'])) {
+if (isset($found['volucer-attach']) xor isset($found['php-fpm'])) {
     fwrite(STDERR, "Warning: dataset has only one of warm/cold — the derived view will be partial.\n");
 }
 if ($found === []) {
@@ -73,7 +73,7 @@ if ($found === []) {
 $raw['env']['derived_from']      = basename($src);
 $raw['env']['deployment_models'] = [
     'php-fpm'    => 'harness cold mode: the framework boots per request (opcache retained, as with real FPM workers sharing bytecode). Models the application cost FPM pays per request; FPM worker management itself is not simulated.',
-    'roadrunner' => 'harness warm mode: the framework boots once and serves many requests from a resident worker (RoadRunner/Octane/Swoole style).',
+    'volucer-attach' => 'harness warm mode: the framework boots once and serves many requests from a resident worker (Octane / Swoole / Volucer attach style).',
 ];
 
 file_put_contents($dst, json_encode($raw, JSON_PRETTY_PRINT));

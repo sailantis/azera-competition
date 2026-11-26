@@ -3,20 +3,32 @@
 declare(strict_types=1);
 
 /**
- * Logging interceptor — records each call it wraps (Spiral AOP demo).
+ * Logging interceptor — writes entry/exit records through a PSR-3 logger
+ * (Spiral AOP demo).
+ *
+ * WHY IT TAKES A LOGGER RATHER THAN AN ARRAY. It used to append strings to an
+ * `array &$entries` the application owned, so `/features/log` demonstrated a
+ * pipeline appending to a PHP array — it never touched Spiral's logger, and the
+ * report's "PSR-3 everywhere" claim was false for this entrant. Spiral ships
+ * `LogsInterface::getLogger($channel)`, which returns a PSR-3 logger feeding the
+ * framework's `ListenerRegistry`; passing `LoggerInterface` in makes the row
+ * measure that path.
+ *
+ * `elapsed_ms` is measured across the intercepted call and travels in the exit
+ * record, so the number describes the work the record wraps.
  */
 
 namespace App\Spiral\Interceptor;
 
+use Psr\Log\LoggerInterface;
 use Spiral\Interceptors\Context\CallContextInterface;
 use Spiral\Interceptors\HandlerInterface;
 use Spiral\Interceptors\InterceptorInterface;
 
 final class LogInterceptor implements InterceptorInterface
 {
-    /** @param list<string> $entries */
     public function __construct(
-        private array &$entries,
+        private readonly LoggerInterface $logger,
     ) {}
 
     public function intercept(CallContextInterface $context, HandlerInterface $handler): mixed
@@ -30,11 +42,26 @@ final class LogInterceptor implements InterceptorInterface
             ? ($target->getReflection()?->getName() ?? 'closure')
             : implode('.', $path);
 
-        $this->entries[] = 'log:before ' . $label;
+        $this->logger->info("Entering {$label}", ['target' => $label]);
 
-        $result = $handler->handle($context);
+        $start = hrtime(true);
 
-        $this->entries[] = 'log:after ' . $label;
+        try {
+            $result = $handler->handle($context);
+        } catch (\Throwable $e) {
+            $this->logger->error("Failed {$label}", [
+                'target'     => $label,
+                'elapsed_ms' => round((hrtime(true) - $start) / 1e6, 4),
+                'exception'  => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+
+        $this->logger->info("Completed {$label}", [
+            'target'     => $label,
+            'elapsed_ms' => round((hrtime(true) - $start) / 1e6, 4),
+        ]);
 
         return $result;
     }

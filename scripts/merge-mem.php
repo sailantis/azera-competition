@@ -35,7 +35,7 @@ declare(strict_types=1);
  * relying on that equality) is what keeps `peak >= boot` true WITHIN the row
  * even if a future runtime ever drifts.
  *
- * NOT MERGED, and REFUSED: roadrunner. A resident worker's memory is a
+ * NOT MERGED: the retired RoadRunner arm. A resident worker's memory is a
  * CUMULATIVE TRAJECTORY belonging to ONE run, and its boot heap is not
  * reproducible:
  *
@@ -63,7 +63,7 @@ declare(strict_types=1);
  *   php scripts/merge-mem.php <dataset.json> <mem1.json> <mem2.json> ...
  *
  * Each mem file is the --mem-only output of scripts/http-bench.php for one
- * (server, app) pair. RoadRunner files are accepted and skipped with a reason,
+ * (server, app) pair. A retired arm's files are accepted and skipped with a reason,
  * so a run that probes both servers needs no filtering by the caller.
  */
 
@@ -80,14 +80,20 @@ if (!is_array($dataset) || !isset($dataset['apps'])) {
     exit(1);
 }
 
-// server => mode, matching run-http.php's $modeOf and merge-boot.php.
-$modeOf = static fn(string $server): string => $server === 'rr' ? 'roadrunner' : 'php-fpm';
+// server => mode, matching run-http.php's modeNameFor() and merge-boot.php. A
+// blanket 'php-fpm' would label a volucer-attach probe as the FPM arm, which is
+// exactly the misattribution this map exists to prevent.
+$modeOf = static fn(string $server): string => match ($server) {
+    'rr'    => 'roadrunner',
+    'fpm'   => 'php-fpm',
+    default => $server,
+};
 
 $byApp = [];
+
 foreach ($dataset['apps'] as $i => $app) {
     $byApp[(string) ($app['app'] ?? '')] = $i;
 }
-
 // The per-request statistic plus the footprint it is measured against. Both
 // belong to the probe pass, and both are safe for php-fpm: a fresh process
 // boots to the same heap every time (verified 0.000 MB drift across all six
@@ -121,15 +127,15 @@ foreach ($args as $path) {
         exit(1);
     }
 
-    // RoadRunner is SKIPPED, not merged: a resident worker's memory is one
+    // A retired arm is SKIPPED, not merged: a resident worker's memory is one
     // run's cumulative trajectory and its boot heap is not reproducible (it is
     // read warm, after the worker's re-boot cycles). Merging a probe pass's
     // peak into a dataset whose boot came from the latency run produced rows
     // with peak BELOW boot — impossible for a single worker, and a symptom of
     // mixing two runs rather than of a bad probe. Reported, so the caller sees
     // why, and so "the RR chart did not change" is never a silent surprise.
-    if ($server === 'rr') {
-        $skipped[] = "{$appKey}/roadrunner: skipped — a resident worker's memory is one "
+    if ($server === 'rr' || $mode === 'volucer-attach') {
+        $skipped[] = "{$appKey}/{$mode}: skipped — a resident worker's memory is one "
             . 'run\'s cumulative trajectory and its warm boot heap is not reproducible '
             . 'between runs, so a probe pass cannot be grafted onto the latency run.';
         continue;

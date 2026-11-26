@@ -292,7 +292,7 @@ final class MarkdownReport
      *     OPcache is on by default everywhere EXCEPT cli, where it is opt-in,
      *     which is why the harness documents `-d opcache.enable_cli=1`.
      *   Real deployment (run-http.php) — two servers, two directives: php-fpm
-     *     (fpm-fcgi) reads `opcache.enable`; the RoadRunner worker is spawned
+     *     (fpm-fcgi) reads `opcache.enable`; the volucer worker is inherited
      *     as cli and reads `opcache.enable_cli`. A scalar cannot describe both,
      *     so the dataset carries `env.opcache_by_mode` and this renders the
      *     value belonging to the PAGE's own mode.
@@ -503,7 +503,7 @@ final class MarkdownReport
      *          boot is the visible signal on this axis: a real-FPM row is the
      *          framework building itself again for every request.
      *   RR   — requests cross a socket to a resident worker, so a bare worker
-     *          (floor-rr, ~0.2 ms) is the IPC + server floor.
+     *          (the resident floor probe) is the IPC + server floor.
      *
      * Without this line the FPM rows read as if the framework itself cost
      * 10 ms. Empty for every in-process dataset (no `floors` key).
@@ -573,18 +573,18 @@ final class MarkdownReport
 
         if ($this->store->isResidentMode($mode)) {
             // THE FLOOR MUST BE THE ONE THIS SERVER PAID. Resolve it by MODE, not by
-            // the RoadRunner key: `floor-rr` is a RoadRunner process, so reading it
+            // a fixed key: the old floor-rr row was a RoadRunner process, so reading it
             // on a Volucer page described a DIFFERENT server's overhead as the
             // arithmetic behind these rows. That is why the Volucer page used to say
             // "none measured" even after floor-volucer-attach existed in the dataset
-            // — the check only ever asked for `floor-rr`.
+            // — the check only ever asked for floor-rr.
             $floorKey = $residentFloorKey($mode);
 
             if ($floorKey === null) {
                 // A resident server with no probe of its own. The honest statement is
                 // that there is none, and why — never a borrowed number.
                 return "\n\n**Server floor** — none measured for this server: the resident floor in "
-                    . 'this dataset (`floor-rr`) was measured through RoadRunner, whose process model '
+                    . 'this dataset was measured through another server, whose process model '
                     . 'differs from ' . $this->serverLabel($mode) . "'s, so its number is not this "
                     . "server's overhead and does not appear in these rows. Read the figures here as "
                     . 'end-to-end; differences larger than the floor in the other resident summaries '
@@ -597,9 +597,14 @@ final class MarkdownReport
             // `floor-*` row in the dataset already carries it, and a figure repeated
             // in prose is the one thing a re-run cannot update (see
             // ChartManifestTest::testTheReportProseNamesNoMeasuredFigure).
+            //
+            // The row is named as `GET /echo` because that is the request the probe
+            // issues (measureFloorApp()): a floor is subtracted from the `/echo` row,
+            // so both sides must be the same request. It used to probe `GET /`, which
+            // measured a template render on every app against a constant on the floor.
             return "\n\n**Server floor** — a resident worker that boots NOTHING (`{$floorKey}`) measures "
                 . 'this server\'s own overhead: a bare request round trip with no framework, no routing '
-                . 'and no template, stated as that floor\'s `GET /` row in the dataset. Every row below '
+                . 'and no template, stated as that floor\'s `GET /echo` row in the dataset. Every row below '
                 . 'stands on it, so only differences larger than it are framework differences — and a '
                 . 'row BELOW it is a measurement that describes a different server than its floor, '
                 . 'which is what FloorCoverageTest and bench-lib.php::assertRowsNotBelowFloor() now refuse.'
@@ -651,7 +656,7 @@ final class MarkdownReport
      *     fork-per-iteration child boots in its own request clock), so the
      *     headline is what a user waits for end-to-end.
      *
-     *   warm/roadrunner — the rows measure post-boot work only, so the
+     *   warm — the rows measure post-boot work only, so the
      *     worker's recycle cost is ADDED to every row and to every chart
      *     point. That is what the deployment pays to bring a worker back
      *     between requests, and it is the only way a warm cell can answer
@@ -664,7 +669,7 @@ final class MarkdownReport
      * True when its boot probe produced a single sample. That is a structural fact
      * about the backend, not a sampling shortfall: a master that boots before
      * forking (Volucer's `attach`) can only ever report one boot, while a pool that
-     * re-initialises a live worker (`RoadRunner`) reports one per recycle.
+     * re-initialises a live worker reports one per recycle.
      *
      * Requiring EVERY measured app to agree keeps a half-sampled dataset on the
      * conservative side — a mixed dataset claims nothing special and keeps the
@@ -722,7 +727,7 @@ final class MarkdownReport
 
     /**
      * The human name of the server behind a mode, for a chart band or caption,
-     * e.g. "(RoadRunner)" / "(PHP-FPM)".
+     * e.g. "(Volucer attach)" / "(PHP-FPM)".
      *
      * A mode this does not recognise is passed through unchanged rather than
      * guessed at: a label reading "(volucer-attach)" is honest, while one
@@ -732,11 +737,10 @@ final class MarkdownReport
     private function serverLabel(string $mode): string
     {
         return match ($mode) {
-            'roadrunner', 'warm' => 'RoadRunner',
-            'php-fpm', 'cold'    => 'PHP-FPM',
-            'volucer-attach'     => 'Volucer attach',
-            'volucer-cgi'        => 'Volucer spawn_cgi',
-            default              => $mode,
+            'warm'           => 'Resident worker',
+            'php-fpm', 'cold' => 'PHP-FPM',
+            'volucer-attach' => 'Volucer attach',
+            default          => $mode,
         };
     }
 
@@ -749,11 +753,10 @@ final class MarkdownReport
     private function workerName(string $mode): string
     {
         return match ($mode) {
-            'roadrunner', 'warm' => 'RoadRunner',
-            'php-fpm', 'cold'    => 'FPM',
-            'volucer-attach'     => 'Volucer attach',
-            'volucer-cgi'        => 'Volucer spawn_cgi',
-            default              => $mode,
+            'warm'           => 'Resident worker',
+            'php-fpm', 'cold' => 'FPM',
+            'volucer-attach' => 'Volucer attach',
+            default          => $mode,
         };
     }
 
@@ -854,7 +857,7 @@ final class MarkdownReport
      *      the same inheritance a real FPM master→worker fork gets. The
      *      "virtual cold boot" a recycled FPM worker pays per request.
      *   3. Warm recycle — a re-bootstrap with everything already loaded;
-     *      what a RoadRunner-style worker pays per recycle. Guarded no-op
+     *      what a resident worker pays per recycle. Guarded no-op
      *      re-boots (CodeIgniter/CakePHP state resets) read ~0 here.
      *
      * Each band shows boot + the mode's median per-request teardown: both
@@ -896,7 +899,7 @@ final class MarkdownReport
         //
         //   php-fpm    -> the entry script re-runs per request, so the probe
         //                 measures the boot each request waits for.
-        //   roadrunner -> the worker re-inits the framework in an already-warm
+        //   resident   -> the worker re-inits the framework in an already-warm
         //                 process N times, so the probe measures the cycle
         //                 reset: opcache and every class are loaded, only the
         //                 kernel/container is rebuilt. The process-start cost
@@ -911,14 +914,14 @@ final class MarkdownReport
             // The band follows the MEASURED model, not the mode name. Naming the
             // server in the label is deliberate: a reader needs to know which
             // deployment produced the number. The `? :` this replaced compared
-            // against 'roadrunner' exactly, so any additional resident arm would
+            // against one exact mode name, so an additional resident arm would
             // have been drawn with the per-request band and its cold_ms — a
             // plausible chart of the wrong quantity.
             //
             // WHICH resident boot, though, depends on whether the arm RECYCLES at
             // all, and the probe sample count says so unambiguously:
             //
-            //   RoadRunner  — the pool re-boots the framework in a live worker, so
+            //   recycling   — the pool re-boots the framework in a live worker, so
             //                 the probe repeats and returns many samples. That is a
             //                 per-service-lifetime REBUILD, and it happens to be
             //                 cheap (opcache and every class are already loaded).
@@ -948,7 +951,7 @@ final class MarkdownReport
             if ($this->store->fpmBootMedian($apps[0] ?? '') !== null || $this->store->fpmBootMedian($apps[1] ?? '') !== null) {
                 $bands['fpm'] = ['label' => 'FPM rebuild — per-request boot on shared opcache', 'key' => 'fpm_boot'];
             }
-            $bands['warm'] = ['label' => 'Warm recycle — resident worker (RoadRunner model)', 'key' => 'warm_ms'];
+            $bands['warm'] = ['label' => 'Warm recycle — resident worker', 'key' => 'warm_ms'];
         }
 
         foreach ($bands as $band => $cfg) {
@@ -1378,11 +1381,25 @@ final class MarkdownReport
                     $participants[] = $app;
                 }
             }
-            if (count($participants) < 2) {
+            // TWO DIFFERENT REASONS to draw nothing, and only one is a defect.
+            //
+            //   - NO PARTICIPANTS: nobody claims the feature, so there is no race
+            //     to draw. Cannot happen for a feature in adapterFeatures().
+            //   - ONE PARTICIPANT: a legitimate solo row since `aop-tx` narrowed to
+            //     transparent AOP, which only Azera ships. Suppressing it hid the
+            //     framework from the one comparison where it is the only entrant —
+            //     the same silent-vanish failure as a missing route.
+            //
+            // A lone bar is not a ranking, so the chart is drawn with the note
+            // below instead of pretending otherwise.
+            if ($participants === []) {
                 continue;
             }
 
-            // Only requests where at least two of the participants measured.
+            // Every request a participant measured. This used to require two of
+            // them, which silently dropped an endpoint whenever only one entrant
+            // raced it — and with `aop-tx` narrowed to Azera alone that is now the
+            // normal case, not an anomaly.
             $cats    = [];
             $metrics = [];
             $colors  = [];
@@ -1399,7 +1416,10 @@ final class MarkdownReport
                         $measured[$app] = $spread;
                     }
                 }
-                if (count($measured) < 2) {
+                // One measurement is a legitimate row now that `aop-tx` has a single
+                // participant; requiring two here silently dropped the endpoint the
+                // chart exists to show. See the participant-count comment above.
+                if ($measured === []) {
                     continue;
                 }
                 $cats[] = $req;
@@ -1468,6 +1488,14 @@ final class MarkdownReport
                 $anchor = $cats[0];
             }
 
+            // A feature only ONE entrant competes in gets a bar, not a ranking.
+            // Say so, or a reader reads a single column as a result.
+            if (count($participants) === 1) {
+                $what .= ' Only ' . BenchmarkConfig::appLabel($participants[0])
+                    . ' competes in this feature, so the chart is a single measurement '
+                    . 'rather than a ranking.';
+            }
+
             // Say WHO is missing, WHY, and — for the AOP race — which STYLE each
             // participant implements. `supports()` silently drops an app, so
             // without this a reader sees one chart with seven series and another
@@ -1476,8 +1504,8 @@ final class MarkdownReport
             // against hand-written pipelines, which are different work.
             //
             // An ENDPOINT-level exclusion counts as absent here even though the app
-            // supports the feature: `aop` is in Phalcon's feature list because it
-            // serves the control, but it must not appear in the `/features/aop` band.
+            // supports the feature: `aop-tx` is in Phalcon's feature list because it
+            // serves the control, but it must not appear in the `/features/aop-tx` band.
             $absent = [];
             foreach ($apps as $app) {
                 if (!$this->store->supports($app, $feature)) {
@@ -1501,7 +1529,7 @@ final class MarkdownReport
                 : "\n\n*Not measured here:* " . implode(', ', $absent)
                     . ' — ' . BenchmarkConfig::exclusionReason($feature, $absent);
 
-            if ($feature === 'aop') {
+            if ($feature === 'aop-tx' || $feature === 'aop-cache') {
                 $styles = BenchmarkConfig::aopStylesInRace();
                 $parts  = [];
                 if ($styles['transparent'] !== []) {
@@ -1512,16 +1540,35 @@ final class MarkdownReport
                     $parts[] = '**direct** (the pipeline is written out in the code): '
                         . implode(', ', $styles['direct']);
                 }
-                if ($parts !== []) {
+                // Only claim a cross-style comparison when BOTH styles are present.
+                // Now that `aop-tx` narrowed to the sole transparent entrant, saying
+                // "read this row in two styles" would describe a comparison that is
+                // not on the page — the direct side moved to `aop-tx-direct`, which is
+                // a separate chart.
+                if (count($parts) === 2) {
                     $notCompeting .= "\n\n*Read this row in two styles.* " . implode('. ', $parts)
                         . '. The two styles pay for different machinery, and the cross-style ranking '
                         . 'is not a speed verdict.';
+                } elseif ($parts !== []) {
+                    $notCompeting .= "\n\n*This facility, and who ships it.* " . implode('. ', $parts)
+                        . '. The hand-written equivalent is charted separately as `aop-tx-direct`, and '
+                        . 'the gap between the two is what generated interception costs on the same '
+                        . 'work.';
                 }
                 // Name the endpoint-level exclusion and the row that replaces it, so a
                 // reader who notices one entrant missing from this band knows which
                 // band does include it.
+                //
+                // An app already listed as ABSENT above is skipped: since the six
+                // entrants without transparent AOP left `aop-tx` altogether, Phalcon is
+                // now absent by FACILITY, and its stale per-endpoint exclusion in
+                // `excludedRequests()` would otherwise be reported a second time in a
+                // sentence about an endpoint it no longer competes on either way.
                 $sitsOut = [];
                 foreach ($apps as $app) {
+                    if (in_array(BenchmarkConfig::appLabel($app), $absent, true)) {
+                        continue;
+                    }
                     foreach ($reqs as $req) {
                         if (!$this->store->racesOn($app, $req)) {
                             $sitsOut[] = BenchmarkConfig::appLabel($app) . ' (`' . $req . '`)';
@@ -1531,9 +1578,9 @@ final class MarkdownReport
                 if ($sitsOut !== []) {
                     $notCompeting .= "\n\n*Sits out one endpoint, not the feature:* "
                         . implode(', ', $sitsOut) . ' — the identical insert with the transaction '
-                        . 'written by hand, which is what this entrant\'s `/features/aop` already '
+                        . 'written by hand, which is what this entrant\'s `/features/aop-tx` already '
                         . 'does, so racing it there would compare machinery rather than speed. It '
-                        . 'DOES compete on `GET /features/aop-direct`, the control, so the gap '
+                        . 'DOES compete on `GET /features/aop-tx-direct`, the control, so the gap '
                         . 'between that row and this one is what interception actually costs.';
                 }
             }
@@ -1611,7 +1658,7 @@ final class MarkdownReport
     }
 
     /**
-     * Resident-worker memory from the opt-in RoadRunner probe (see
+     * Resident-worker memory from the opt-in worker probe (see
      * deploy/rr/worker.php and scripts/bench-lib.php).
      *
      * This is a DIFFERENT measurement from the peak_mem chart above, and the
@@ -1663,7 +1710,7 @@ final class MarkdownReport
         // because the chart itself only knows "lowest / typical / highest" and
         // the difference is entirely in what those readings are.
         //
-        //   roadrunner — ONE worker serves every endpoint. boot -> last ->
+        //   resident   — ONE worker serves every endpoint. boot -> last ->
         //     worst is a real cumulative sequence, and its GROWTH is the
         //     finding. cakePHP's was 39.7 MB on the 2026-09-15 run (the leak
         //     documented below); after the adapter fix the re-measured
@@ -1835,7 +1882,7 @@ final class MarkdownReport
     }
 
     /**
-     * Memory of a RESIDENT worker (RoadRunner), where one process serves every
+     * Memory of a RESIDENT worker (volucer attach), where one process serves every
      * endpoint — so the three marks are that one worker at three moments and
      * form a genuine cumulative sequence:
      *
@@ -1980,9 +2027,9 @@ final class MarkdownReport
      * measured — which is a fact about the SERVER, not about the view.
      *
      * The two transports are genuinely different, and a reader comparing the
-     * real-roadrunner and real-fpm pages has to know that:
+     * real-volucer-attach and real-fpm pages has to know that:
      *
-     *   roadrunner — the worker is resident in a request loop, so it answers
+     *   resident   — the worker is resident in a request loop, so it answers
      *                in RESPONSE HEADERS (deploy/rr/worker.php) whenever a
      *                probe request carries X-Mem-Probe: 1.
      *   php-fpm    — there is no loop to ask: the entry script runs, serves
@@ -1992,7 +2039,7 @@ final class MarkdownReport
      *
      * Both sides call the same PHP functions for the same four quantities, so
      * the numbers are comparable; only the route out of the process differs.
-     * Claiming "read from inside the RoadRunner worker" on an FPM page would
+     * Claiming "read from inside the resident worker" on an FPM page would
      * simply be false, which is why this is a branch and not a constant.
      */
     private function workerMemoryTransport(string $mode): string
@@ -2008,7 +2055,7 @@ final class MarkdownReport
             . 'script is torn down when the request ends, it appends one sample as it exits, and '
             . 'the harness reads that back.'
             // The pool settings are a fact about the FPM deployment specifically, so
-            // they are only claimed for it. A spawn_cgi arm has no pool to describe.
+            // they are only claimed for it. A per-request arm has no pool to describe.
             . ($name === 'FPM'
                 ? ' The pool is `pm = static` with `max_children = 1` and `max_requests = 0`, so this '
                     . 'is ONE worker that stays alive for the whole block — which is why it has '

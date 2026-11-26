@@ -55,6 +55,23 @@ final class ChartManifestTest extends TestCase
             mkdir($dir, 0777, true);
         }
 
+        // Clear what a PREVIOUS run left here. The directory is keyed by name and
+        // is reused across runs, so a chart that no longer exists (a feature removed
+        // from the manifest, or one whose dataset row is gone) survived as a stale
+        // .svg and made the funnel comparison report a chart this render had not
+        // written — a false failure about test setup, not about the renderer.
+        $clean = static function (string $pattern) use (&$clean): void {
+            foreach (glob($pattern) ?: [] as $path) {
+                if (is_dir($path)) {
+                    $clean($path . '/*');
+                    @rmdir($path);
+                    continue;
+                }
+                @unlink($path);
+            }
+        };
+        $clean($dir . '/*');
+
         return $dir;
     }
 

@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * HTTP latency benchmark client (curl_multi over loopback).
  *
- * Measures REAL deployed endpoints (RoadRunner resident worker = mode
- * "roadrunner"; nginx + php-fpm with pm.max_requests=0 = mode "php-fpm")
+ * Measures REAL deployed endpoints (volucer `attach` resident worker = mode
+ * "volucer-attach"; nginx + php-fpm with pm.max_requests=0 = mode "php-fpm")
  * with the same stats machinery and JSON field names as run.php's
  * benchRequest(), so the real-deployment dataset drops straight into the
  * existing report generator.
@@ -14,10 +14,10 @@ declare(strict_types=1);
  * Called by scripts/run-http.php — one invocation per (server, app) block:
  *
  *   php scripts/http-bench.php \
- *       --server=rr --app=azera --base-url=http://127.0.0.1:8988 \
+ *       --server=fpm --app=azera --base-url=http://127.0.0.1:8883 \
  *       --iterations-per-run=1000 --runs=10 \
  *       --requests="GET /,GET /items,POST /items" \
- *       --out-json=temp/bench-rr-azera.json
+ *       --out-json=temp/bench-fpm-azera.json
  *
  * Measurement model (matches run.php):
  *  - hrtime() around each sequential request; cleanup cost is part of the
@@ -44,7 +44,7 @@ $opts = getopt('', [
     'mem-repeats::',
 ]);
 
-$server      = $opts['server'] ?? 'rr';
+$server      = $opts['server'] ?? 'fpm';
 $appKey      = $opts['app'] ?? 'azera';
 $baseUrl     = rtrim((string) ($opts['base-url'] ?? ''), '/');
 $itersPerRun = (int) ($opts['iterations-per-run'] ?? 1000);
@@ -88,12 +88,11 @@ echo "=== http-bench: {$server} / {$appKey} @ {$baseUrl} ({$itersPerRun}x{$runs}
 // — the orchestrator looks the child's output up by that key, so a mismatch reads as
 // "No results from http-bench", not as a naming quirk.
 //
-// The volucer arms keep their own names because they are different deployment models:
-// `volucer-attach` is resident (the framework boots once and every connection reuses
-// it) while `volucer-cgi` re-runs the entry script per request like FPM. Bucketing
-// them together would average a resident arm with a cold one.
+// The two arms are different deployment models: `volucer-attach` is resident (the
+// framework boots once and every connection reuses it) while `fpm` re-runs the entry
+// script per request. Bucketing them together would average a resident arm with a cold
+// one.
 $modeName = match ($server) {
-    'rr'    => 'roadrunner',
     'fpm'   => 'php-fpm',
     default => $server,
 };
@@ -102,15 +101,13 @@ $modeName = match ($server) {
 // probeKindFor(): the harness CLEARS these files before the block and reads them after,
 // so both sides must name the same one.
 //
-// This used to be a two-way rr/fpm choice, which was correct only while those were the
-// only two arms. The volucer `spawn_cgi` arm re-runs public/index-<app>.php, which
-// writes its samples under whatever BENCH_PROBE_KIND the process carries — so the arm
-// names its own kind and this side must agree, or the block reads FPM's leftovers.
+// This must agree with scripts/run-http.php's probeKindFor(): the harness CLEARS these
+// files before the block and this side READS them after, so both must name the same
+// one. The kinds are historical strings and are NOT renamed with the arms, because
+// datasets written before this pair existed store their samples under them.
 $probeKind = match ($server) {
-    'rr'             => 'rr',
     'fpm'            => 'fpm',
     'volucer-attach' => 'volucer',
-    'volucer-cgi'    => 'volucer-cgi',
     default          => throw new RuntimeException("http-bench: no probe kind for server '{$server}'"),
 };
 
@@ -268,16 +265,16 @@ foreach ($bootOnly ? [] : $requests as [$method, $uri]) {
     // --- Memory probe (every server) -----------------------------------------
     // One extra request AFTER the timed loop answers "after N requests the
     // worker holds X". Kept off the hot path so latency stays comparable (see
-    // deploy/rr/worker.php, deploy/volucer/app.php and boot-probe.php for what
+    // deploy/volucer/app.php and boot-probe.php for what
     // each field means).
     //
     // The transport is chosen by whether the arm holds a WORKER LOOP that can be
     // asked at any time:
     //
-    //   resident (roadrunner, volucer, volucer-attach)
+    //   resident (volucer, volucer-attach)
     //                — the worker is alive and answers in RESPONSE HEADERS
     //                (X-Bench-Boot/Peak/Heap/Rss/Hwm). It can be asked any time.
-    //   per-request (php-fpm, volucer-cgi)
+    //   per-request (php-fpm)
     //                — there is no worker loop to ask: the entry script runs, serves
     //                this one request and is torn down. It appends to
     //                temp/mem-<kind>-<app>.jsonl from a shutdown hook, and the newest
@@ -314,7 +311,7 @@ foreach ($bootOnly ? [] : $requests as [$method, $uri]) {
         } catch (RuntimeException $e) {}
         $sample = memProbeWaitForNewSample($memFile, $before);
         if ($sample !== null) {
-            // Same five fields, same names as the RR branch above: the two
+            // Same five fields, same names as the resident branch above: the two
             // probes report the same quantities, only the transport differs.
             $mem = [
                 'boot' => $sample['boot'],
@@ -326,7 +323,7 @@ foreach ($bootOnly ? [] : $requests as [$method, $uri]) {
         }
     }
 
-    // --- Resident-worker handle/cleanup split (RoadRunner only) --------------
+    // --- Resident-worker handle/cleanup split (opt-in, resident arms) ---------
     // The timed loop measures the whole HTTP round-trip, so the work a worker
     // does BETWEEN requests (request-scoped teardown, ORM/heap resets, driver
     // disconnects) is invisible inside it. One short gated probe splits it, so
@@ -334,7 +331,7 @@ foreach ($bootOnly ? [] : $requests as [$method, $uri]) {
     // teardown. Kept off the hot path: the header is what turns the worker's
     // hrtime() calls on, and no timed request carries it.
     $split = ['handle' => 0.0, 'cleanup' => 0.0, 'samples' => 0];
-    if ($probeKind === 'rr') {
+    if (probeUsesHeaders($probeKind)) {
         $samples = httpSplitProbe($baseUrl, $method, $uri);
         if ($samples !== []) {
             $h     = array_column($samples, 'handle');
@@ -359,7 +356,7 @@ foreach ($bootOnly ? [] : $requests as [$method, $uri]) {
         'peak_mem'           => $peakMem,
         'connect_ms'         => $connectAvg,
         // Worker memory. Populated for BOTH servers since 2026-09-17. It used
-        // to be RoadRunner-only on the reasoning that "a php-fpm worker is
+        // to be resident-only on the reasoning that "a php-fpm worker is
         // per-request, so there is no resident heap to report" — but the FPM
         // pool is pm=static/max_children=1/max_requests=0, so one worker IS
         // resident for the whole block and DOES retain what it built. The
@@ -370,7 +367,7 @@ foreach ($bootOnly ? [] : $requests as [$method, $uri]) {
         //   mem_peak_heap — how much memory THIS request needed (per-request,
         //                   order-independent, the comparable one).
         //   mem_heap      — what the worker still held at that point
-        //                   (cumulative, endpoint-order dependent; for RR this
+        //                   (cumulative, endpoint-order dependent; for the resident arm this
         //                   is the leak trajectory boot -> ... -> last).
         // mem_boot_heap is the endpoint-independent footprint. See
         // memProbeRepeated()/ResultStore::residentPeakSeries().
@@ -390,7 +387,7 @@ foreach ($bootOnly ? [] : $requests as [$method, $uri]) {
     // the framework-side terms that SUM to the headline (`boot + handle +
     // cleanup`), which holds because a fork-mode row times them in the same
     // clock as the request. These probe numbers cannot: the headline is the
-    // client's HTTP round-trip (socket write + RoadRunner IPC + the request
+    // client's HTTP round-trip (socket write + supervisor IPC + the request
     // object + dispatch + teardown), so a framework-side handle of 0.026 ms
     // against a 0.267 ms headline would leave a 0.24 ms residual that
     // Tables::splitLabel() parks on the largest term — printing a sub-line
@@ -422,12 +419,12 @@ foreach ($bootOnly ? [] : $requests as [$method, $uri]) {
 //
 //   php-fpm    -> 'fpm': the entry script re-runs per request, so each probe
 //                 request appends the boot that request waited for.
-//   roadrunner -> 'rr':  the worker already appended N warm recycle samples
-//                 when it started (deploy/rr/worker.php), because the probe
+//   volucer    -> 'volucer': the supervisor already appended its boot samples
+//                 when it started (deploy/volucer/app.php), because the probe
 //                 requests below cannot force a re-boot — the worker serves
-//                 them from the kernel it is holding. The probe requests are
-//                 therefore only a readiness ping for RR; the samples come
-//                 from the worker's own cycle loop.
+//                 them from the state it is holding. The probe requests are
+//                 therefore only a readiness ping for the resident arm; the
+//                 samples come from the supervisor's own startup.
 //
 // 50 samples is well past the point where the median is stable, and costs
 // ~35 ms of server time per block.
@@ -446,8 +443,8 @@ for ($i = 0; $i < 50; $i++) {
 $bootSamples = bootProbeRead($bootFile);
 
 // The row-level boot_ms is only meaningful for php-fpm: there the entry
-// script re-runs per request, so the boot IS part of every timed row. On
-// RoadRunner the worker boots once before serving anything, so the boot is
+// script re-runs per request, so the boot IS part of every timed row. On a
+// resident arm the worker boots once before serving anything, so the boot is
 // NOT in the timed rows (adding it to a row would double-count).
 $bootMs    = $bootSamples === [] ? null : bootProbeStat($bootSamples)['median'];
 $bootStats = $bootSamples === [] ? null : bootProbeStat($bootSamples);
@@ -479,7 +476,7 @@ if ($bootOnly) {
         $median = (float) $bootStats['median'];
         $payload['boot']         = ['cold_ms' => $median, 'warm_ms' => $median];
         $payload['boot_samples'] = $bootStats;
-        $payload['boot_kind']    = $probeKind === 'rr' ? 'warm_recycle' : 'per_request_boot';
+        $payload['boot_kind']    = probeUsesHeaders($probeKind) ? 'warm_recycle' : 'per_request_boot';
     }
     file_put_contents($outJsonPath, json_encode($payload, JSON_PRETTY_PRINT));
     echo "  wrote {$outJsonPath} (boot only)\n";

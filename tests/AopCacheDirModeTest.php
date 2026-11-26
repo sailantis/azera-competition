@@ -18,8 +18,8 @@ use PHPUnit\Framework\TestCase;
  *
  *   - on a clean checkout ProxyFactory created it 0700, and everything passed
  *   - on the bench VM, `data/aop` already existed at 0775 from a run that
- *     predated the framework's check, so EVERY /features/aop and
- *     /features/aop-direct request threw, answered 500, and aborted the run
+ *     predated the framework's check, so EVERY /features/aop-tx and
+ *     /features/aop-tx-direct request threw, answered 500, and aborted the run
  *
  * The failure only appeared on Linux: on Windows there are no POSIX mode bits
  * to inspect, so the guard is a no-op and the local suite stayed green. That is

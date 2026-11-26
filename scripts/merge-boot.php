@@ -39,14 +39,17 @@ if (!is_array($dataset) || !isset($dataset['apps'])) {
     exit(1);
 }
 
-// server => mode, mirroring run-http.php's modeNameFor(). The volucer arms are
-// included because their server name IS the mode name, and a table that mapped
-// everything non-RoadRunner to php-fpm would graft a volucer-cgi boot onto the FPM
-// block. Keep this in step with modeNameFor(): it is the same decision.
+// server => mode, mirroring run-http.php's modeNameFor(). The volucer arm is
+// included because its server name IS the mode name, and a table that mapped
+// everything non-FPM onto php-fpm would graft a resident boot onto the FPM
+// block. `rr` is retained so a PRE-2026-11-26 boot file can still be read and
+// then refused at the block lookup below, instead of being mislabelled as
+// FPM and silently grafted onto the wrong server.
+// Keep this in step with modeNameFor(): it is the same decision.
 $modeOf = static function (string $server): string {
     return match ($server) {
-        'rr'    => 'roadrunner',
         'fpm'   => 'php-fpm',
+        'rr'    => 'roadrunner',
         default => $server,
     };
 };
@@ -104,7 +107,7 @@ foreach ($args as $path) {
     //
     // php-fpm is the ONLY mode that carries the stamp, because http-bench.php gates
     // its own stamping on the probe kind being 'fpm' and volucer's spawn_cgi arm has
-    // kind 'volucer-cgi'. Stamping it there too would produce a row shape the run
+    // kind 'volucer'. Stamping it there too would produce a row shape the run
     // itself never writes, so the gate copies http-bench.php rather than reasoning
     // independently about which arms boot per request.
     if ($mode === 'php-fpm') {

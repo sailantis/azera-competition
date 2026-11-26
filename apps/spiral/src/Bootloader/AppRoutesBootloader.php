@@ -209,23 +209,17 @@ final class AppRoutesBootloader extends RoutesBootloader
         $routes->add('features:index', '/features')
             ->action(FeatureController::class, 'index')
             ->methods('GET');
-        $routes->add('feature:aop', '/features/aop')
-            ->action(FeatureController::class, 'aop')
+        $routes->add('feature:aop-tx-explicit', '/features/aop-tx-explicit')
+            ->action(FeatureController::class, 'aopExplicit')
             ->methods('GET');
-        $routes->add('feature:aop-direct', '/features/aop-direct')
+        $routes->add('feature:aop-tx-direct', '/features/aop-tx-direct')
             ->action(FeatureController::class, 'aopDirect')
             ->methods('GET');
-        $routes->add('feature:cache', '/features/cache')
-            ->action(FeatureController::class, 'cache')
+        $routes->add('feature:aop-cache-direct', '/features/aop-cache-direct')
+            ->action(FeatureController::class, 'aopCacheDirect')
             ->methods('GET');
         $routes->add('feature:log', '/features/log')
             ->action(FeatureController::class, 'log')
-            ->methods('GET');
-        $routes->add('feature:retry', '/features/retry')
-            ->action(FeatureController::class, 'retry')
-            ->methods('GET');
-        $routes->add('feature:pipeline', '/features/pipeline')
-            ->action(FeatureController::class, 'pipeline')
             ->methods('GET');
         $routes->add('feature:events', '/features/events')
             ->action(FeatureController::class, 'events')
@@ -239,12 +233,17 @@ final class AppRoutesBootloader extends RoutesBootloader
         $routes->add('feature:db-events', '/features/db-events')
             ->action(FeatureController::class, 'dbEvents')
             ->methods('GET');
-        $routes->add('feature:request-scoped', '/features/request-scoped')
-            ->action(FeatureController::class, 'requestScoped')
-            ->methods('GET');
         $routes->add('feature:rate-limit', '/features/rate-limit')
             ->action(FeatureController::class, 'rateLimit')
             ->methods('GET');
+        // The lifecycle row. The middleware is attached to THIS route rather than to
+        // globalMiddleware(): no other entrant runs a middleware stack on the benchmark
+        // rows, so a global registration would charge the work to every row. Its result
+        // is 203 plus the X-Bench-Lifecycle header (see the class docblock).
+        $routes->add('feature:lifecycle-hooks', '/features/lifecycle-hooks')
+            ->action(FeatureController::class, 'lifecycleHooks')
+            ->methods('GET')
+            ->middleware(\App\Spiral\Middleware\LifecycleHookMiddleware::class);
 
         // --- Filler routes (route-table size parity with azera app) ------
         foreach (\range(1, 100) as $i) {

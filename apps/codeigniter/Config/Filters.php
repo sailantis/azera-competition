@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * CodeIgniter 4 benchmark app — Filters config.
+ * CodeIgniter 4 benchmark app ??? Filters config.
  *
  * Required filters trimmed to the minimum for in-process dispatch:
  * `forcehttps` and the debug toolbar are irrelevant for synthetic requests
@@ -30,6 +30,11 @@ class Filters extends BaseFilters
         'forcehttps'    => \CodeIgniter\Filters\ForceHTTPS::class,
         'pagecache'     => \CodeIgniter\Filters\PageCache::class,
         'performance'   => \CodeIgniter\Filters\PerformanceMetrics::class,
+        // The lifecycle row's hook (GET /features/lifecycle-hooks). An `after` filter:
+        // it stamps a marker header and sets 203. See the class docblock and
+        // BenchmarkConfig::featureMap() for why this row is a filter here and a
+        // middleware or a kernel listener elsewhere.
+        'lifecycle'     => \Ci4App\Filters\LifecycleHookFilter::class,
     ];
 
     /**
@@ -56,5 +61,8 @@ class Filters extends BaseFilters
     /**
      * @var array<string, mixed>
      */
-    public array $filters = [];
+    public array $filters = [
+        // Per-route, not global: only the lifecycle row pays for its hook.
+        'features/lifecycle-hooks' => ['after' => ['lifecycle']],
+    ];
 }

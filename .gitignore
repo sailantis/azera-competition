@@ -23,6 +23,37 @@ apps/**/tmp/
 # Results (keep committed baselines if desired; ignore transient runs)
 results/transient/
 
+# Only the datasets a VIEW reads belong in git. `scripts/report/views.php`
+# declares exactly four, and everything else in results/ is one of two things:
+#
+#   * a SPLICE INPUT — the fresh run handed to scripts/merge-modes.php or
+#     scripts/merge-app.php so a single app or mode can be folded into a
+#     canonical dataset. Its numbers live on inside the target; the file itself
+#     is then dead weight, and it reads like a dataset the report might use.
+#   * a DATED SNAPSHOT of a superseded run (`quick-<sha>.json`,
+#     `full-<date>.json`). Git already holds every historical version.
+#
+# Fifteen such files had accumulated (~1.6 MB) and none was read by any view,
+# test or script. The four that ARE read stay whitelisted below, so anything
+# new that appears here is a deliberate act rather than a `git add -A` away
+# from being committed as if it were a measurement.
+results/*
+!results/free-for-all-opcache-iso.json
+!results/free-for-all-opcache-iso-deployments.json
+!results/real-deployments.json
+!results/real-0.5.0.json
+
+# The .csv/.md companions are DERIVED and are not committed: `run.php --export=
+# results/<prefix>` re-emits both from the .json with the same writers the
+# harness uses. They had been committed and had gone wrong in the two ways a
+# derived artefact does — `real-deployments.csv/.md` still described the
+# 2026-11-16 run (552 rows) beside a JSON from 2026-11-24 (728 rows), and all
+# four had been rewritten as UTF-16LE by an earlier `>` redirection. A second
+# copy of a dataset that can silently disagree with its source is worse than
+# no copy.
+results/*.csv
+results/*.md
+
 # Bench-harness scratch. The root-anchored `/temp/` above does not reach this,
 # and this directory is scratch by definition: dump.php writes the rendered HTML
 # here, run.php's --out=temp/... writes probe datasets here, and run-remote.ps1

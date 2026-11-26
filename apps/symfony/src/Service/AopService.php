@@ -30,6 +30,7 @@ final class AopService
 
     public function __construct(
         private readonly Connection $connection,
+        private readonly MemoryLogger $logger,
     ) {}
 
     /**
@@ -91,12 +92,34 @@ final class AopService
     }
 
     /**
-     * Wrap a plain callable with LogInterceptor via the pipeline.
+     * Wire a plain callable through LogInterceptor with Symfony's PSR-3 logger.
+     *
+     * The logger comes from the container (`Psr\Log\LoggerInterface` →
+     * `MemoryLogger` in services.yaml), so this app keeps depending on the PSR
+     * interface and Symfony decides the sink — the same split Laravel and Spiral
+     * have. `logRecords()` reads back what that logger wrote.
      */
     public function loggedCall(callable $fn): mixed
     {
         $this->entries = [];
-        return $this->pipeline(new LogInterceptor($this->entries))($fn);
+
+        $this->logger->clear();
+
+        return $this->pipeline(new LogInterceptor($this->logger))($fn);
+    }
+
+    /**
+     * Records the container's logger captured.
+     *
+     * The logger is the one registered for `Psr\Log\LoggerInterface`, so this is a
+     * readback of what the framework logged rather than a re-description of the
+     * call.
+     *
+     * @return list<array{level: string, message: string, context: array<string, mixed>}>
+     */
+    public function logRecords(): array
+    {
+        return $this->logger->records();
     }
 
     /**

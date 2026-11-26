@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Every server a row can be measured on must also have a FLOOR probe.
  *
- * WHY THIS IS A TEST AND NOT A COMMENT. A floor is one `GET /` to the same server
+ * WHY THIS IS A TEST AND NOT A COMMENT. A floor is one `GET /echo` to the same server
  * with no framework behind it, so it is the only thing in the dataset that says how
  * much of a row is the SERVER. Without it a reader has no way to know that a 149 us
  * `/echo` row on volucer-attach contains 4 us of framework — and on 2026-11-24 that
@@ -93,8 +93,17 @@ final class FloorCoverageTest extends TestCase
     /**
      * A floor must be a real measurement, not a placeholder.
      *
-     * A zero or absent `GET /` row would satisfy a keys-only check while giving a
-     * reader nothing to subtract, and the failure would look like a fast server.
+     * A zero or absent row would satisfy a keys-only check while giving a reader
+     * nothing to subtract, and the failure would look like a fast server.
+     *
+     * THE ROW IS READ POSITIONALLY, not by URI, because `requests[0]` IS the floor
+     * probe — that is the contract `measureFloorApp()` writes and `ResultStore::floors()`
+     * reads. The probe's URI is `GET /echo` (see measureFloorApp(): a floor is
+     * subtracted from the `/echo` row, so the two must be the same request), but
+     * datasets written before that change carry `GET /`. Matching on the label would
+     * fail every historical dataset over a detail the reader never sees; the property
+     * under test is that a real measurement exists, so the position is what is checked
+     * and the URI is reported when it is missing.
      */
     public function testEveryFloorCarriesARealMeasurement(): void
     {
@@ -102,14 +111,9 @@ final class FloorCoverageTest extends TestCase
 
         foreach (($dataset['floors'] ?? []) as $floor) {
             $mode = array_key_first((array) ($floor['modes'] ?? []));
-            $row  = null;
-            foreach ((array) ($floor['modes'][$mode]['requests'] ?? []) as $candidate) {
-                if (($candidate['request'] ?? null) === 'GET /') {
-                    $row = $candidate;
-                }
-            }
+            $row  = (array) ($floor['modes'][$mode]['requests'][0] ?? []);
 
-            self::assertNotNull($row, "floor '{$floor['app']}' has no GET / row");
+            self::assertNotSame([], $row, "floor '{$floor['app']}' has no measurement row");
             self::assertGreaterThan(
                 0.0,
                 (float) ($row['median_ms'] ?? 0.0),
@@ -136,7 +140,6 @@ final class FloorCoverageTest extends TestCase
 
         $entryScripts = [
             $root . '/public/index-floor-volucer-attach.php',
-            $root . '/public/index-floor-volucer-cgi.php',
         ];
         foreach ($entryScripts as $path) {
             self::assertFileExists($path, basename($path) . ' must exist for the stampVolucerConfigs() front_controller');
@@ -166,7 +169,7 @@ final class FloorCoverageTest extends TestCase
 
     // --- a floor the rows can actually be held against ----------------------
 
-    /** One floor probe carrying a single `GET /` row. */
+    /** One floor probe carrying a single `GET /echo` row. */
     private static function floor(string $app, string $mode, float $trimmedMs): array
     {
         return [
@@ -176,7 +179,7 @@ final class FloorCoverageTest extends TestCase
                     'iterations_per_run' => 1000,
                     'runs'               => 10,
                     'requests'           => [[
-                        'request'         => 'GET /',
+                        'request'         => 'GET /echo',
                         'trimmed_mean_ms' => $trimmedMs,
                         'median_ms'       => $trimmedMs,
                     ]],

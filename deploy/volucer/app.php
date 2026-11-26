@@ -7,11 +7,11 @@ declare(strict_types=1);
  *
  * Both volucer entries load this file and serve the closure it returns:
  *
- *   attach.php   `attach` backend — this process is the supervisor; it LISTENS on
+ *   attach.php   `attach` backend â€” this process is the supervisor; it LISTENS on
  *                the relay and forks a child per accepted connection, and volucer
  *                dials it (`Volucer\Supervisor::serve($relay, $handler)`). This is
  *                the resident arm the dataset measures.
- *   worker.php   `worker` backend — volucer starts this process and hands it ONE
+ *   worker.php   `worker` backend â€” volucer starts this process and hands it ONE
  *                connection (`Volucer\Worker::create()->run($handler)`). Not in the
  *                dataset (see worker.php), but still runnable by hand.
  *
@@ -22,32 +22,32 @@ declare(strict_types=1);
  * WHERE THE BOOT HAPPENS, AND WHY IT IS HERE. This file does the framework boot
  * before returning, which means:
  *
- *   attach — booted once in the MASTER, before the first fork. Every child inherits
+ *   attach â€” booted once in the MASTER, before the first fork. Every child inherits
  *            the initialized class table and the built container, so no child pays
  *            the boot either. This is the position the SDK documentation calls out:
  *            "an application that builds a container, compiles templates or warms a
  *            router does it once, here, before the first fork."
- *   worker — booted once in the process volucer started, before the first request.
+ *   worker â€” booted once in the process volucer started, before the first request.
  *
  * So both are resident-worker arms and neither pays a per-request boot. The arm that
- * DOES pay it is `spawn_cgi`, which runs public/index-<app>.php per request through
- * php-cgi — the same shape as nginx + php-fpm.
+ * DOES pay it is nginx + PHP-FPM, which runs public/index-<app>.php per request through
+ * php-cgi â€” the same shape as nginx + php-fpm.
  *
  * WHAT MUST NOT HAPPEN BEFORE A FORK. An open network connection, because every
  * child would inherit the socket and they would take turns reading from it. SQLite
  * is the exception this benchmark relies on and it is safe to inherit: it is a file
  * handle to a local database, and the arms hold `children = 1` / `workers = 1` so
- * exactly one process is ever reading or writing it — the same single-writer rule
- * that makes the FPM pool `pm.max_children = 1` and RoadRunner `num_workers = 1`.
+ * exactly one process is ever reading or writing it â€” the same single-writer rule
+ * that makes the FPM pool `pm.max_children = 1` and volucer `workers = 1`.
  */
 
-// Shared with the RoadRunner worker rather than copied: it owns the adapter map and
+// Shared with any out-of-process worker rather than copied: it owns the adapter map and
 // the framework-helper preload order, both of which are subtle (see its comments on
 // the Laravel `env()` and CodeIgniter `Common.php` races). A second copy would drift.
-require __DIR__ . '/../rr/bootstrap-worker.php';
+require __DIR__ . '/../worker-bootstrap.php';
 
 // BENCH_APP is read with getenv() BEFORE composer loads, for the same reason the
-// RoadRunner worker does it: a helper defined here would shadow Laravel's own env().
+// worker does it: a helper defined here would shadow Laravel's own env().
 $benchApp  = (string) (getenv('BENCH_APP') ?: '');
 $benchRoot = dirname(__DIR__, 2);
 
@@ -57,7 +57,7 @@ $benchRoot = dirname(__DIR__, 2);
 // exit 1 with "not found" on a tree where composer had installed the SDK correctly.
 $sdk = (string) (getenv('VOLUCER_SDK') ?: $benchRoot . '/vendor/sailantis/volucer-worker');
 if (!is_file($sdk . '/autoload.php')) {
-    fwrite(STDERR, "[volucer] volucer-worker SDK not found at {$sdk} — set VOLUCER_SDK\n");
+    fwrite(STDERR, "[volucer] volucer-worker SDK not found at {$sdk} â€” set VOLUCER_SDK\n");
     exit(1);
 }
 require $sdk . '/autoload.php';
@@ -85,7 +85,7 @@ $adapter->bootstrap();
 boot_probe_record('volucer', $benchApp, true);
 
 // The endpoint-independent footprint every probe response carries. Read here, once,
-// because it must be the framework-built / no-request-served heap — the same number
+// because it must be the framework-built / no-request-served heap â€” the same number
 // deploy/rr/worker.php captures at its own boot. Reading it per request would report
 // whatever the previous request left behind.
 //
@@ -95,7 +95,7 @@ $bootHeap = memory_get_usage(false);
 
 return static function (Volucer\Request $request) use ($adapter, $bootHeap): Volucer\Response {
     // A URI the application can route on: path plus query, exactly as the adapter
-    // expects from run.php, from RoadRunner and from the FPM entry scripts.
+    // expects from run.php, from the worker transports and from the FPM entry scripts.
     $uri = (string) parse_url($request->uri, PHP_URL_PATH);
     $query = (string) parse_url($request->uri, PHP_URL_QUERY);
     if ($query !== '') {
@@ -104,8 +104,8 @@ return static function (Volucer\Request $request) use ($adapter, $bootHeap): Vol
 
     // --- Opt-in memory probe (X-Mem-Probe: 1) --------------------------------
     //
-    // Same header, same five values, same meanings as deploy/rr/worker.php — the
-    // report compares this band with the RoadRunner band through ONE code path, so
+    // Same header, same five values, same meanings as deploy/rr/worker.php â€” the
+    // report compares this band with the FPM band through ONE code path, so
     // the field sets have to stay identical.
     //
     // Gated on the header because no timed request may carry it: the probe costs a
@@ -114,7 +114,7 @@ return static function (Volucer\Request $request) use ($adapter, $bootHeap): Vol
     // the timed loop.
     //
     // The peak is reset BEFORE dispatch, so it covers this request only, and it is
-    // anchored at the boot heap — the identical construction the FPM shutdown hook
+    // anchored at the boot heap â€” the identical construction the FPM shutdown hook
     // uses, which is what makes peak an absolute number comparable across arms.
     $memProbe = $request->header('X-Mem-Probe') === '1';
     if ($memProbe && function_exists('memory_reset_peak_usage')) {

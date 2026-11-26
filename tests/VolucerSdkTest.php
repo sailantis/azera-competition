@@ -44,14 +44,14 @@ final class VolucerSdkTest extends TestCase
      * `volucer-php-sdk`, the package is `volucer-worker`, and composer only ever
      * creates the latter.
      *
-     * Checked across app.php and both entry points, because the boot (and therefore the
-     * SDK requirement) lives in app.php while worker.php and attach.php are thin. A
-     * test that only read worker.php would pass while the real lookup was wrong.
+     * Checked across app.php and the attach entry point, because the boot (and therefore
+     * the SDK requirement) lives in app.php while attach.php is thin. A test that only
+     * read attach.php would pass while the real lookup was wrong.
      */
     public function testTheWorkerLooksForTheComposerPackageName(): void
     {
         $combined = '';
-        foreach (['app.php', 'worker.php', 'attach.php'] as $name) {
+        foreach (['app.php', 'attach.php'] as $name) {
             $combined .= (string) file_get_contents(self::root() . '/deploy/volucer/' . $name);
         }
 
@@ -146,9 +146,9 @@ final class VolucerSdkTest extends TestCase
     public function testTemplatesTakeTheInterpreterFromPlaceholders(): void
     {
         // attach.template.toml names no interpreter at all: it starts no PHP process,
-        // because the supervisor it dials does. spawn-cgi.template.toml does, through
-        // {{PHP_CGI}}. A bare `php`/`php-cgi` would let PATH decide what is measured.
-        foreach (['attach.template.toml', 'spawn-cgi.template.toml'] as $name) {
+        // because the supervisor it dials does. A bare `php`/`php-cgi` would let PATH
+        // decide what is measured.
+        foreach (['attach.template.toml'] as $name) {
             $tpl = self::stripTomlComments((string) file_get_contents(self::root() . '/deploy/volucer/' . $name));
 
             self::assertStringNotContainsString(
@@ -162,18 +162,6 @@ final class VolucerSdkTest extends TestCase
                 "{$name}: a bare `php-cgi` lets PATH decide which interpreter is measured"
             );
         }
-
-        $cgi = (string) file_get_contents(self::root() . '/deploy/volucer/spawn-cgi.template.toml');
-        self::assertStringContainsString('binary = "{{PHP_CGI}}"', $cgi, 'spawn-cgi must take php-cgi as a placeholder');
-
-        // The dataset's two templates must also take the app and the root from
-        // placeholders, or they would serve one app's tree under every app's name.
-        foreach (['attach.template.toml', 'spawn-cgi.template.toml'] as $name) {
-            $tpl = (string) file_get_contents(self::root() . '/deploy/volucer/' . $name);
-            self::assertStringContainsString('{{APP}}', $tpl, "{$name} must take the app key as a placeholder");
-            self::assertStringContainsString('{{ROOT}}', $tpl, "{$name} must take the checkout root as a placeholder");
-            self::assertStringContainsString('{{PORT}}', $tpl, "{$name} must take its listen port as a placeholder");
-        }
     }
 
     /**
@@ -184,29 +172,30 @@ final class VolucerSdkTest extends TestCase
      * weight, and a `volucer` entry in $validServers would add a second resident row
      * measuring the same model as attach.
      */
-    public function testTheRetiredWorkerArmIsKeptRunnableButUnwired(): void
+    /**
+     * The retired arms are GONE, not merely unwired.
+     *
+     * `volucer` (the worker backend) and `volucer-cgi` (spawn_cgi) both implemented a
+     * deployment model another server already serves -- resident and per-request
+     * respectively -- so keeping their configs and workers around was dead weight that
+     * could silently come back. Their files, their template and their floor entry point
+     * are asserted ABSENT so a well-meaning restore fails here first.
+     */
+    public function testTheRetiredArmsAreGoneEntirely(): void
     {
-        $runHttp  = (string) file_get_contents(self::root() . '/scripts/run-http.php');
-        $deployLib = (string) file_get_contents(self::root() . '/scripts/deploy-lib.php');
+        $root = self::root();
 
-        self::assertStringNotContainsString(
-            "'volucer', 'volucer-attach'",
-            $runHttp,
-            '$validServers must not accept the retired worker arm'
-        );
-        self::assertStringNotContainsString(
-            "'volucer'        => ",
-            $deployLib,
-            'stampVolucerConfigs() must not render pool.template.toml for an arm nobody starts'
-        );
+        self::assertFileDoesNotExist($root . '/deploy/volucer/pool.template.toml');
+        self::assertFileDoesNotExist($root . '/deploy/volucer/worker.php');
+        self::assertFileDoesNotExist($root . '/deploy/volucer/spawn-cgi.template.toml');
+        self::assertFileDoesNotExist($root . '/public/index-floor-volucer-cgi.php');
 
-        // ...but the files themselves stay, and stay usable.
-        self::assertFileExists(self::root() . '/deploy/volucer/pool.template.toml');
-        self::assertStringContainsString(
-            "require __DIR__ . '/app.php'",
-            self::worker(),
-            'worker.php must still load the shared handler so a hand run works'
-        );
+        $runHttp = (string) file_get_contents($root . '/scripts/run-http.php');
+        // The retired arm NAME, as it would appear in the accepted-server list. The bare
+        // word 'volucer' legitimately appears (it is the binary and the probe kind), so
+        // the assertion is on the quoted list entry, not the substring.
+        self::assertStringNotContainsString("'volucer', 'volucer-attach'", $runHttp, '$validServers must not accept a retired arm');
+        self::assertStringNotContainsString("=== 'volucer-cgi'", $runHttp, 'the spawn_cgi arm is retired');
     }
 
     /**
@@ -220,7 +209,7 @@ final class VolucerSdkTest extends TestCase
      */
     public function testDefaultBackendIsInsideTheServerTable(): void
     {
-        foreach (['attach.template.toml' => 'app', 'spawn-cgi.template.toml' => 'cgi'] as $name => $backend) {
+        foreach (['attach.template.toml' => 'app'] as $name => $backend) {
             $lines = file(self::root() . '/deploy/volucer/' . $name, FILE_IGNORE_NEW_LINES);
             self::assertNotFalse($lines);
 
@@ -267,7 +256,7 @@ final class VolucerSdkTest extends TestCase
      */
     public function testStaticFilesIsExpressedAsATable(): void
     {
-        foreach (['attach.template.toml', 'spawn-cgi.template.toml'] as $name) {
+        foreach (['attach.template.toml'] as $name) {
             $tpl = self::stripTomlComments((string) file_get_contents(self::root() . '/deploy/volucer/' . $name));
 
             self::assertStringNotContainsString(
@@ -298,7 +287,7 @@ final class VolucerSdkTest extends TestCase
      */
     public function testBothTemplatesNameTheAppsRealFrontController(): void
     {
-        foreach (['attach.template.toml', 'spawn-cgi.template.toml'] as $name) {
+        foreach (['attach.template.toml'] as $name) {
             $tpl = self::stripTomlComments((string) file_get_contents(self::root() . '/deploy/volucer/' . $name));
 
             self::assertStringContainsString(
@@ -307,43 +296,6 @@ final class VolucerSdkTest extends TestCase
                 "{$name}: must point at the per-app entry script; there is no public/index.php"
             );
         }
-    }
-
-    /**
-     * The spawn_cgi pool must reach php-cgi over a UNIX SOCKET, not loopback TCP.
-     *
-     * A FastCGI response is a header frame plus one or more body frames. When the body
-     * needs a second frame, Nagle holds it until the peer ACKs the first, and Linux's
-     * delayed ACK is ~40 ms. Measured on the bench VM: `GET /items` was a flat
-     * **42 ms** (min 41.87, max 42.98 across every run — a constant, which is the
-     * signature) against 1.57 ms for php-fpm. Small responses never split a frame and
-     * were unaffected, so the arm looked "fine" until a route returned a list.
-     *
-     * The comparison also requires it: nginx reaches php-fpm over
-     * `unix:/run/php-fpm-bench/<app>.sock`, so a TCP cold arm would differ from the FPM
-     * cold arm by its TRANSPORT rather than by its server.
-     */
-    public function testTheSpawnCgiPoolUsesAUnixSocketNotLoopbackTcp(): void
-    {
-        $tpl = self::stripTomlComments(
-            (string) file_get_contents(self::root() . '/deploy/volucer/spawn-cgi.template.toml')
-        );
-
-        self::assertMatchesRegularExpression(
-            '/^\s*socket\s*=\s*"unix:\/run\//m',
-            $tpl,
-            'spawn_cgi must bind its php-cgi slots on a unix socket under /run, spelled `unix:<prefix>`'
-        );
-        self::assertStringNotContainsString(
-            'base_port',
-            $tpl,
-            'base_port is unused when `socket` is set, and its presence suggests the TCP transport'
-        );
-        self::assertStringNotContainsString(
-            'bind_host',
-            $tpl,
-            'bind_host is unused when `socket` is set'
-        );
     }
 
     /**

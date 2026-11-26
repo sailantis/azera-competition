@@ -30,6 +30,34 @@ final class DbEventLog
     private array $events = [];
 
     /**
+     * Statements that describe the CONNECTION or the SCHEMA rather than the demo.
+     *
+     * Not every entrant's hook sees these — it depends on when the framework
+     * attaches its listener relative to when the connection is opened, and on how
+     * much schema introspection the ORM does per operation. Recording them made
+     * the same logical workload (one upsert + one COUNT) report anywhere from 2 to
+     * 9 events, so the row's payload measured when a logger was attached and how
+     * curious an ORM is, not the observation facility it exists to compare.
+     */
+    private const INFRASTRUCTURE_SQL = [
+        '/^\s*PRAGMA\b/i',
+        '/^\s*SELECT\s+.+FROM\s+pragma_/is',
+        '/sqlite_master/i',
+        '/^\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i',
+    ];
+
+    private static function isInfrastructure(string $sql): bool
+    {
+        foreach (self::INFRASTRUCTURE_SQL as $pattern) {
+            if (\preg_match($pattern, $sql) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * LogEvent listener — attach via ListenerRegistryInterface::addListener().
      */
     public function __invoke(LogEvent $event): void
@@ -50,6 +78,10 @@ final class DbEventLog
         // Query logs carry the SQL as the message; transaction lifecycle
         // messages are named events.
         if (isset($context['rowCount'])) {
+            if (self::isInfrastructure($message)) {
+                return;
+            }
+
             $entry['type'] = 'QueryExecuted';
             $entry['sql']  = $message;
         } elseif (str_starts_with($message, 'Begin transaction')) {
