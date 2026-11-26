@@ -4,9 +4,9 @@ Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, w
 
 **Environment** — PHP 8.5.11 · Linux 6.8.0-139-generic · OPcache: yes · JIT: tracing (buffer 64M) · 1000 iterations per run over 10 runs, lower is better.
 
-**Frameworks** — Azera v0.6.0 · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0 · Phalcon 6 (RC) 6.0.0RC4.
+**Frameworks** — Azera v0.6.0-10-g3926ba6 · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0 · Phalcon 6 (RC) 6.0.0RC4.
 
-_Measured 2026-11-24T18:27:42+00:00_
+_Measured 2026-11-26T01:57:45+00:00_
 
 ## Framework startup
 
@@ -14,14 +14,13 @@ Time from PHP start until the framework is ready to serve, measured inside the F
 
 - Each app boots through a **pruned autoloader** (`vendor/app-autoload/<app>/autoload.php`). This repository has ONE composer.json, so the shared `vendor/autoload.php` runs composer's EAGER `files` list for all seven frameworks on every request: the bootstrap code of entrants the app never instantiates. The pruned loader is the same ClassLoader with the same PSR-4 and classmap tables, restricted to the app's own dependency closure (see `scripts/app-autoload.php`). What it removes is a fixed per-request cost, so it dominates a lean framework's boot and is invisible against a slow one — read this band as framework work, not as composer work.
 - The fastest and slowest framework on this band are named by the chart below; the multiplier beside each row states how many times the fastest boot it needed.
-- Azera re-run the entry script but had nothing left to build. They are left out of the chart's factor column.
 - Each framework's boot is reduced to one statistic (median of the probe samples), and the samples per framework are recorded in the dataset.
 
 ![Framework startup — boot](svg/real-fpm/startup.svg)
 
 ## Total response times
 
-Total time to serve one pass over every benchmarked endpoint — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over those endpoints costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
+Total time to serve one pass over the 23 endpoints EVERY entrant races (3 more are raced by only some, and are left out here so no framework is charged for work it does not do) — each framework's sum of its endpoint medians, not a single response time — drawn relative to the baseline, so a row states how many times the baseline's own total it needed. Each endpoint's median is boot-inclusive occupancy for this view's deployment model, so the total is the worker time one pass over those endpoints costs. The chart orders the frameworks by that total and prints each one's multiplier beside its row.
 
 ![Total response times](svg/real-fpm/speedup.svg)
 
@@ -48,6 +47,41 @@ One race per framework feature, each run as a real request against a real databa
  `GET /api/items` — serves the same page of items as a JSON response rather than HTML, which adds serialization to the ORM work. The `-fast` band repeats that response with hydration switched off, so serialization cost and hydration cost can be told apart.
 
 ![REST API (JSON)](svg/real-fpm/feature-rest-api.svg)
+
+### AOP (Aspect-Oriented)
+ `GET /features/aop-tx` — measures TRANSPARENT AOP: advice is declared on a method by an attribute and applied by generated code, with the handler body untouched. Azera is the only entrant that ships this facility (`#[Advised]` plus `#[Transactional]` / `#[Cache]` / `#[Log]` / `#[Retry]`, compiled into a proxy class by `Azera\Aop\ProxyFactory`), so it is the only entrant raced here. The other six have no attribute-to-advice layer at all — Laravel's `Pipeline`, Symfony's invokable interceptors, Spiral's `PipelineBuilder` and the hand-written `begin`/`commit` on CodeIgniter, CakePHP and Phalcon are machinery the APPLICATION composes — and answering this row with that code would publish a hand-written implementation under a label claiming generated interception. Their own AOP rows are `aop-tx-explicit` (Azera, Spiral), `aop-cache` (Azera), and `aop-tx-direct` / `aop-cache-direct` (all seven). The same caution applies to `log`, which on Azera used to route through a generated proxy while every other entrant implemented it plainly; that advice was removed for exactly this reason. Only Azera competes in this feature, so the chart is a single measurement rather than a ranking.
+
+*Not measured here:* Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon 6 (RC) — Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon 6 (RC) ship no attribute-declared, proxy-generated advice layer, so there is no transparent AOP to race. That is a FACILITY gap, not a missing endpoint: every entrant answers `GET /features/aop-tx-direct` (the same write with the transaction written by hand) and `GET /features/aop-cache-direct` (the same cached COUNT with the lookup written by hand), which are the controls this row is read against.
+
+*This facility, and who ships it.* **transparent** (advice declared on the method, applied by generated code): Azera. The hand-written equivalent is charted separately as `aop-tx-direct`, and the gap between the two is what generated interception costs on the same work.
+
+![AOP (Aspect-Oriented)](svg/real-fpm/feature-aop-tx.svg)
+
+### AOP (hand-written control)
+ `GET /features/aop-tx-direct` — answers a different question: what the same write costs implemented DIRECTLY, with no AOP at all. The transaction is written out by hand — `begin` / `commit` / `rollback` in application code — and there is no interceptor and no generated proxy anywhere. Every entrant can serve it, because it needs no framework facility, so all seven race here and the row is the shared baseline the other three AOP features are read against. On Azera `aop-tx - aop-tx-direct` is the cost of the generated proxy and on the six direct entrants it is the cost of their own composition; the difference is small against the write itself, which is the finding the pair was built to show.
+
+![AOP (hand-written control)](svg/real-fpm/feature-aop-tx-direct.svg)
+
+### AOP explicit (Pipeline)
+ `GET /features/aop-tx-explicit` — runs the same transactional insert through the framework's OWN explicit interceptor pipeline: the advice is composed by hand around a plain handler, no proxy class is generated and no attribute is read. Only two entrants ship a dedicated interceptor abstraction, so only they race here — Azera (`Azera\Aop\InterceptorInterface` + `Pipeline`) and Spiral (`Spiral\Interceptors\InterceptorInterface` + `PipelineBuilder`). Laravel's Pipeline is request middleware rather than an interceptor abstraction, Symfony ships neither, and CodeIgniter, CakePHP and Phalcon have no interceptor layer at all; a hand-written `begin`/`commit` is not this feature, so those three would be measuring workarounds rather than the facility. Both participants execute the SAME transaction contract through their own pipeline, which is what makes the row comparable: read it against `aop-tx` to price generated interception against explicit composition on identical work.
+
+*Not measured here:* Laravel, Symfony, CodeIgniter, CakePHP, Phalcon 6 (RC) — Laravel, Symfony, CodeIgniter, CakePHP, Phalcon 6 (RC) ship no dedicated interceptor abstraction (an interceptor interface plus a pipeline that composes it), so the explicit AOP form are not their to serve. A hand-written `begin`/`commit` is not this feature.
+
+![AOP explicit (Pipeline)](svg/real-fpm/feature-aop-tx-explicit.svg)
+
+### AOP #[Cache] (attribute-applied)
+ `GET /features/aop-cache` — reads the COUNT(*) through a cache whose lookup, miss decision and store are applied by ATTRIBUTE — `#[Cache(ttl: 10, key: …)]` on the method, run by the generated proxy, with no cache code in the handler. Azera is the only entrant that ships that facility, so it is the only one raced here; the six others would answer this row with the hand-written lookup that `aop-cache-direct` already measures. Read it against `aop-cache-direct` to price the generated override plus one interceptor frame on identical work. Only Azera competes in this feature, so the chart is a single measurement rather than a ranking.
+
+*Not measured here:* Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon 6 (RC) — Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon 6 (RC) ship no attribute-declared, proxy-generated advice layer, so they cannot apply caching through `#[Cache]`. The cache row those entrants serve is `GET /features/aop-cache-direct` — the same COUNT, the same key and the same 10-second TTL with the lookup written in application code — which every entrant races.
+
+*This facility, and who ships it.* **transparent** (advice declared on the method, applied by generated code): Azera. The hand-written equivalent is charted separately as `aop-tx-direct`, and the gap between the two is what generated interception costs on the same work.
+
+![AOP #[Cache] (attribute-applied)](svg/real-fpm/feature-aop-cache.svg)
+
+### Cache (hand-written control)
+ `GET /features/aop-cache-direct` — reads the same COUNT(*) that `aop-cache` reads, through the same 10-second cache the framework would use — same key, same TTL, same entry — but with the lookup, the miss decision and the store written out in application code. No interceptor and no generated proxy anywhere, so every entrant can serve it and all seven race here. This is the control the `aop-cache` row is read against, exactly as `aop-tx-direct` is for `aop-tx`: on Azera the two share one cache entry, so the difference between them is the generated override plus one interceptor frame and not a different workload.
+
+![Cache (hand-written control)](svg/real-fpm/feature-aop-cache-direct.svg)
 
 ### Logging
  `GET /features/log` — logs a method entry and exit through the framework's own logger, and reports the records that logger captured. Every entrant uses the sink its own stack provides and every one of those sinks is in-process, so the row measures the logging path rather than disk or stderr I/O: Azera its PSR-3 `MemoryLogger`, Laravel `Log` → `LogManager` → Monolog's in-memory `TestHandler`, Symfony a PSR-3 logger registered as the `logger` service, Spiral `LogsInterface::getLogger()` feeding its `ListenerRegistry`, CakePHP `Log::write()` into an `ArrayLog` engine, CodeIgniter `log_message()` into a buffering handler, and Phalcon its own `Phalcon\Logger\Logger` with an in-memory adapter. NONE of them declares the logging as advice: Azera has `#[Log]`, but this row calls the logger directly so that all seven measure the same work — intercepting a logger would charge proxy cost to a chart about logging, which is what the `aop-*` rows exist to isolate. Phalcon's logger is not a PSR-3 implementation — it is the framework's own logger API — so the row demonstrates Phalcon logging, not interchangeable PSR-3 logging.
@@ -79,6 +113,11 @@ One race per framework feature, each run as a real request against a real databa
 
 ![Rate Limiter](svg/real-fpm/feature-rate-limiter.svg)
 
+### Request Lifecycle Hooks
+ `GET /features/lifecycle-hooks` — runs a hook around the handler, which rewrites the response with a marker header and status 203, via whichever interception mechanism the framework has.
+
+![Request Lifecycle Hooks](svg/real-fpm/feature-lifecycle-hooks.svg)
+
 ## Per-request memory
 
 How much memory a single request needs, for every framework, measured inside the FPM worker that served it. The numbers come from the FPM worker process itself: because the entry script is torn down when the request ends, it appends one sample as it exits, and the harness reads that back. The pool is `pm = static` with `max_children = 1` and `max_requests = 0`, so this is ONE worker that stays alive for the whole block — which is why it has retained memory worth reporting at all.
@@ -99,32 +138,32 @@ Median in milliseconds, lower is better. **Bold** = fastest for that endpoint; a
 
 | Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP | Phalcon 6 (RC) |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| `GET /api/routing/1` | no DB — typed route + constant body (routing only) | **0.296** | 4.00 | 1.83 | 8.08 | 1.53 | 1.25 | 0.540 |
-| `GET /` | no DB — routing + template only | **0.374** | 3.80 | 2.03 | 8.10 | 1.70 | 1.34 | 0.658 |
-| `GET /echo` | no DB — static route, constant body (throughput floor) | **0.252** | 3.66 | 1.75 | 8.01 | 1.54 | 1.22 | 0.545 |
-| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **1.15** | 5.23 | 3.24 | 8.85 | 2.53 | 2.69 | 1.86 |
-| `GET /items-fast` | 20 of 1000 items (page 1, + COUNT), hydrated rows not built | **1.03** | 4.96 | 3.15 | 8.70 | 2.41 | 2.62 | 1.80 |
-| `GET /items/1` | 1 item by id | **1.03** | 4.90 | 2.61 | 8.71 | 2.35 | 2.49 | 1.57 |
-| `POST /items` | 1 row upserted (sentinel #999999) | **2.10** | 6.11 | 3.61 | 10.2 | 3.42 | 3.56 | 2.63 |
-| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.960** | 4.81 | 2.28 | 8.49 | 2.39 | 2.11 | 1.23 |
-| `GET /items-qb/1` | 1 item by id | **0.917** | 4.61 | 2.22 | 8.48 | 2.30 | 2.05 | 1.13 |
-| `POST /items-qb` | 1 row upserted (sentinel #999997) | **1.87** | 5.70 | 3.20 | 9.72 | 3.38 | 3.06 | 2.14 |
-| `GET /api/items` | 20 of 1000 items as JSON | **0.941** | 5.03 | 2.59 | 8.04 | 2.31 | 2.36 | 1.52 |
-| `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | **0.865** | 4.68 | 2.52 | 7.88 | 2.21 | 2.31 | 1.54 |
-| `GET /api/items/1` | 1 item by id as JSON | **0.915** | 4.85 | 2.34 | 7.97 | 2.24 | 2.34 | 1.46 |
-| `POST /api/items` | 1 row upserted (sentinel #999998) | **1.83** | 5.57 | 3.34 | 9.21 | 3.18 | 3.42 | 2.51 |
-| `GET /features/aop-tx` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — | — |
-| `GET /features/aop-tx-direct` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — | — |
-| `GET /features/aop-tx-explicit` | 1 row upserted (sentinel #888800) | — | — | — | — | — | — | — |
-| `GET /features/aop-cache` | COUNT(*) of 1000 rows, cached 10s by #[Cache] (miss = query) | — | — | — | — | — | — | — |
-| `GET /features/aop-cache-direct` | COUNT(*) of 1000 rows, cached 10s by hand (miss = query) | — | — | — | — | — | — | — |
-| `GET /features/log` | no DB — one in-memory log sink per entrant | **0.379** | 3.73 | 1.87 | 8.30 | 1.62 | 1.25 | 0.651 |
-| `GET /features/db-events` | 1 row upserted (sentinel #888800) + COUNT(*), events collected | **1.83** | 5.54 | 3.66 | 9.83 | 3.39 | 3.39 | 1.99 |
-| `GET /features/events` | no DB — in-process listeners | **1.75** | 5.22 | 2.97 | 9.54 | 3.30 | 2.70 | 1.97 |
-| `GET /features/validation` | no DB — validator run | **0.289** | 4.66 | 2.20 | 8.35 | 1.96 | 1.64 | 0.719 |
-| `GET /features/config` | no DB — config lookup | **0.258** | 3.74 | 1.86 | 8.23 | 1.63 | 1.23 | 0.599 |
-| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.272** | 3.89 | 1.90 | 8.35 | 1.61 | 1.34 | 0.632 |
-| `GET /features/lifecycle-hooks` | no DB — a request/response hook stamps a header and sets 203, via each framework's own mechanism | — | — | — | — | — | — | — |
+| `GET /api/routing/1` | no DB — typed route + constant body (routing only) | **0.341** | 3.96 | 1.85 | 8.05 | 1.58 | 1.34 | 0.651 |
+| `GET /` | no DB — routing + template only | **0.420** | 3.75 | 2.03 | 8.09 | 1.72 | 1.42 | 0.751 |
+| `GET /echo` | no DB — static route, constant body (throughput floor) | **0.299** | 3.60 | 1.75 | 8.05 | 1.57 | 1.30 | 0.642 |
+| `GET /items` | 20 of 1000 items (page 1, + COUNT) | **1.17** | 5.21 | 3.32 | 8.90 | 2.56 | 2.82 | 1.98 |
+| `GET /items-fast` | 20 of 1000 items (page 1, + COUNT), hydrated rows not built | **1.09** | 4.96 | 3.20 | 8.71 | 2.44 | 2.74 | 1.94 |
+| `GET /items/1` | 1 item by id | **1.05** | 4.88 | 2.63 | 8.78 | 2.38 | 2.60 | 1.69 |
+| `POST /items` | 1 row upserted (sentinel #999999) | **2.11** | 6.12 | 3.67 | 10.1 | 3.52 | 3.74 | 2.68 |
+| `GET /items-qb` | 20 of 1000 items (page 1, + COUNT) | **0.998** | 4.81 | 2.30 | 8.46 | 2.42 | 2.22 | 1.34 |
+| `GET /items-qb/1` | 1 item by id | **0.961** | 4.61 | 2.23 | 8.37 | 2.33 | 2.15 | 1.25 |
+| `POST /items-qb` | 1 row upserted (sentinel #999997) | **1.94** | 5.68 | 3.20 | 9.58 | 3.49 | 3.19 | 2.18 |
+| `GET /api/items` | 20 of 1000 items as JSON | **0.976** | 5.02 | 2.63 | 7.96 | 2.35 | 2.48 | 1.62 |
+| `GET /api/items-fast` | 20 of 1000 items as JSON, rows not hydrated | **0.896** | 4.64 | 2.53 | 7.77 | 2.25 | 2.43 | 1.65 |
+| `GET /api/items/1` | 1 item by id as JSON | **0.942** | 4.85 | 2.35 | 7.85 | 2.27 | 2.44 | 1.58 |
+| `POST /api/items` | 1 row upserted (sentinel #999998) | **1.85** | 5.56 | 3.32 | 9.11 | 3.30 | 3.54 | 2.64 |
+| `GET /features/aop-tx` | 1 row upserted (sentinel #888800) | **1.84** | — | — | — | — | — | — |
+| `GET /features/aop-tx-direct` | 1 row upserted (sentinel #888800) | **1.83** | 5.10 | 2.96 | 9.54 | 3.33 | 2.80 | 2.02 |
+| `GET /features/aop-tx-explicit` | 1 row upserted (sentinel #888800) | **1.87** | — | — | 9.60 | — | — | — |
+| `GET /features/aop-cache` | COUNT(*) of 1000 rows, cached 10s by #[Cache] (miss = query) | **0.901** | — | — | — | — | — | — |
+| `GET /features/aop-cache-direct` | COUNT(*) of 1000 rows, cached 10s by hand (miss = query) | **0.859** | 4.45 | 2.56 | 8.67 | 2.23 | 2.35 | 1.19 |
+| `GET /features/log` | no DB — one in-memory log sink per entrant | **0.420** | 3.95 | 1.88 | 8.38 | 1.71 | 1.36 | 0.759 |
+| `GET /features/db-events` | 1 row upserted (sentinel #888800) + COUNT(*), events collected | **1.85** | 5.36 | 3.68 | 9.89 | 3.45 | 3.50 | 2.11 |
+| `GET /features/events` | no DB — in-process listeners | **1.88** | 5.13 | 2.93 | 9.68 | 3.36 | 2.71 | 2.05 |
+| `GET /features/validation` | no DB — validator run | **0.331** | 4.59 | 2.22 | 8.55 | 2.03 | 1.73 | 0.824 |
+| `GET /features/config` | no DB — config lookup | **0.304** | 3.69 | 1.88 | 8.38 | 1.68 | 1.32 | 0.682 |
+| `GET /features/rate-limit` | no DB — cache-backed limiter | **0.316** | 3.84 | 1.91 | 8.47 | 1.67 | 1.41 | 0.736 |
+| `GET /features/lifecycle-hooks` | no DB — a request/response hook stamps a header and sets 203, via each framework's own mechanism | **0.313** | 3.73 | 1.87 | 8.42 | 1.65 | 1.31 | 0.649 |
 
 ---
 

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 256" width="960" height="256" role="img" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"><title>AOP explicit (Pipeline)</title>
+<rect x="0.5" y="0.5" width="959" height="255" rx="8" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="218" y="32" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="17" font-weight="700" fill="#1e293b" text-anchor="start">AOP explicit (Pipeline)</text>
+<text x="218" y="54" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">linear scale · lower is better · x = median ÷ the fastest on that endpoint</text>
+<text x="218" y="74" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">bar = median · dot = median · whisker = fastest observation → p95 (ms) · worker never recycled (max_jobs=0) — no boot inside these points</text>
+<text x="218" y="94" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="400" fill="#64748b" text-anchor="start" font-style="italic">Azera v0.6.0-10-g3926ba6 · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0 · Phalcon 6 (RC) 6.0.0RC4</text>
+<text x="206" y="122" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#64748b" text-anchor="end">median</text>
+<line x1="218" y1="128" x2="218" y2="200" stroke="#f1f5f9" stroke-width="1"/>
+<text x="218" y="222" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">0 ms</text>
+<line x1="347.2" y1="128" x2="347.2" y2="200" stroke="#f1f5f9" stroke-width="1"/>
+<text x="347.2" y="222" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">0.25 ms</text>
+<line x1="476.4" y1="128" x2="476.4" y2="200" stroke="#f1f5f9" stroke-width="1"/>
+<text x="476.4" y="222" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">0.5 ms</text>
+<line x1="605.6" y1="128" x2="605.6" y2="200" stroke="#f1f5f9" stroke-width="1"/>
+<text x="605.6" y="222" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">0.75 ms</text>
+<line x1="734.8" y1="128" x2="734.8" y2="200" stroke="#f1f5f9" stroke-width="1"/>
+<text x="734.8" y="222" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">1 ms</text>
+<line x1="864" y1="128" x2="864" y2="200" stroke="#f1f5f9" stroke-width="1"/>
+<text x="864" y="222" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">1.25 ms</text>
+<line x1="218" y1="128" x2="218" y2="200" stroke="#cbd5e1" stroke-width="1"/>
+<text x="218" y="142" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="start">GET /features/aop-tx-explicit</text>
+<rect x="218" y="154" width="116.68" height="14" fill="#3459e6" fill-opacity="0.12"/>
+<line x1="317.92" y1="161" x2="379.53" y2="161" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="317.92" y1="154" x2="317.92" y2="168" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="379.53" y1="154" x2="379.53" y2="168" stroke="#3459e6" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="334.68" cy="161" r="5.6" fill="#3459e6" stroke="#ffffff" stroke-width="2"/>
+<text x="112" y="165.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#3459e6" text-anchor="end">Azera</text>
+<text x="206" y="165.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.226 ms</text>
+<rect x="218" y="180" width="412.77" height="14" fill="#0ca678" fill-opacity="0.12"/>
+<line x1="568.75" y1="187" x2="738.88" y2="187" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+<line x1="568.75" y1="180" x2="568.75" y2="194" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="738.88" y1="180" x2="738.88" y2="194" stroke="#0ca678" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="630.77" cy="187" r="5.6" fill="#0ca678" stroke="#ffffff" stroke-width="2"/>
+<text x="747.88" y="191.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="400" fill="#94a3b8" text-anchor="start" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">x 3.5</text>
+<text x="112" y="191.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#0ca678" text-anchor="end">Spiral</text>
+<text x="206" y="191.5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="12.5" font-weight="700" fill="#1e293b" text-anchor="end">0.799 ms</text>
+</svg>
