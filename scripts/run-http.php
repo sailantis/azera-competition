@@ -520,7 +520,8 @@ foreach ($apps as $appKey) {
         // processes write: the FPM entry scripts hardcode 'fpm', and the resident
         // volucer arm hardcodes 'volucer' (deploy/volucer/app.php). Getting this wrong
         // is silent: the second arm would read the first arm's leftover samples and
-        // report them as its own.        $bootKind = probeKindFor($server);
+        // report them as its own.
+        $bootKind = probeKindFor($server);
         $bootFile = "{$root}/temp/boot-{$bootKind}-{$appKey}.jsonl";
         @unlink($bootFile);
         // The memory-probe file is per kind for the same reason; clear it so a
