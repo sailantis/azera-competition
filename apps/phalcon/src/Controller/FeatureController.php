@@ -253,6 +253,28 @@ final class FeatureController extends Controller
 
     /**
      * GET /features/events — dispatch through Phalcon\Events\Manager.
+     *
+     * THE LISTENER IS DETACHED BEFORE RETURNING, and that is not tidiness: the
+     * events manager is a SHARED service (`$di->getShared('eventsManager')`), so
+     * it outlives the request. `attach()` appends the handler, `fire()` invokes
+     * EVERY attached handler for that event, and nothing removes them — so a
+     * listener left behind is both retained memory and work every later request
+     * pays for.
+     *
+     * Left in place this was QUADRATIC, not a slow leak. Each request attached a
+     * fresh closure capturing that request's `$entries` by reference, and the
+     * manager kept it alive; `fire()` then ran request 1's closure, 2's, … N's,
+     * so request N dispatched N listeners and every one of them appended to an
+     * array that was still reachable. Over `volucer-attach`'s 1000x10 the process
+     * grew from 4.2 MB to 6.54 GB, which made Phalcon the one row on the resident
+     * memory chart that dwarfed every other entrant by three orders of magnitude.
+     *
+     * CodeIgniter's app guards the identical hazard with `removeListener()`,
+     * because its registry is a process-global static; Phalcon's equivalent is
+     * `detach()`, in a `finally` so a throwing listener cannot strand the handler
+     * in the queue. Reusing the shared manager rather than building one per
+     * request keeps the row measuring the manager a real Phalcon app wires from
+     * its container.
      */
     public function eventsAction(): string
     {
@@ -266,13 +288,18 @@ final class FeatureController extends Controller
         $entries = [];
 
         /** @var ManagerInterface $events */
-        $events = $this->getDI()->getShared('eventsManager');
-        $events->attach('item:created', static function ($event, $source, $data = null) use (&$entries): void {
+        $events  = $this->getDI()->getShared('eventsManager');
+        $handler = static function ($event, $source, $data = null) use (&$entries): void {
             $entries[] = 'ItemCreated handled: id=' . ($data['id'] ?? '?')
                 . ' title=' . ($data['title'] ?? '?');
-        });
+        };
 
-        $events->fire('item:created', $this, ['id' => self::EVENT_SENTINEL_ID, 'title' => $title]);
+        $events->attach('item:created', $handler);
+        try {
+            $events->fire('item:created', $this, ['id' => self::EVENT_SENTINEL_ID, 'title' => $title]);
+        } finally {
+            $events->detach('item:created', $handler);
+        }
 
         return $this->json([
             'feature'      => 'Phalcon Events',

@@ -222,7 +222,7 @@ final class AdapterFeaturesTest extends TestCase
                 . '`aop-tx-direct`, which every app races. Naming them here would claim they competed '
                 . 'in a race for a facility they do not ship.'
         );
-        self::assertNotContains('Phalcon 6 (RC)', $split['transparent']);
+        self::assertNotContains('Phalcon', $split['transparent']);
     }
 
     /**

@@ -370,7 +370,13 @@ final class BenchmarkConfig
             'spiral'      => ['label' => 'Spiral', 'color' => '#0ca678'],
             'codeigniter' => ['label' => 'CodeIgniter', 'color' => '#e8590c'],
             'cakephp'     => ['label' => 'CakePHP', 'color' => '#d6409f'],
-            'phalcon'     => ['label' => 'Phalcon 6 (RC)', 'color' => '#8b5a2b'],
+            // "Phalcon", not "Phalcon 6 (RC)". The version is already stated in
+            // every page's version line (`Phalcon 6 (RC) 6.0.0RC4`) and in each
+            // chart footer, so repeating the major number and the release stage
+            // in the row label said the same thing twice and shortened the name
+            // the eye actually matches on. The label names the ENTRANT; the
+            // version line names the build.
+            'phalcon'     => ['label' => 'Phalcon', 'color' => '#8b5a2b'],
         ];
     }
 

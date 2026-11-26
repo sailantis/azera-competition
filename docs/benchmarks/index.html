@@ -65,12 +65,12 @@ main{padding-bottom:10px}
 <a class="card" href="view-real-volucer-attach.html">
   <h3>Framework Competition — Volucer (attach)</h3>
   <p>Volucer&#039;s `attach` backend: the framework boots ONCE, in a supervisor the deployment owns, and every request is served from that already-built state. `deploy/volucer/attach.php` listens on a unix relay and forks a child per connection; volucer dials it. End-to-end HTTP over loopback — includes the constant webserver overhead; framework differences smaller than that floor are below its noise. Single sequential client. Whether a row also carries part of the worker&#039;s boot depends on the pool&#039;s max_jobs, which the dataset records.</p>
-  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span><span class="chip" style="--c:#8b5a2b">Phalcon 6 (RC)</span></div>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span><span class="chip" style="--c:#8b5a2b">Phalcon</span></div>
 </a>
 <a class="card" href="view-real-fpm.html">
   <h3>Framework Competition — Real PHP-FPM</h3>
   <p>Real nginx + PHP-FPM serving over HTTP: the framework boots for every request, which is what PHP actually runs in production. The pool&#039;s worker-recycling setting is stated with the server floor below, since it changes what each row contains. End-to-end HTTP over loopback — includes the constant webserver overhead (see floor-http/floor-php in the dataset). Single sequential client.</p>
-  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span><span class="chip" style="--c:#8b5a2b">Phalcon 6 (RC)</span></div>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span><span class="chip" style="--c:#8b5a2b">Phalcon</span></div>
 </a>
 <a class="card" href="view-warm-start.html">
   <h3>Framework Competition — Warm Start</h3>
@@ -85,12 +85,12 @@ main{padding-bottom:10px}
 <a class="card" href="view-summary-fpm.html">
   <h3>Framework Competition — PHP-FPM Summary</h3>
   <p>The headline numbers from the measured nginx + PHP-FPM deployment: the cost of one pass over every endpoint, the plain routing request, the two data-access races, and what one request costs in memory. End-to-end HTTP over loopback, so the constant webserver overhead is included (see floor-http/floor-php in the dataset). The worker-recycling setting of the pool is stated with the server floor below, because it changes what each row contains.</p>
-  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span><span class="chip" style="--c:#8b5a2b">Phalcon 6 (RC)</span></div>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span><span class="chip" style="--c:#8b5a2b">Phalcon</span></div>
 </a>
 <a class="card" href="view-summary-volucer.html">
   <h3>Framework Competition — Volucer Summary</h3>
   <p>The headline numbers from the measured Volucer deployment. Volucer runs the app as a resident worker under a supervisor the deployment owns: the framework boots ONCE, before the supervisor forks, and every request is served from that already-built state. End-to-end HTTP over loopback, so the constant webserver overhead is included.</p>
-  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span><span class="chip" style="--c:#8b5a2b">Phalcon 6 (RC)</span></div>
+  <div class="chips"><span class="chip" style="--c:#3459e6">Azera</span><span class="chip" style="--c:#e5484d">Laravel</span><span class="chip" style="--c:#7048e8">Symfony</span><span class="chip" style="--c:#0ca678">Spiral</span><span class="chip" style="--c:#e8590c">CodeIgniter</span><span class="chip" style="--c:#d6409f">CakePHP</span><span class="chip" style="--c:#8b5a2b">Phalcon</span></div>
 </a>
 <a class="card" href="view-engine.html">
   <h3>Template engine benchmark</h3>

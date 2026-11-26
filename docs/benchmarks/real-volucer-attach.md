@@ -4,7 +4,7 @@ Volucer's `attach` backend: the framework boots ONCE, in a supervisor the deploy
 
 **Environment** — PHP 8.5.11 · Linux 6.8.0-139-generic · OPcache: yes · JIT: tracing (buffer 64M) · 1000 iterations per run over 10 runs, lower is better.
 
-**Frameworks** — Azera v0.6.0-10-g3926ba6 · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0 · Phalcon 6 (RC) 6.0.0RC4.
+**Frameworks** — Azera v0.6.0-10-g3926ba6 · Laravel 12.69.2 · Symfony 7.4.18 · Spiral 3.17.2 · CodeIgniter 4.7.4 · CakePHP 5.4.0 · Phalcon 6.0.0RC4.
 
 _Measured 2026-11-26T01:57:45+00:00_
 
@@ -51,7 +51,7 @@ One race per framework feature, each run as a real request against a real databa
 ### AOP (Aspect-Oriented)
  `GET /features/aop-tx` — measures TRANSPARENT AOP: advice is declared on a method by an attribute and applied by generated code, with the handler body untouched. Azera is the only entrant that ships this facility (`#[Advised]` plus `#[Transactional]` / `#[Cache]` / `#[Log]` / `#[Retry]`, compiled into a proxy class by `Azera\Aop\ProxyFactory`), so it is the only entrant raced here. The other six have no attribute-to-advice layer at all — Laravel's `Pipeline`, Symfony's invokable interceptors, Spiral's `PipelineBuilder` and the hand-written `begin`/`commit` on CodeIgniter, CakePHP and Phalcon are machinery the APPLICATION composes — and answering this row with that code would publish a hand-written implementation under a label claiming generated interception. Their own AOP rows are `aop-tx-explicit` (Azera, Spiral), `aop-cache` (Azera), and `aop-tx-direct` / `aop-cache-direct` (all seven). The same caution applies to `log`, which on Azera used to route through a generated proxy while every other entrant implemented it plainly; that advice was removed for exactly this reason. Only Azera competes in this feature, so the chart is a single measurement rather than a ranking.
 
-*Not measured here:* Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon 6 (RC) — Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon 6 (RC) ship no attribute-declared, proxy-generated advice layer, so there is no transparent AOP to race. That is a FACILITY gap, not a missing endpoint: every entrant answers `GET /features/aop-tx-direct` (the same write with the transaction written by hand) and `GET /features/aop-cache-direct` (the same cached COUNT with the lookup written by hand), which are the controls this row is read against.
+*Not measured here:* Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon — Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon ship no attribute-declared, proxy-generated advice layer, so there is no transparent AOP to race. That is a FACILITY gap, not a missing endpoint: every entrant answers `GET /features/aop-tx-direct` (the same write with the transaction written by hand) and `GET /features/aop-cache-direct` (the same cached COUNT with the lookup written by hand), which are the controls this row is read against.
 
 *This facility, and who ships it.* **transparent** (advice declared on the method, applied by generated code): Azera. The hand-written equivalent is charted separately as `aop-tx-direct`, and the gap between the two is what generated interception costs on the same work.
 
@@ -65,14 +65,14 @@ One race per framework feature, each run as a real request against a real databa
 ### AOP explicit (Pipeline)
  `GET /features/aop-tx-explicit` — runs the same transactional insert through the framework's OWN explicit interceptor pipeline: the advice is composed by hand around a plain handler, no proxy class is generated and no attribute is read. Only two entrants ship a dedicated interceptor abstraction, so only they race here — Azera (`Azera\Aop\InterceptorInterface` + `Pipeline`) and Spiral (`Spiral\Interceptors\InterceptorInterface` + `PipelineBuilder`). Laravel's Pipeline is request middleware rather than an interceptor abstraction, Symfony ships neither, and CodeIgniter, CakePHP and Phalcon have no interceptor layer at all; a hand-written `begin`/`commit` is not this feature, so those three would be measuring workarounds rather than the facility. Both participants execute the SAME transaction contract through their own pipeline, which is what makes the row comparable: read it against `aop-tx` to price generated interception against explicit composition on identical work.
 
-*Not measured here:* Laravel, Symfony, CodeIgniter, CakePHP, Phalcon 6 (RC) — Laravel, Symfony, CodeIgniter, CakePHP, Phalcon 6 (RC) ship no dedicated interceptor abstraction (an interceptor interface plus a pipeline that composes it), so the explicit AOP form are not their to serve. A hand-written `begin`/`commit` is not this feature.
+*Not measured here:* Laravel, Symfony, CodeIgniter, CakePHP, Phalcon — Laravel, Symfony, CodeIgniter, CakePHP, Phalcon ship no dedicated interceptor abstraction (an interceptor interface plus a pipeline that composes it), so the explicit AOP form are not their to serve. A hand-written `begin`/`commit` is not this feature.
 
 ![AOP explicit (Pipeline)](svg/real-volucer-attach/feature-aop-tx-explicit.svg)
 
 ### AOP #[Cache] (attribute-applied)
  `GET /features/aop-cache` — reads the COUNT(*) through a cache whose lookup, miss decision and store are applied by ATTRIBUTE — `#[Cache(ttl: 10, key: …)]` on the method, run by the generated proxy, with no cache code in the handler. Azera is the only entrant that ships that facility, so it is the only one raced here; the six others would answer this row with the hand-written lookup that `aop-cache-direct` already measures. Read it against `aop-cache-direct` to price the generated override plus one interceptor frame on identical work. Only Azera competes in this feature, so the chart is a single measurement rather than a ranking.
 
-*Not measured here:* Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon 6 (RC) — Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon 6 (RC) ship no attribute-declared, proxy-generated advice layer, so they cannot apply caching through `#[Cache]`. The cache row those entrants serve is `GET /features/aop-cache-direct` — the same COUNT, the same key and the same 10-second TTL with the lookup written in application code — which every entrant races.
+*Not measured here:* Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon — Laravel, Symfony, Spiral, CodeIgniter, CakePHP, Phalcon ship no attribute-declared, proxy-generated advice layer, so they cannot apply caching through `#[Cache]`. The cache row those entrants serve is `GET /features/aop-cache-direct` — the same COUNT, the same key and the same 10-second TTL with the lookup written in application code — which every entrant races.
 
 *This facility, and who ships it.* **transparent** (advice declared on the method, applied by generated code): Azera. The hand-written equivalent is charted separately as `aop-tx-direct`, and the gap between the two is what generated interception costs on the same work.
 
@@ -140,7 +140,7 @@ These rows are end-to-end for a resident worker with a pool that never recycles 
 
 **Run-to-run spread** — a resident arm's rows are mostly the server, so a cell moves by a few percent between two runs of unchanged code, and by more than a tenth on roughly one cell in five. Read a gap smaller than that band as a tie, which is what the trailing `≈` in the table marks, and prefer the rows where real work is done over the routing-only ones when the question is which framework is faster.
 
-| Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP | Phalcon 6 (RC) |
+| Request | Workload | Azera | Laravel | Symfony | Spiral | CodeIgniter | CakePHP | Phalcon |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | `GET /api/routing/1` | no DB — typed route + constant body (routing only) | **0.159** | 0.336 | 0.244 | 0.660 | 0.537 | 0.242 | 0.182 |
 | `GET /` | no DB — routing + template only | **0.175** | 0.427 | 0.340 | 0.680 | 0.680 | 0.315 | 0.208 |
